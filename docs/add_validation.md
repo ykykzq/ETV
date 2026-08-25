@@ -58,10 +58,11 @@ CUDA kernel。
 | Other | `arg1` block | `arg2` block |
 | Output | `arg3` block | `arg3` block |
 
-虽然参数编号部分相同，ETV 仍保留 side 标签，并只依据 PairSpec 映射建立逻辑对应。
+虽然参数编号部分相同，ETV 仍保留 side 标签，并只依据
+`predicates.abi` 映射建立逻辑对应。
 
 左侧还接收 shape/stride ABI 参数 `arg4..arg15`；右侧 `arg4` 是 `xnumel=128`。这些值
-位于 `facts.side_bindings`。两侧 launch 均为一个 program，但左侧编译为 256 lane，
+位于 `predicates.side_bindings`。两侧 launch 均为一个 program，但左侧编译为 256 lane，
 右侧为 128 lane。
 
 ## 实际验证轨迹
@@ -71,7 +72,7 @@ CUDA kernel。
 3. 提升器构建两个内部 `Program`；
 4. 枚举左侧 256 lane 和右侧 128 lane；
 5. 左侧后 128 lane 被 mask，活动逻辑域均为 `[0,128)`；
-6. PairSpec 角色把两侧 input/other/alpha/output 对齐；
+6. PairSpec 的 ABI 谓词把两侧 input/other/alpha/output 对齐；
 7. 地址和 mask 义务通过；
 8. egglog 使用角色关系与代数规则合并：
 

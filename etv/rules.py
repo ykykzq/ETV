@@ -1,4 +1,4 @@
-"""Rewrite declarations and fact gates for the egglog equality engine."""
+"""Rewrite declarations and predicate gates for the egglog equality engine."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ class Rule:
     requires: Tuple[str, ...] = ("semantic_mode == abstract_float",)
     kind: str = "algebraic"
     source: str = "builtin"
-    fact_requirements: Tuple["FactRequirement", ...] = ()
+    predicate_requirements: Tuple["PredicateRequirement", ...] = ()
     generated_by: str = "human"
     generator: Optional[str] = None
     prompt_sha256: Optional[str] = None
@@ -67,8 +67,8 @@ class Rule:
             "kind": self.kind,
             "source": self.source,
             "requires": list(self.requires),
-            "fact_requirements": [
-                requirement.to_json() for requirement in self.fact_requirements
+            "predicate_requirements": [
+                requirement.to_json() for requirement in self.predicate_requirements
             ],
             "provenance": {"generated_by": self.generated_by},
             "status": "declared",
@@ -79,9 +79,15 @@ class Rule:
             value["provenance"]["prompt_sha256"] = self.prompt_sha256
         return value
 
+    @property
+    def fact_requirements(self) -> Tuple["PredicateRequirement", ...]:
+        """Legacy Python API alias; reports use predicate_requirements."""
+
+        return self.predicate_requirements
+
 
 @dataclass(frozen=True)
-class FactRequirement:
+class PredicateRequirement:
     kind: str
     name: Optional[str] = None
     value: Any = None
@@ -95,6 +101,8 @@ class FactRequirement:
             )
         if self.kind == "assumption":
             return self.value in facts.assumptions
+        if self.kind == "predicate":
+            return self.value in facts.predicate_ids
         if self.kind == "disjoint":
             return all(
                 facts.disjoint(lhs, rhs) for lhs, rhs in combinations(self.roles, 2)
@@ -109,6 +117,8 @@ class FactRequirement:
             value["name"] = self.name
         if self.kind == "assumption":
             value["text"] = self.value
+        elif self.kind == "predicate":
+            value["id"] = self.value
         elif self.value is not None:
             value["value"] = self.value
         if self.roles:
@@ -116,6 +126,10 @@ class FactRequirement:
         if self.expression is not None:
             value["expression"] = self.expression.to_json()
         return value
+
+
+# Compatibility alias for callers that imported the v1 Python name.
+FactRequirement = PredicateRequirement
 
 
 def pattern_variables(pattern: Pattern) -> frozenset[str]:

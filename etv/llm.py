@@ -143,6 +143,12 @@ def _available_requirements(spec: PairSpec) -> list[dict]:
         if isinstance(value, int)
     ]
     values.extend(
+        {"kind": "predicate", "id": predicate_id}
+        for predicate_id in spec.predicates.predicate_ids
+    )
+    # Legacy v1 formal assumptions remain available for backwards
+    # compatibility. v2 natural-language assumptions never enter this list.
+    values.extend(
         {"kind": "assumption", "text": text} for text in spec.facts.assumptions
     )
     values.extend(
@@ -173,6 +179,7 @@ def propose_rules(
     if spec.llm.select_nodes:
         selection_payload = {
             "task": "Select expression-node pairs whose equality would help connect unmatched output roots.",
+            "assumptions_for_llm": list(spec.assumptions),
             "candidates": [
                 {
                     "label": label,
@@ -234,6 +241,7 @@ def propose_rules(
 
     generation_payload = {
         "task": "Propose conditional equality rewrite rules that may connect the selected nodes.",
+        "assumptions_for_llm": list(spec.assumptions),
         "selected_nodes": [
             {
                 "label": label,
@@ -244,12 +252,12 @@ def propose_rules(
             }
             for label, lhs, rhs, lhs_path, rhs_path in selected
         ],
-        "available_fact_requirements": requirements,
+        "available_predicate_requirements": requirements,
         "rule_schema": {
             "rules": [
                 {
                     "id": "stable_identifier",
-                    "kind": "algebraic or trusted_fact",
+                    "kind": "algebraic or trusted_predicate",
                     "statement": "human-readable equality",
                     "lhs": {"op": "fadd", "args": [{"match": "a"}, {"match": "b"}]},
                     "rhs": {"op": "fadd", "args": [{"match": "b"}, {"match": "a"}]},
@@ -259,14 +267,14 @@ def propose_rules(
         },
         "requirements": [
             "Return JSON only.",
-            "Every rule must contain at least one requires entry copied exactly from available_fact_requirements.",
+            "Every rule must contain at least one requires entry copied exactly from available_predicate_requirements.",
             "Use match metavariables for reusable subexpressions.",
             "Do not invent facts or operations outside the supplied expression language.",
         ],
     }
     generated, audit = client.complete_json(
         "rule_generation",
-        "Return JSON only. Proposed rules are untrusted candidates and must be conditional on supplied facts.",
+        "Return JSON only. Proposed rules are untrusted candidates and must be conditional on supplied predicates.",
         generation_payload,
     )
     calls.append(audit)

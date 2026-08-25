@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Tuple
@@ -19,7 +21,6 @@ from .ir import (
 )
 from .model import (
     Contract,
-    FactContext,
     FrontendSpec,
     InputError,
     LLMConfig,
@@ -27,14 +28,17 @@ from .model import (
     Parameter,
     PairSpec,
     PartitionConfig,
+    PredicateDeclaration,
+    PredicateSet,
     ProofLevel,
+    RewriteSource,
     RulePolicy,
     RoleEndpoint,
     RolePair,
 )
 from .rules import (
-    FactRequirement,
     Pattern,
+    PredicateRequirement,
     Rule,
     builtin_rules,
     node,
@@ -46,6 +50,8 @@ from .rules import (
 
 FORMAT_PROGRAM = "etv-semantic-program-v1"
 FORMAT_PAIR = "etv-pair-v1"
+FORMAT_PAIR_V2 = "etv-pair-v2"
+FORMAT_REWRITE = "etv-rewrite-v1"
 
 _ARITY = {
     "iadd": 2,
@@ -87,18 +93,46 @@ _SORT = {
 }
 
 _RULE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
+_SYMBOLIC_PREDICATE_OPS = {
+    "const_int",
+    "const_bool",
+    "var",
+    "iadd",
+    "isub",
+    "imul",
+    "idiv",
+    "irem",
+    "ceildiv",
+    "lt",
+    "le",
+    "gt",
+    "ge",
+    "eq",
+    "ne",
+    "and",
+    "or",
+    "not",
+    "select",
+}
 
 
-def _read_json(path: Path) -> Mapping[str, Any]:
+def _read_json_document(path: Path) -> Tuple[Mapping[str, Any], bytes]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        content = path.read_bytes()
+        value = json.loads(content.decode("utf-8"))
     except OSError as exc:
         raise InputError(f"cannot read {path}: {exc}", "READ_ERROR") from exc
+    except UnicodeDecodeError as exc:
+        raise InputError(f"invalid UTF-8 in {path}: {exc}", "PARSE_ERROR") from exc
     except json.JSONDecodeError as exc:
         raise InputError(f"invalid JSON in {path}: {exc}", "PARSE_ERROR") from exc
     if not isinstance(value, dict):
         raise InputError(f"top-level value in {path} must be an object")
-    return value
+    return value, content
+
+
+def _read_json(path: Path) -> Mapping[str, Any]:
+    return _read_json_document(path)[0]
 
 
 def _only_keys(value: Mapping[str, Any], allowed: Iterable[str], where: str) -> None:
@@ -144,16 +178,16 @@ def parse_expr(value: Any, where: str = "expression") -> Expr:
         missing = [key for key in ("offset", "mask", "default") if key not in value]
         if missing:
             raise InputError(f"missing key(s) in {where}: {', '.join(missing)}")
-        return Expr(
-            "load",
-            args=(
-                parse_expr(value["offset"], f"{where}.offset"),
-                parse_expr(value["mask"], f"{where}.mask"),
-                parse_expr(value["default"], f"{where}.default"),
-            ),
-            data=block,
-            sort=Sort.FLOAT,
-        )
+        offset = parse_expr(value["offset"], f"{where}.offset")
+        mask = parse_expr(value["mask"], f"{where}.mask")
+        default = parse_expr(value["default"], f"{where}.default")
+        if offset.sort != Sort.INT:
+            raise InputError(f"{where}.offset must be an integer expression")
+        if mask.sort != Sort.BOOL:
+            raise InputError(f"{where}.mask must be a boolean expression")
+        if default.sort != Sort.FLOAT:
+            raise InputError(f"{where}.default must be abstract_float")
+        return Expr("load", args=(offset, mask, default), data=block, sort=Sort.FLOAT)
 
     _only_keys(value, {"op", "args"}, where)
     if op not in _ARITY:
@@ -165,12 +199,51 @@ def parse_expr(value: Any, where: str = "expression") -> Expr:
         parse_expr(arg, f"{where}.{op}[{index}]") for index, arg in enumerate(args)
     )
     if op == "select":
+        if parsed_args[0].sort != Sort.BOOL:
+            raise InputError(f"{where}.select condition must be boolean")
         result_sort = parsed_args[1].sort
         if parsed_args[2].sort != result_sort:
             raise InputError(f"{where}.select branches have different sorts")
+    elif op in {"iadd", "isub", "imul", "idiv", "irem", "ceildiv"}:
+        if any(argument.sort != Sort.INT for argument in parsed_args):
+            raise InputError(f"{where}.{op} operands must be integers")
+        result_sort = Sort.INT
+    elif op in {"and", "or", "not"}:
+        if any(argument.sort != Sort.BOOL for argument in parsed_args):
+            raise InputError(f"{where}.{op} operands must be boolean")
+        result_sort = Sort.BOOL
+    elif op in {"lt", "le", "gt", "ge"}:
+        if (
+            parsed_args[0].sort != parsed_args[1].sort
+            or parsed_args[0].sort == Sort.BOOL
+        ):
+            raise InputError(f"{where}.{op} operands must have the same numeric sort")
+        result_sort = Sort.BOOL
+    elif op in {"eq", "ne"}:
+        if parsed_args[0].sort != parsed_args[1].sort:
+            raise InputError(f"{where}.{op} operands must have the same sort")
+        result_sort = Sort.BOOL
+    elif op in {"fadd", "fsub", "fmul", "fdiv", "fneg", "fsqrt", "frsqrt", "fma"}:
+        if any(argument.sort != Sort.FLOAT for argument in parsed_args):
+            raise InputError(f"{where}.{op} operands must be abstract_float")
+        result_sort = Sort.FLOAT
     else:
         result_sort = _SORT[op]
     return Expr(op, args=parsed_args, sort=result_sort)
+
+
+def _validate_symbolic_predicate(expression: Expr, where: str) -> None:
+    def operations(node: Expr) -> set[str]:
+        result = {node.op}
+        for argument in node.args:
+            result.update(operations(argument))
+        return result
+
+    unsupported = sorted(operations(expression) - _SYMBOLIC_PREDICATE_OPS)
+    if unsupported:
+        raise InputError(
+            f"{where} uses unsupported symbolic predicate operation(s): {', '.join(unsupported)}"
+        )
 
 
 def load_program(path: Path) -> Program:
@@ -330,7 +403,7 @@ def _rewrite_pattern(value: Any, where: str) -> Pattern:
     )
 
 
-def _rule_requirement(value: Any, where: str) -> FactRequirement:
+def _rule_requirement(value: Any, where: str) -> PredicateRequirement:
     if not isinstance(value, dict):
         raise InputError(f"{where} must be an object")
     kind = value.get("kind")
@@ -342,19 +415,25 @@ def _rule_requirement(value: Any, where: str) -> FactRequirement:
             raise InputError(f"{where}.name must be a non-empty binding name")
         if not isinstance(expected, int) or isinstance(expected, bool):
             raise InputError(f"{where}.value must be an integer")
-        return FactRequirement(kind=kind, name=name, value=expected)
+        return PredicateRequirement(kind=kind, name=name, value=expected)
     if kind == "assumption":
         _only_keys(value, {"kind", "text"}, where)
         text = value.get("text")
         if not isinstance(text, str) or not text:
             raise InputError(f"{where}.text must be a non-empty assumption")
-        return FactRequirement(kind=kind, value=text)
+        return PredicateRequirement(kind=kind, value=text)
+    if kind == "predicate":
+        _only_keys(value, {"kind", "id"}, where)
+        predicate_id = value.get("id")
+        if not isinstance(predicate_id, str) or not _RULE_ID.fullmatch(predicate_id):
+            raise InputError(f"{where}.id must be a stable predicate identifier")
+        return PredicateRequirement(kind=kind, value=predicate_id)
     if kind == "disjoint":
         _only_keys(value, {"kind", "roles"}, where)
         roles = _strings(value.get("roles"), f"{where}.roles")
         if len(roles) < 2:
             raise InputError(f"{where}.roles needs at least two roles")
-        return FactRequirement(kind=kind, roles=roles)
+        return PredicateRequirement(kind=kind, roles=roles)
     if kind == "constraint":
         _only_keys(value, {"kind", "expression"}, where)
         if "expression" not in value:
@@ -362,9 +441,9 @@ def _rule_requirement(value: Any, where: str) -> FactRequirement:
         expression = parse_expr(value["expression"], f"{where}.expression")
         if expression.sort != Sort.BOOL:
             raise InputError(f"{where}.expression must be boolean")
-        return FactRequirement(kind=kind, expression=expression)
+        return PredicateRequirement(kind=kind, expression=expression)
     raise InputError(
-        f"{where}.kind must be binding_equals, assumption, disjoint, or constraint"
+        f"{where}.kind must be binding_equals, assumption, predicate, disjoint, or constraint"
     )
 
 
@@ -382,8 +461,10 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
     if rule_id.startswith("parametric_"):
         raise InputError(f"{where}.id uses the reserved 'parametric_' prefix")
     kind = value.get("kind")
-    if kind not in {"algebraic", "trusted_fact"}:
-        raise InputError(f"{where}.kind must be algebraic or trusted_fact")
+    if kind not in {"algebraic", "trusted_fact", "trusted_predicate"}:
+        raise InputError(
+            f"{where}.kind must be algebraic, trusted_predicate, or legacy trusted_fact"
+        )
     if "lhs" not in value or "rhs" not in value:
         raise InputError(f"{where} requires lhs and rhs patterns")
     lhs = _rewrite_pattern(value["lhs"], f"{where}.lhs")
@@ -403,8 +484,10 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
         _rule_requirement(item, f"{where}.requires[{index}]")
         for index, item in enumerate(requirements_raw)
     )
-    if kind == "trusted_fact" and not requirements:
-        raise InputError(f"{where} trusted_fact rules require at least one fact gate")
+    if kind in {"trusted_fact", "trusted_predicate"} and not requirements:
+        raise InputError(
+            f"{where} trusted predicate rules require at least one formal predicate gate"
+        )
     provenance_raw = value.get("provenance", {"generated_by": "human"})
     if not isinstance(provenance_raw, dict):
         raise InputError(f"{where}.provenance must be an object")
@@ -444,12 +527,14 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
         evidence=(
             ProofLevel.ALGEBRAIC if kind == "algebraic" else ProofLevel.TRUSTED_AXIOM
         ),
-        validator="z3_real_unsat" if kind == "algebraic" else "trusted_pair_fact",
+        validator=(
+            "z3_real_unsat" if kind == "algebraic" else "trusted_pair_predicate"
+        ),
         statement=statement,
         requires=("semantic_mode == abstract_float",),
         kind=kind,
         source=where,
-        fact_requirements=requirements,
+        predicate_requirements=requirements,
         generated_by=generated_by,
         generator=generator,
         prompt_sha256=prompt_sha256,
@@ -462,9 +547,243 @@ def parse_rewrite_rule(value: Any, where: str = "rewrite_rule") -> Rule:
     return _rewrite_rule(value, where)
 
 
-def _load_pair_spec(path: Path, require_ttir: bool) -> PairSpec:
+def _validate_rewrite_rule_ids(rules: Sequence[Rule]) -> None:
+    rule_ids = [rule.rule_id for rule in rules]
+    duplicate_rule_ids = sorted(
+        {rule_id for rule_id in rule_ids if rule_ids.count(rule_id) > 1}
+    )
+    builtin_rule_ids = {rule.rule_id for rule in builtin_rules()}
+    conflicting_rule_ids = sorted(set(rule_ids) & builtin_rule_ids)
+    if duplicate_rule_ids:
+        raise InputError(
+            f"duplicate rewrite rule id(s): {', '.join(duplicate_rule_ids)}"
+        )
+    if conflicting_rule_ids:
+        raise InputError(
+            f"rewrite rule id conflicts with builtin rule(s): {', '.join(conflicting_rule_ids)}"
+        )
+
+
+def _parse_custom_predicates(raw: Any, where: str) -> Tuple[PredicateDeclaration, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise InputError(f"{where} must be a list")
+    declarations = []
+    seen = set()
+    for index, item in enumerate(raw):
+        item_where = f"{where}[{index}]"
+        if not isinstance(item, dict):
+            raise InputError(f"{item_where} must be an object")
+        _only_keys(item, {"id", "formula", "kind", "encoder", "status"}, item_where)
+        predicate_id = item.get("id")
+        if not isinstance(predicate_id, str) or not _RULE_ID.fullmatch(predicate_id):
+            raise InputError(f"{item_where}.id must be a stable predicate identifier")
+        if predicate_id in seen:
+            raise InputError(f"duplicate predicate id {predicate_id!r}")
+        seen.add(predicate_id)
+        kind = item.get("kind", "custom")
+        if kind not in {"custom", "shape", "relation", "abi"}:
+            raise InputError(f"{item_where}.kind is not supported")
+        encoder = item.get("encoder", "trusted")
+        if encoder not in {"trusted", "z3_expr"}:
+            raise InputError(f"{item_where}.encoder must be trusted or z3_expr")
+        status = item.get("status", "assumed")
+        if status != "assumed":
+            raise InputError(
+                f"{item_where}.status must be assumed; PairSpec declarations cannot self-assert a proof"
+            )
+        formula = None
+        if "formula" in item:
+            formula = parse_expr(item["formula"], f"{item_where}.formula")
+            if formula.sort != Sort.BOOL:
+                raise InputError(f"{item_where}.formula must be boolean")
+        if encoder == "z3_expr" and formula is None:
+            raise InputError(f"{item_where}.formula is required for z3_expr predicates")
+        if encoder == "z3_expr" and formula is not None:
+            _validate_symbolic_predicate(formula, f"{item_where}.formula")
+        declarations.append(
+            PredicateDeclaration(
+                predicate_id=predicate_id,
+                formula=formula,
+                kind=kind,
+                encoder=encoder,
+                status=status,
+            )
+        )
+    return tuple(declarations)
+
+
+def _load_rewrite_registry(
+    path: Path, raw: Any
+) -> Tuple[Tuple[Rule, ...], Tuple[RewriteSource, ...]]:
+    if not isinstance(raw, list):
+        raise InputError(f"{path}.rewrites must be a list")
+    rules = []
+    sources = []
+    for index, item in enumerate(raw):
+        where = f"{path}.rewrites[{index}]"
+        if isinstance(item, str):
+            relative = item
+        elif isinstance(item, dict):
+            _only_keys(item, {"file"}, where)
+            relative = item.get("file")
+        else:
+            raise InputError(f"{where} must be a file path or object with file")
+        if not isinstance(relative, str) or not relative:
+            raise InputError(f"{where}.file must be a non-empty relative path")
+        if Path(relative).is_absolute():
+            raise InputError(f"{where}.file must be relative to the PairSpec")
+        source_path = (path.parent / relative).resolve()
+        if source_path == path or source_path.is_dir():
+            raise InputError(f"{where}.file must reference a rewrite file")
+        payload, content = _read_json_document(source_path)
+        _only_keys(payload, {"format", "rules"}, str(source_path))
+        if payload.get("format") != FORMAT_REWRITE:
+            raise InputError(f"{source_path} must declare format {FORMAT_REWRITE!r}")
+        rules_raw = payload.get("rules")
+        if not isinstance(rules_raw, list):
+            raise InputError(f"{source_path}.rules must be a list")
+        rules.extend(
+            replace(
+                _rewrite_rule(item, f"{source_path}.rules[{rule_index}]"),
+                source=f"user:{source_path}",
+            )
+            for rule_index, item in enumerate(rules_raw)
+        )
+        digest = hashlib.sha256(content).hexdigest()
+        sources.append(RewriteSource(kind="user", path=source_path, sha256=digest))
+    _validate_rewrite_rule_ids(rules)
+    return tuple(rules), tuple(sources)
+
+
+def _load_pair_spec_v2(
+    path: Path, raw: Mapping[str, Any], require_ttir: bool
+) -> PairSpec:
+    _only_keys(
+        raw,
+        {"format", "metadata", "assumptions", "predicates", "observation", "rewrites"},
+        str(path),
+    )
+    if raw.get("format") != FORMAT_PAIR_V2:
+        raise InputError(f"{path} must declare format {FORMAT_PAIR_V2!r}")
+    metadata = raw.get("metadata")
+    if not isinstance(metadata, dict):
+        raise InputError(f"{path}.metadata must be an object")
+    _only_keys(
+        metadata,
+        {
+            "pair_id",
+            "lhs",
+            "rhs",
+            "frontends",
+            "semantic_mode",
+            "limits",
+            "rule_policy",
+            "llm",
+            "partition",
+        },
+        f"{path}.metadata",
+    )
+    assumptions_raw = raw.get("assumptions", {"for_llm": []})
+    if isinstance(assumptions_raw, list):
+        assumptions = _strings(assumptions_raw, f"{path}.assumptions")
+    elif isinstance(assumptions_raw, dict):
+        _only_keys(assumptions_raw, {"for_llm"}, f"{path}.assumptions")
+        assumptions = _strings(
+            assumptions_raw.get("for_llm", []), f"{path}.assumptions.for_llm"
+        )
+    else:
+        raise InputError(f"{path}.assumptions must be an object with for_llm")
+
+    predicates_raw = raw.get("predicates")
+    if not isinstance(predicates_raw, dict):
+        raise InputError(f"{path}.predicates must be an object")
+    _only_keys(
+        predicates_raw,
+        {
+            "abi",
+            "bindings",
+            "side_bindings",
+            "parameters",
+            "constraints",
+            "disjoint",
+            "custom",
+        },
+        f"{path}.predicates",
+    )
+    abi = predicates_raw.get("abi")
+    if not isinstance(abi, dict) or not abi:
+        raise InputError(f"{path}.predicates.abi must be a non-empty object")
+    custom = _parse_custom_predicates(
+        predicates_raw.get("custom", []), f"{path}.predicates.custom"
+    )
+    facts_raw = {
+        "bindings": predicates_raw.get("bindings", {}),
+        "side_bindings": predicates_raw.get("side_bindings", {}),
+        "parameters": predicates_raw.get("parameters", {}),
+        "constraints": predicates_raw.get("constraints", []),
+        "assumptions": [],
+        "disjoint": predicates_raw.get("disjoint", []),
+    }
+    observation = raw.get("observation")
+    if not isinstance(observation, dict):
+        raise InputError(f"{path}.observation must be an object")
+    # The proof core calls this section Contract; the public v2 spelling is
+    # observation to make the distinction from assumptions explicit.
+    normalized = {
+        "format": FORMAT_PAIR,
+        "pair_id": metadata.get("pair_id"),
+        "lhs": metadata.get("lhs"),
+        "rhs": metadata.get("rhs"),
+        "frontends": metadata.get("frontends", {}),
+        "semantic_mode": metadata.get("semantic_mode"),
+        "roles": abi,
+        "facts": facts_raw,
+        "contract": observation,
+        "limits": metadata.get("limits", {}),
+        "rule_policy": metadata.get("rule_policy", {}),
+        "llm": metadata.get("llm", {}),
+        "partition": metadata.get("partition", {}),
+    }
+    rewrite_rules, rewrite_sources = _load_rewrite_registry(
+        path, raw.get("rewrites", [])
+    )
+    normalized["rewrite_rules"] = []
+    spec = _load_pair_spec(path, require_ttir, _raw=normalized)
+    predicate_set = PredicateSet(
+        abi=spec.roles,
+        bindings=spec.predicates.bindings,
+        side_bindings=spec.predicates.side_bindings,
+        parameters=spec.predicates.parameters,
+        constraints=spec.predicates.constraints,
+        disjoint_groups=spec.predicates.disjoint_groups,
+        formal_assumptions=(),
+        custom=custom,
+    )
+    custom_ids = {declaration.predicate_id for declaration in custom}
+    generated_ids = set(replace(predicate_set, custom=()).predicate_ids)
+    conflicts = sorted(custom_ids & generated_ids)
+    if conflicts:
+        raise InputError(
+            f"custom predicate id conflicts with generated predicate id(s): {', '.join(conflicts)}"
+        )
+    return replace(
+        spec,
+        predicates=predicate_set,
+        assumptions=assumptions,
+        rewrite_rules=rewrite_rules,
+        rewrite_sources=rewrite_sources,
+    )
+
+
+def _load_pair_spec(
+    path: Path, require_ttir: bool, _raw: Mapping[str, Any] | None = None
+) -> PairSpec:
     path = path.resolve()
-    raw = _read_json(path)
+    raw = _read_json(path) if _raw is None else _raw
+    if raw.get("format") == FORMAT_PAIR_V2:
+        return _load_pair_spec_v2(path, raw, require_ttir)
     _only_keys(
         raw,
         {
@@ -587,6 +906,8 @@ def _load_pair_spec(path: Path, require_ttir: bool) -> PairSpec:
     )
     if any(expression.sort != Sort.BOOL for expression in constraints):
         raise InputError(f"{path}.facts.constraints must contain boolean expressions")
+    for index, expression in enumerate(constraints):
+        _validate_symbolic_predicate(expression, f"{path}.facts.constraints[{index}]")
     side_bindings_raw = facts_raw.get("side_bindings", {})
     if not isinstance(side_bindings_raw, dict):
         raise InputError(f"{path}.facts.side_bindings must be an object")
@@ -791,9 +1112,7 @@ def _load_pair_spec(path: Path, require_ttir: bool) -> PairSpec:
         allowed = {"ttir"} if require_ttir else {"semantic_json"}
         if kind not in allowed:
             expected = "ttir" if require_ttir else "semantic_json"
-            raise InputError(
-                f"{where}.kind must be {expected}", "TTIR_PAIR_REQUIRED"
-            )
+            raise InputError(f"{where}.kind must be {expected}", "TTIR_PAIR_REQUIRED")
         function = value.get("function")
         programs = value.get("programs")
         if kind == "ttir":
@@ -825,20 +1144,7 @@ def _load_pair_spec(path: Path, require_ttir: bool) -> PairSpec:
         _rewrite_rule(item, f"{path}.rewrite_rules[{index}]")
         for index, item in enumerate(rewrite_rules_raw)
     )
-    rule_ids = [rule.rule_id for rule in rewrite_rules]
-    duplicate_rule_ids = sorted(
-        {rule_id for rule_id in rule_ids if rule_ids.count(rule_id) > 1}
-    )
-    builtin_rule_ids = {rule.rule_id for rule in builtin_rules()}
-    conflicting_rule_ids = sorted(set(rule_ids) & builtin_rule_ids)
-    if duplicate_rule_ids:
-        raise InputError(
-            f"duplicate rewrite rule id(s): {', '.join(duplicate_rule_ids)}"
-        )
-    if conflicting_rule_ids:
-        raise InputError(
-            f"rewrite rule id conflicts with builtin rule(s): {', '.join(conflicting_rule_ids)}"
-        )
+    _validate_rewrite_rule_ids(rewrite_rules)
 
     lhs_path = (base / lhs).resolve()
     rhs_path = (base / rhs).resolve()
@@ -854,26 +1160,31 @@ def _load_pair_spec(path: Path, require_ttir: bool) -> PairSpec:
                     f"{path}.{side} does not exist: {artifact}", "READ_ERROR"
                 )
 
+    predicate_set = PredicateSet(
+        abi=tuple(roles),
+        bindings=bindings,
+        formal_assumptions=assumptions,
+        disjoint_groups=tuple(disjoint_groups),
+        side_bindings=side_bindings,
+        parameters=parameters,
+        constraints=constraints,
+    )
+    output_numel = parse_expr(
+        contract_raw["output_numel"], f"{path}.contract.output_numel"
+    )
+    if output_numel.sort != Sort.INT:
+        raise InputError(f"{path}.contract.output_numel must be an integer expression")
     return PairSpec(
         pair_id=pair_id,
         source=path,
         lhs_path=lhs_path,
         rhs_path=rhs_path,
         semantic_mode=semantic_mode,
-        roles=tuple(roles),
-        facts=FactContext(
-            bindings=bindings,
-            assumptions=assumptions,
-            disjoint_groups=tuple(disjoint_groups),
-            side_bindings=side_bindings,
-            parameters=parameters,
-            constraints=constraints,
-        ),
+        predicates=predicate_set,
+        assumptions=assumptions,
         contract=Contract(
             output_role=output_role,
-            output_numel=parse_expr(
-                contract_raw["output_numel"], f"{path}.contract.output_numel"
-            ),
+            output_numel=output_numel,
             require_full_coverage=require_full_coverage,
             require_disjoint=require_disjoint,
         ),

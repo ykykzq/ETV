@@ -10,18 +10,19 @@ P => ObservableMemory(L) = ObservableMemory(R)
 
 ## 1. 输入验证
 
-`load_pair_spec` 首先严格解析 `etv-pair-v1`，拒绝未知字段、重复物理端点、非法参数
+`load_pair_spec` 首先严格解析 `etv-pair-v2`，拒绝未知字段、重复物理端点、非法参数
 域、未声明入口、缺失 launch 或非 TT IR 路径。生产约束为：
 
 ```text
-lhs.kind = rhs.kind = ttir
-lhs,rhs suffix in {.ttir,.mlir}
-lhs.function and rhs.function are nonempty
-lhs.programs and rhs.programs are integer expressions
+metadata.frontends.lhs.kind = metadata.frontends.rhs.kind = ttir
+metadata.lhs,metadata.rhs suffix in {.ttir,.mlir}
+metadata.frontends.lhs.function and rhs.function are nonempty
+metadata.frontends.lhs.programs and rhs.programs are integer expressions
 ```
 
-PairSpec 还必须声明物理 ABI 到逻辑角色的映射、共享/单侧事实、no-alias 前提和观察
-契约。TT IR 不编码 host grid，`programs` 是必须信任的外部事实。
+v2 将 `metadata`、只供 LLM 阅读的 `assumptions`、形式 `predicates`、证明目标
+`observation` 和外部 `rewrites` 分开。TT IR 不编码 host grid，`programs` 是必须信任的
+外部配置。旧 v1 仍可读取，但会先归一化到相同的内部 `PredicateSet`。
 
 ## 2. libtriton 解析与快照
 
@@ -78,9 +79,9 @@ store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Pro
 整数用于地址和 shape。固定规模求值检查 signed i32 范围与除零；参数化路径通过 Z3
 加入定义性/范围义务。当前整数模型仍不是完整的 TT IR 位向量语义。
 
-## 5. ABI 与内存契约
+## 5. ABI 谓词与内存观察
 
-同名物理参数不会自动对齐。PairSpec 可声明：
+同名物理参数不会自动对齐。PairSpec 在 `predicates.abi` 中声明：
 
 ```json
 "Alpha": {
@@ -92,8 +93,8 @@ store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Pro
 这表示左侧按值标量和右侧指针下标 0 的读取具有同一逻辑角色。`block`、
 `scalar_block`、`scalar` 的差异保留到关系规则实际应用。
 
-当前内存语义只观察 `contract.output_role`。`require_disjoint` 中的角色必须被
-`facts.disjoint` 覆盖，否则无法排除写输出改变后续输入读取，结果为 `UNKNOWN`。
+当前内存语义只观察 `observation.output_role`。`require_disjoint` 中的角色必须被
+`predicates.disjoint` 覆盖，否则无法排除写输出改变后续输入读取，结果为 `UNKNOWN`。
 系统不证明实际 allocation 大小或越界安全。
 
 ## 6. 固定规模义务
@@ -113,7 +114,7 @@ store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Pro
 
 ## 7. 参数化义务
 
-存在 `facts.parameters` 时，ETV 对任意逻辑元素 `k` 建立两侧 writer：
+存在 `predicates.parameters` 时，ETV 对任意逻辑元素 `k` 建立两侧 writer：
 
 ```text
 0 <= k < output_numel
@@ -134,13 +135,26 @@ SMT 依次检查：
 每项通过“寻找反例”的查询完成，`unsat` 表示该义务在全部参数域内成立。查询文本哈希、
 Z3 版本和结论进入报告。
 
-## 8. 重写规则准入
+## 8. 谓词与重写规则准入
+
+所有 ABI、binding、参数域、约束和 no-alias 信息在内部统一为 `PredicateSet`。它们是
+条件验证的前提，不是验证器从程序中证明出的结论。`constraints` 与 `custom` 中的
+`z3_expr` 使用当前参数化编码器支持的 Z3 整数/布尔理论；可编码只说明后续义务能在该
+前提下求解，不说明前提本身已被证明。没有编码器的自定义谓词标成 `trusted`，只能
+作为可信规则 gate。
+
+`assumptions.for_llm` 与上述谓词完全分离：自然语言只帮助节点选择、规则候选生成和
+子图划分，不能满足 v2 规则 gate，也不能直接改变证明状态。
+
+内建规则位于代码维护的规则库。用户规则必须放入独立 `etv-rewrite-v1` 文件，并通过
+PairSpec 的 `rewrites` 列表按本次运行加载。验证器记录文件 SHA-256，把来源强制标为
+`user:<path>`，不修改 egglog 或全局规则库。
 
 规则分三类：
 
 ### 代数规则
 
-内建和默认自定义代数规则被翻译为 Z3 Real 等式。ETV 查询是否存在使左右不等的赋值；
+内建和用户自定义代数规则被翻译为 Z3 Real 等式。ETV 查询是否存在使左右不等的赋值；
 仅 `unsat` 才按 `ALGEBRAIC` 准入。例如交换律、结合律和 `fma(a,b,c) = a*b+c`。这些
 证明只对 `ABSTRACT_FLOAT` 有效。
 
@@ -151,12 +165,12 @@ launch 事实，参数化时还要有 SMT 义务证据。它们不是通用代�
 
 ### 未验证可信规则
 
-布局、库语义或 LLM 提出的非代数规则如果尚无验证器，可在显式 fact gate 和当前策略
+布局、库语义或 LLM 提出的非代数规则如果尚无验证器，可在显式 predicate gate 和当前策略
 下作为 `TRUSTED_AXIOM` 准入。这是已知缺陷。报告记录：声明、事实检查、来源、是否匹配、
 使用次数和“未经形式验证”的警告。未实际使用的可信规则不污染最终证明等级；实际
 使用则进入 `trusted_axioms` 和 `does_not_prove`。
 
-LLM 不能添加无条件可信规则，不能修改事实，也不能直接合并根。
+LLM 不能添加无条件可信规则，不能修改谓词，也不能直接合并根。
 
 ## 9. egglog 等式饱和
 
@@ -164,8 +178,8 @@ ETV 把内部 IR 表达式编码为 egglog term。一次义务按阶段执行：
 
 ```text
 insert(lhs_root, rhs_root)
-run(fact-derived relational rules)
-if roots differ: run(validated algebraic/custom rules)
+run(predicate-derived relational rules)
+if roots differ: run(validated builtin/user rules)
 if roots differ and LLM enabled: admit and run LLM candidates
 check(same_eclass(lhs_root, rhs_root))
 ```
@@ -179,7 +193,8 @@ check(same_eclass(lhs_root, rhs_root))
 
 ## 10. 子图划分
 
-可选 LLM 划分发生在计算证明前。模型一次扫描左右完整 Program 和所有根，返回成对
+可选 LLM 划分发生在计算证明前。模型一次扫描左右完整 Program、形式谓词、自然语言
+assumptions 和所有根，返回成对
 表达式路径。ETV 重新计算覆盖、唯一性、sort、左右父子拓扑和 DAG。通过后：
 
 1. 先验证叶子子图；
@@ -205,7 +220,10 @@ and
 
 ## 12. 信任边界与保证
 
-`PROVED` 在声明的 PairSpec 前提和 `ABSTRACT_FLOAT` 语义下建立可观察输出内存等价。
+`PROVED` 在声明的 PairSpec 谓词前提和 `ABSTRACT_FLOAT` 语义下建立可观察输出内存
+等价。报告中的 `soundness.level=formal_under_declared_predicates` 表示证明条件化于这些
+谓词；如果实际应用未验证规则，则降为 `conditional_on_unverified_rewrites`。顶层
+`PROVED` 不能脱离 `soundness`、规则应用日志和输入哈希单独解释。
 它不证明：
 
 - TT IR 到 ETV IR 提升器本身的形式正确性；

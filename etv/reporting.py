@@ -16,6 +16,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"- Reason: `{report.get('reason', 'UNKNOWN')}`",
         f"- Semantic mode: `{report.get('semantic_mode')}`",
         f"- Scope: {report.get('scope', '')}",
+        f"- Soundness: `{report.get('soundness', {}).get('level', 'not_established')}`",
         "",
         "## Assumptions",
         "",
@@ -28,6 +29,36 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         )
     else:
         lines.append("- None loaded.")
+
+    llm_context = report.get("llm_context", {})
+    lines.extend(["", "## LLM-only context", ""])
+    llm_assumptions = llm_context.get("assumptions", [])
+    if llm_assumptions:
+        lines.extend(f"- {item}" for item in llm_assumptions)
+    else:
+        lines.append("- None loaded.")
+    lines.append(
+        f"- Proof relevance: `{llm_context.get('proof_relevance', 'informational_only')}`."
+    )
+
+    predicates = report.get("formal_predicates", [])
+    lines.extend(["", "## Declared formal predicates", ""])
+    if predicates:
+        lines.extend(
+            f"- `{item.get('id')}`: {item.get('kind')} / {item.get('status')} "
+            f"(`{item.get('evidence')}`)"
+            for item in predicates
+        )
+    else:
+        lines.append("- None loaded.")
+
+    registry = report.get("rewrite_registry", {})
+    lines.extend(["", "## Rewrite registry", ""])
+    lines.append(f"- Builtin: `{registry.get('builtin', 'none')}`")
+    for source in registry.get("user_sources", []):
+        lines.append(
+            f"- User file: `{source.get('path')}`; SHA-256 `{source.get('sha256')}`"
+        )
 
     lines.extend(
         [
@@ -122,8 +153,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 lines.append(
                     f"Initial unmatched roots: {initial.get('unmatched_root_pairs')}; "
                     f"rewrite phase: `{stats.get('phase', 'UNSPECIFIED')}`; "
-                    f"unmatched after fact rewrites: "
-                    f"{egraph.get('after_fact_rewrites', {}).get('unmatched_root_pairs')}."
+                    f"unmatched after predicate-derived rewrites: "
+                    f"{egraph.get('after_predicate_rewrites', {}).get('unmatched_root_pairs')}."
                 )
             rules = stats.get("rule_matches", {})
             lines.append(
@@ -194,6 +225,11 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             )
 
     lines.extend(["", "## Trust boundary", ""])
+    soundness = report.get("soundness", {})
+    conditions = soundness.get("conditional_on", [])
+    lines.append(f"- Soundness level: `{soundness.get('level', 'not_established')}`")
+    if conditions:
+        lines.extend(f"- Conditional on: {item}" for item in conditions)
     lines.extend(f"- {item}" for item in report.get("trusted_axioms", []))
     guarantees = report.get("guarantees", {})
     if guarantees:

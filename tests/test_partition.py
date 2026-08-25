@@ -92,6 +92,8 @@ def test_partition_plan_is_dependency_ordered_and_uses_typed_boundaries():
     assert client.calls[0][0] == "program_partitioning"
     assert client.calls[0][2]["programs"]["lhs"]["stores"]
     assert client.calls[0][2]["programs"]["rhs"]["stores"]
+    assert client.calls[0][2]["pair"]["assumptions_for_llm"] == list(spec.assumptions)
+    assert client.calls[0][2]["pair"]["predicates"]["ids"]
 
 
 def test_partition_plan_rejects_incomplete_root_coverage():

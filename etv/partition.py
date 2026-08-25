@@ -138,7 +138,8 @@ def _pair_context(spec: PairSpec) -> dict:
             }
             for role in spec.roles
         ],
-        "facts": {
+        "assumptions_for_llm": list(spec.assumptions),
+        "predicates": {
             "bindings": {
                 name: value_json(value)
                 for name, value in sorted(spec.facts.bindings.items())
@@ -156,7 +157,8 @@ def _pair_context(spec: PairSpec) -> dict:
                 name: {"min": parameter.minimum, "max": parameter.maximum}
                 for name, parameter in sorted(spec.facts.parameters.items())
             },
-            "assumptions": list(spec.facts.assumptions),
+            "ids": list(spec.predicates.predicate_ids),
+            "custom": [item.to_json() for item in spec.predicates.custom],
             "constraints": [item.to_json() for item in spec.facts.constraints],
             "disjoint": [sorted(group) for group in spec.facts.disjoint_groups],
         },

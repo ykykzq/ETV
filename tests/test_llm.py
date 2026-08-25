@@ -7,9 +7,11 @@ class FakeDeepSeekClient(DeepSeekClient):
     def __init__(self, spec):
         super().__init__(spec)
         self.calls = 0
+        self.payloads = []
 
     def complete_json(self, purpose, system, payload):
         self.calls += 1
+        self.payloads.append(payload)
         audit = {
             "purpose": purpose,
             "provider": "deepseek",
@@ -29,7 +31,7 @@ class FakeDeepSeekClient(DeepSeekClient):
                     "kind": "algebraic",
                     "lhs": {"op": "fadd", "args": [{"match": "a"}, {"match": "b"}]},
                     "rhs": {"op": "fadd", "args": [{"match": "b"}, {"match": "a"}]},
-                    "requires": [payload["available_fact_requirements"][-1]],
+                    "requires": [payload["available_predicate_requirements"][-1]],
                 }
             ]
         }, audit
@@ -71,5 +73,7 @@ def test_deepseek_assistance_selects_nodes_and_parses_conditional_rules(tmp_path
     assert client.calls == 2
     assert assistance.rules[0].rule_id == "llm_conditional_commute"
     assert assistance.rules[0].generated_by == "llm"
-    assert assistance.rules[0].fact_requirements[0].kind == "constraint"
+    assert assistance.rules[0].predicate_requirements[0].kind == "constraint"
     assert assistance.audit["selected_nodes"][0]["label"] == "k"
+    assert client.payloads[0]["assumptions_for_llm"] == list(spec.assumptions)
+    assert client.payloads[1]["assumptions_for_llm"] == list(spec.assumptions)

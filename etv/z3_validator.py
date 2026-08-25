@@ -12,8 +12,8 @@ from .model import PairSpec
 from .rules import Pattern, Rule, builtin_rules
 
 TRUSTED_RULE_WARNING = (
-    "This fact-gated rewrite is assumed equivalent without SMT or formal validation; "
-    "an incorrect PairSpec fact or rewrite can make PROVED unsound."
+    "This predicate-gated rewrite is assumed equivalent without SMT or formal validation; "
+    "an incorrect PairSpec predicate or rewrite can make PROVED unsound."
 )
 UNVERIFIED_ALGEBRAIC_WARNING = (
     "This algebraic rewrite was admitted by PairSpec policy without a successful proof; "
@@ -125,14 +125,14 @@ def admitted_rules(
                 "requirement": requirement.to_json(),
                 "satisfied": requirement.evaluate(spec.facts),
             }
-            for requirement in declaration.fact_requirements
+            for requirement in declaration.predicate_requirements
         ]
         if checks and not all(check["satisfied"] for check in checks):
             result = declaration.to_json()
             result["status"] = "skipped"
             result["validation"] = {
-                "result": "fact_requirements_not_met",
-                "fact_checks": checks,
+                "result": "predicate_requirements_not_met",
+                "predicate_checks": checks,
             }
             results.append(result)
             continue
@@ -145,7 +145,7 @@ def admitted_rules(
                 result["validation"] = {
                     "result": "skipped_by_policy",
                     "policy": policy,
-                    "fact_checks": checks,
+                    "predicate_checks": checks,
                     "warning": UNVERIFIED_ALGEBRAIC_WARNING,
                 }
                 accepted.append(declaration)
@@ -154,7 +154,7 @@ def admitted_rules(
 
             result = validate_rule(declaration)
             result["validation"]["policy"] = policy
-            result["validation"]["fact_checks"] = checks
+            result["validation"]["predicate_checks"] = checks
             if result["status"] == "proved":
                 accepted.append(declaration)
             elif policy == "best_effort":
@@ -170,15 +170,15 @@ def admitted_rules(
             result["validation"] = {
                 "result": "trusted",
                 "policy": spec.rule_policy.non_algebraic_validation,
-                "fact_checks": checks,
+                "predicate_checks": checks,
                 "warning": TRUSTED_RULE_WARNING,
             }
             accepted.append(declaration)
         else:
             result["status"] = "skipped"
             result["validation"] = {
-                "result": "fact_requirements_not_met",
-                "fact_checks": checks,
+                "result": "predicate_requirements_not_met",
+                "predicate_checks": checks,
             }
         results.append(result)
     return tuple(accepted), tuple(results)

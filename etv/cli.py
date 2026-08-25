@@ -106,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     check = subparsers.add_parser("check", help="verify a pair specification")
-    check.add_argument("spec", help="path to an etv-pair-v1 JSON file")
+    check.add_argument("spec", help="path to an etv-pair-v2 JSON file")
     check.add_argument("--out", help="directory for report.json and report.md")
     check.add_argument("--json", action="store_true", help="print the full machine report")
     check.set_defaults(handler=_check)

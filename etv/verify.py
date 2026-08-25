@@ -69,7 +69,7 @@ def _base_report(spec: PairSpec) -> dict:
         {
             "text": f"{name} = {binding_text(value)}",
             "evidence": ProofLevel.TRUSTED_AXIOM.value,
-            "source": "PairSpec.facts.bindings",
+            "source": "PairSpec.predicates.bindings",
         }
         for name, value in sorted(spec.facts.bindings.items())
     ]
@@ -77,7 +77,7 @@ def _base_report(spec: PairSpec) -> dict:
         {
             "text": f"{side}.{name} = {binding_text(value)}",
             "evidence": ProofLevel.TRUSTED_AXIOM.value,
-            "source": f"PairSpec.facts.side_bindings.{side}",
+            "source": f"PairSpec.predicates.side_bindings.{side}",
         }
         for side in ("lhs", "rhs")
         for name, value in sorted(spec.facts.side_bindings.get(side, {}).items())
@@ -86,7 +86,7 @@ def _base_report(spec: PairSpec) -> dict:
         {
             "text": f"{name} in [{parameter.minimum}, {parameter.maximum}]",
             "evidence": ProofLevel.TRUSTED_AXIOM.value,
-            "source": "PairSpec.facts.parameters",
+            "source": "PairSpec.predicates.parameters",
         }
         for name, parameter in sorted(spec.facts.parameters.items())
     )
@@ -94,7 +94,7 @@ def _base_report(spec: PairSpec) -> dict:
         {
             "text": constraint.render(),
             "evidence": ProofLevel.TRUSTED_AXIOM.value,
-            "source": "PairSpec.facts.constraints",
+            "source": "PairSpec.predicates.constraints",
         }
         for constraint in spec.facts.constraints
     )
@@ -102,7 +102,7 @@ def _base_report(spec: PairSpec) -> dict:
         {
             "text": text,
             "evidence": ProofLevel.TRUSTED_AXIOM.value,
-            "source": "PairSpec.facts.assumptions",
+            "source": "PairSpec.v1.facts.assumptions",
         }
         for text in spec.facts.assumptions
     )
@@ -110,13 +110,38 @@ def _base_report(spec: PairSpec) -> dict:
         {
             "text": "disjoint(" + ", ".join(sorted(group)) + ")",
             "evidence": ProofLevel.TRUSTED_AXIOM.value,
-            "source": "PairSpec.facts.disjoint",
+            "source": "PairSpec.predicates.disjoint",
         }
         for group in spec.facts.disjoint_groups
     )
+    custom_by_id = {
+        declaration.predicate_id: declaration for declaration in spec.predicates.custom
+    }
+    formal_predicates = [
+        {
+            "id": predicate_id,
+            **(
+                {
+                    "kind": custom_by_id[predicate_id].kind,
+                    "encoder": custom_by_id[predicate_id].encoder,
+                    "status": custom_by_id[predicate_id].status,
+                    **(
+                        {"formula": custom_by_id[predicate_id].formula.to_json()}
+                        if custom_by_id[predicate_id].formula is not None
+                        else {}
+                    ),
+                }
+                if predicate_id in custom_by_id
+                else {"kind": "builtin", "status": "assumed"}
+            ),
+            "evidence": ProofLevel.TRUSTED_AXIOM.value,
+            "source": "PairSpec.predicates",
+        }
+        for predicate_id in spec.predicates.predicate_ids
+    ]
     return {
-        "schema_version": 4,
-        "tool": {"name": "ETV", "version": "0.5.0"},
+        "schema_version": 5,
+        "tool": {"name": "ETV", "version": "0.6.0"},
         "pair_id": spec.pair_id,
         "status": Status.UNKNOWN.value,
         "reason": "NOT_RUN",
@@ -137,6 +162,21 @@ def _base_report(spec: PairSpec) -> dict:
             },
         },
         "assumptions": assumptions,
+        "llm_context": {
+            "assumptions": list(spec.assumptions),
+            "proof_relevance": "informational_only",
+            "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence.",
+        },
+        "formal_predicates": formal_predicates,
+        "rewrite_registry": {
+            "builtin": "validated_builtin_rules",
+            "user_sources": [source.to_json() for source in spec.rewrite_sources],
+            "inline_legacy_rules": [
+                rule.rule_id
+                for rule in spec.rewrite_rules
+                if not rule.source.startswith("user:")
+            ],
+        },
         "trusted_axioms": [
             "PairSpec role correspondence",
             (
@@ -152,6 +192,11 @@ def _base_report(spec: PairSpec) -> dict:
         "unsupported": [],
         "counterexample": None,
         "proof": {},
+        "soundness": {
+            "level": "formal_under_declared_predicates",
+            "conditional_on": [],
+            "non_formal_assistance": ["PairSpec.assumptions"],
+        },
         "guarantees": {
             "proves": (
                 "equal final Output memory for all abstract input values and all declared shape parameters"
@@ -179,6 +224,26 @@ def _finish(
     report["status"] = status.value
     report["reason"] = reason
     report["counterexample"] = counterexample
+    unverified = (
+        report.get("proof", {}).get("egraph", {}).get("unverified_rule_uses", [])
+    )
+    conditional = [
+        f"unverified rewrite rule: {entry['id']}"
+        for entry in unverified
+        if isinstance(entry, Mapping) and "id" in entry
+    ]
+    for predicate in report.get("formal_predicates", []):
+        if predicate.get("evidence") == ProofLevel.TRUSTED_AXIOM.value:
+            condition = f"declared predicate: {predicate.get('id')}"
+            if condition not in report["soundness"]["conditional_on"]:
+                report["soundness"]["conditional_on"].append(condition)
+    report["soundness"]["conditional_on"].extend(
+        item
+        for item in conditional
+        if item not in report["soundness"]["conditional_on"]
+    )
+    if conditional:
+        report["soundness"]["level"] = "conditional_on_unverified_rewrites"
     if status == Status.PROVED:
         report["guarantees"]["establishes"] = report["guarantees"].pop("proves")
     elif status == Status.DISPROVED:
@@ -196,8 +261,8 @@ def _finish(
 
 def _invalid_report(path: Path, exc: Exception) -> dict:
     return {
-        "schema_version": 4,
-        "tool": {"name": "ETV", "version": "0.5.0"},
+        "schema_version": 5,
+        "tool": {"name": "ETV", "version": "0.6.0"},
         "pair_id": path.stem,
         "status": Status.UNKNOWN.value,
         "reason": getattr(exc, "code", "INVALID_INPUT"),
@@ -205,11 +270,19 @@ def _invalid_report(path: Path, exc: Exception) -> dict:
         "scope": "input validation",
         "inputs": {"spec": str(path.resolve())},
         "assumptions": [],
+        "llm_context": {"assumptions": [], "proof_relevance": "informational_only"},
+        "formal_predicates": [],
+        "rewrite_registry": {"builtin": "validated_builtin_rules", "user_sources": []},
         "trusted_axioms": [],
         "blocks": [],
         "unsupported": [str(exc)],
         "counterexample": None,
         "proof": {},
+        "soundness": {
+            "level": "not_established",
+            "conditional_on": [],
+            "non_formal_assistance": [],
+        },
         "guarantees": {},
     }
 
@@ -530,16 +603,16 @@ def _complete_whole_compute_proof(
             for label, lhs, rhs, _, _ in root_pairs
         ],
     }
-    unmatched_after_facts = initially_unmatched
+    unmatched_after_predicates = initially_unmatched
     if initially_unmatched and relational_rules:
         saturation = _label_saturation(
             egraph.saturate(relational_rules, spec.limits),
-            "FACT_DERIVED_RELATIONAL_REWRITES",
+            "PREDICATE_DERIVED_RELATIONAL_REWRITES",
         )
-        unmatched_after_facts = [
+        unmatched_after_predicates = [
             item for item in root_pairs if not egraph.equivalent(item[3], item[4])
         ]
-        if unmatched_after_facts and ordinary_rules:
+        if unmatched_after_predicates and ordinary_rules:
             algebraic_saturation = _label_saturation(
                 egraph.saturate(ordinary_rules, spec.limits),
                 "ALGEBRAIC_REWRITES",
@@ -609,7 +682,9 @@ def _complete_whole_compute_proof(
         if entry["status"] == "admitted_unverified" and entry["used"]
     ]
     trusted_rule_uses = [
-        entry for entry in unverified_rule_uses if entry["kind"] == "trusted_fact"
+        entry
+        for entry in unverified_rule_uses
+        if entry["kind"] in {"trusted_fact", "trusted_predicate"}
     ]
     if unverified_rule_uses:
         trusted_ids = ", ".join(entry["id"] for entry in unverified_rule_uses)
@@ -623,8 +698,8 @@ def _complete_whole_compute_proof(
     report["proof"]["egraph"] = {
         "stats": saturation,
         "initial_state": initial_state,
-        "after_fact_rewrites": {
-            "unmatched_root_pairs": len(unmatched_after_facts),
+        "after_predicate_rewrites": {
+            "unmatched_root_pairs": len(unmatched_after_predicates),
             "rules": [rule.rule_id for rule in relational_rules],
         },
         "root_pairs": len(root_pairs),
@@ -787,16 +862,16 @@ def _partitioned_egraph_report(
             ),
             "roots": [],
         },
-        "after_fact_rewrites": {
+        "after_predicate_rewrites": {
             "unmatched_root_pairs": sum(
-                item["after_fact_rewrites"]["unmatched_root_pairs"]
+                item["after_predicate_rewrites"]["unmatched_root_pairs"]
                 for item in egraphs
             ),
             "rules": list(
                 dict.fromkeys(
                     rule_id
                     for item in egraphs
-                    for rule_id in item["after_fact_rewrites"]["rules"]
+                    for rule_id in item["after_predicate_rewrites"]["rules"]
                 )
             ),
         },
@@ -824,7 +899,7 @@ def _partitioned_egraph_report(
             entry
             for entry in rule_log
             if entry["status"] == "admitted_unverified"
-            and entry["kind"] == "trusted_fact"
+            and entry["kind"] in {"trusted_fact", "trusted_predicate"}
             and entry["used"]
         ],
         "unverified_rule_uses": [

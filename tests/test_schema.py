@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from etv.model import InputError
-from etv.schema import load_internal_pair_spec, load_pair_spec, load_program
+from etv.schema import load_internal_pair_spec, load_pair_spec, load_program, parse_expr
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"
@@ -27,6 +27,9 @@ def test_loads_side_specific_bindings_from_real_pair():
     assert spec.facts.for_side("lhs").bindings["arg4"] == 8
     assert spec.facts.for_side("rhs").bindings["arg4"] == 128
     assert spec.lhs_frontend.kind == spec.rhs_frontend.kind == "ttir"
+    assert "abi.Output" in spec.predicates.predicate_ids
+    assert spec.facts.assumptions == ()
+    assert spec.assumptions
 
 
 def test_unknown_schema_key_is_rejected(tmp_path):
@@ -126,7 +129,7 @@ def test_trusted_rewrite_without_fact_gate_is_rejected(tmp_path):
     path = tmp_path / "spec.json"
     path.write_text(json.dumps(source), encoding="utf-8")
 
-    with pytest.raises(InputError, match="require at least one fact gate"):
+    with pytest.raises(InputError, match="require at least one formal predicate gate"):
         load_internal_pair_spec(path)
 
 
@@ -167,11 +170,117 @@ def test_production_pair_spec_rejects_internal_ir_frontends():
 @pytest.mark.parametrize("missing", ["kind", "function", "programs"])
 def test_production_pair_spec_requires_explicit_ttir_metadata(tmp_path, missing):
     source = json.loads((ROOT / "examples/add/pair.json").read_text(encoding="utf-8"))
-    source["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
-    source["rhs"] = str(ROOT / "examples/add/ttir/torch_inductor_add.ttir")
-    del source["frontends"]["lhs"][missing]
+    source["metadata"]["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
+    source["metadata"]["rhs"] = str(ROOT / "examples/add/ttir/torch_inductor_add.ttir")
+    del source["metadata"]["frontends"]["lhs"][missing]
     path = tmp_path / "missing-frontend-field.json"
     path.write_text(json.dumps(source), encoding="utf-8")
 
     with pytest.raises(InputError):
+        load_pair_spec(path)
+
+
+def test_v2_loads_external_user_rewrite_with_predicate_gate(tmp_path):
+    source = json.loads((ROOT / "examples/add/pair.json").read_text(encoding="utf-8"))
+    source["metadata"]["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
+    source["metadata"]["rhs"] = str(ROOT / "examples/add/ttir/torch_inductor_add.ttir")
+    source["rewrites"] = [{"file": "rules.json"}]
+    rules = {
+        "format": "etv-rewrite-v1",
+        "rules": [
+            {
+                "id": "user_sub_self",
+                "kind": "trusted_predicate",
+                "lhs": {"op": "fsub", "args": [{"match": "a"}, {"match": "a"}]},
+                "rhs": {"float": "0"},
+                "requires": [{"kind": "predicate", "id": "abi.Output"}],
+            }
+        ],
+    }
+    spec_path = tmp_path / "pair.json"
+    rule_path = tmp_path / "rules.json"
+    spec_path.write_text(json.dumps(source), encoding="utf-8")
+    rule_path.write_text(json.dumps(rules), encoding="utf-8")
+
+    spec = load_pair_spec(spec_path)
+
+    assert spec.rewrite_sources[0].kind == "user"
+    assert len(spec.rewrite_sources[0].sha256) == 64
+    assert spec.rewrite_rules[0].source == f"user:{rule_path.resolve()}"
+    assert spec.rewrite_rules[0].predicate_requirements[0].evaluate(spec.facts)
+
+
+def test_v2_llm_assumption_is_not_a_formal_rule_gate():
+    spec = load_pair_spec(ROOT / "examples/add/pair.json")
+
+    assert spec.assumptions
+    assert spec.facts.assumptions == ()
+
+
+def test_expression_operand_sorts_are_checked_at_schema_boundary():
+    with pytest.raises(InputError, match="operands must be abstract_float"):
+        parse_expr({"op": "fadd", "args": [1, 2]})
+    with pytest.raises(InputError, match="offset must be an integer"):
+        parse_expr(
+            {
+                "op": "load",
+                "block": "arg0",
+                "offset": {"float": "0"},
+                "mask": True,
+                "default": {"float": "0"},
+            }
+        )
+
+
+def test_v2_rejects_non_integer_observation_size(tmp_path):
+    source = json.loads((ROOT / "examples/add/pair.json").read_text(encoding="utf-8"))
+    source["metadata"]["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
+    source["metadata"]["rhs"] = str(ROOT / "examples/add/ttir/torch_inductor_add.ttir")
+    source["observation"]["output_numel"] = {"float": "128"}
+    path = tmp_path / "bad-output-numel.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    with pytest.raises(InputError, match="output_numel must be an integer"):
+        load_pair_spec(path)
+
+
+def test_v2_z3_custom_predicate_enters_formal_constraints(tmp_path):
+    source = json.loads(
+        (ROOT / "examples/add/pair_parametric.json").read_text(encoding="utf-8")
+    )
+    source["metadata"]["lhs"] = str(ROOT / "examples/add/ttir/parametric_2d_add.ttir")
+    source["metadata"]["rhs"] = str(ROOT / "examples/add/ttir/parametric_1d_add.ttir")
+    source["predicates"]["custom"] = [
+        {
+            "id": "shape.a_reflexive",
+            "kind": "shape",
+            "encoder": "z3_expr",
+            "formula": {"op": "eq", "args": [{"var": "a"}, {"var": "a"}]},
+        }
+    ]
+    path = tmp_path / "custom-predicate.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    spec = load_pair_spec(path)
+
+    assert "shape.a_reflexive" in spec.predicates.predicate_ids
+    assert spec.facts.constraints[-1].render() == "eq(var(a), var(a))"
+
+
+def test_v2_custom_predicate_cannot_self_assert_proof(tmp_path):
+    source = json.loads((ROOT / "examples/add/pair.json").read_text(encoding="utf-8"))
+    source["metadata"]["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
+    source["metadata"]["rhs"] = str(ROOT / "examples/add/ttir/torch_inductor_add.ttir")
+    source["predicates"]["custom"] = [
+        {
+            "id": "layout.claimed",
+            "kind": "relation",
+            "encoder": "trusted",
+            "status": "smt_proved",
+        }
+    ]
+    path = tmp_path / "self-proved-predicate.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    with pytest.raises(InputError, match="cannot self-assert a proof"):
         load_pair_spec(path)

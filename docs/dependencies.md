@@ -12,11 +12,12 @@
 | Triton/libtriton | `==3.7.1`（`ttir` extra） | `3.7.1` | 原始 TTIR/MLIR 方言注册、解析和 IR 验证 |
 
 完成安装后，默认验证路径不依赖网络。只有 PairSpec 显式启用 `llm` 时才会通过
-DeepSeek HTTPS API 发送候选表达式和可用 fact gate；客户端使用 Python 标准库，
+DeepSeek HTTPS API 发送候选表达式、自然语言上下文和可用 predicate gate；客户端使用 Python 标准库，
 不增加运行时包依赖。Z3、egglog 与 libtriton 均通过 Python API 导入，不解析 CLI 输出。
 
 子图划分复用同一个 DeepSeek 客户端，不引入新的运行时包。启用
-`partition.enabled` 后会发送一次左右完整 ETV IR Program、PairSpec 事实和计算根
+`partition.enabled` 后会发送一次左右完整 ETV IR Program、PairSpec 谓词、自然语言
+上下文和计算根
 摘要；API key 仍只从 `DEEPSEEK_API_KEY` 读取，报告只保存模型/usage 与请求响应哈希。
 
 egglog 13.2.0 要求 Python 3.11 以上，因此 ETV 不再支持原来的 Python 3.9 基础路径。其 wheel 同时包含 Rust egglog 绑定；上游包还声明了 `typing-extensions`、`black`、`graphviz`、`anywidget`、`cloudpickle>=3` 和 `opentelemetry-api` 等传递依赖。本工程不直接调用其中的 notebook/可视化功能，但保留上游完整依赖集合以避免维护非官方裁剪包。
@@ -128,8 +129,9 @@ libtriton Python 模块，也不影响本工程随后执行的 TT IR 集成测�
 - 包含 `scf.for`/`scf.yield` 的测试模块通过完整解析，并正确保持在语义提升边界之外。
 
 SymPy 由 PyTorch 提取环境传递安装，但 ETV 不使用它进行规则准入。内建代数规则
-仍由 Z3 直接证明；自定义规则默认也如此，但 PairSpec 可显式选择弱化策略并承担
-报告中列出的信任风险。
+仍由 Z3 直接证明；外部用户代数规则默认也如此，但 PairSpec 可显式选择弱化策略并
+承担报告中列出的信任风险。ETV 使用上游 PyPI `egglog==13.2.0` 的公开 Python API，
+没有 fork、打补丁或 hack egglog、Z3、libtriton。
 
 ## 依赖信任
 

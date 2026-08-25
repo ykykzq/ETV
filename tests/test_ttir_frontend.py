@@ -176,7 +176,7 @@ def test_parametric_raw_ttir_pair_is_lifted_and_proved():
     assert report["proof"]["parametric_domain"]["complete_for_parameter_domain"] is True
     egraph = report["proof"]["egraph"]
     assert egraph["root_pairs"] == 1
-    assert egraph["after_fact_rewrites"]["unmatched_root_pairs"] == 0
+    assert egraph["after_predicate_rewrites"]["unmatched_root_pairs"] == 0
     assert "PARAMETRIC_SMT" in next(
         block["proof_levels"]
         for block in report["blocks"]

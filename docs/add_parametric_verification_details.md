@@ -7,7 +7,8 @@
 - `parametric_2d_add.ttir`：二维 shape 参数 `a,b`，256 lane；
 - `parametric_1d_add.ttir`：线性 numel 参数 `c`，128 lane。
 
-PairSpec 量化正 signed-i32 参数并声明：
+PairSpec 在 `predicates.parameters` 与 `predicates.constraints` 中量化正 signed-i32
+参数并声明：
 
 ```text
 a > 0 and b > 0 and c > 0 and a*b = c

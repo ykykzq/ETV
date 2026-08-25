@@ -8,7 +8,7 @@ ETV 的正式输入是两份 raw TT IR 和一份 PairSpec。前端、共同语�
 ```text
 文件层            解析层             语义层             证明层
 lhs/rhs.ttir  ->  libtriton IR  ->  ETV Program/Expr  ->  SMT + egglog e-graph
-pair.json     ->  PairSpec      ->  facts/contract    ->  proof obligations
+pair.json     ->  PairSpec v2   ->  predicates/observation -> proof obligations
 ```
 
 这一区分很重要：内部 IR 不是 e-graph。`Program`、`StoreTemplate` 和 `Expr` 是不可变、
@@ -71,19 +71,33 @@ observe_store(side:physical_output, offset(k), mask(k), value(k))
 `verify_internal_spec` 可读取 `etv-semantic-program-v1` 测试夹具。这是 Python 内部
 测试 API，不由 CLI 暴露，也不是第三种生产前端。
 
-## PairSpec 与事实
+## PairSpec v2 与谓词
 
-PairSpec 提供 TT IR 本身缺少的跨程序关系：
+PairSpec 的内部唯一事实源是 `PredicateSet`。`spec.roles` 与 `spec.facts` 只是供现有证明
+模块使用的只读兼容视图，不是另一份状态。v2 提供 TT IR 本身缺少的跨程序关系：
 
-- `roles`：物理 block/scalar/scalar-block 到逻辑 Input/Other/Alpha/Output；
-- `bindings` 与 `side_bindings`：常量、shape、stride、numel 等参数；
-- `parameters` 与 `constraints`：例如正 i32 的 `a,b,c` 以及 `a*b=c`；
-- `disjoint`：输入与输出的 no-alias 前提；
-- `contract`：观察哪个角色、观察多少逻辑元素、是否要求完整覆盖；
-- `limits`：饱和迭代、e-node 和超时上限。
+- `metadata`：两侧文件、入口、launch、limits、LLM 与划分配置；
+- `assumptions.for_llm`：非形式化自然语言上下文；
+- `predicates.abi`：物理 block/scalar/scalar-block 到逻辑角色；
+- `predicates.bindings/parameters/constraints/disjoint`：shape、参数关系和 no-alias；
+- `predicates.custom`：`z3_expr` 或 `trusted` 的带 ID 扩展谓词；
+- `observation`：观察角色、逻辑元素数、覆盖与内存条件；
+- `rewrites`：本次验证使用的外部用户规则文件。
 
-事实是证明前提，不是从程序中“推测”出来的结论。报告逐项记录其来源为
-`TRUSTED_AXIOM`。
+谓词是证明前提，不是从程序中“推测”出来的结论。自然语言 assumptions 不进入
+`FactContext`、SMT 约束或规则 gate。结构谓词具有稳定 ID，外部规则可以精确引用。
+报告分别列出 `llm_context`、`formal_predicates`、`rewrite_registry` 与 `soundness`。
+
+## 重写库
+
+`etv/rules.py` 维护内建代数规则；`schema.py` 按 PairSpec 加载独立
+`etv-rewrite-v1` 用户文件。每个外部文件以 SHA-256 固定，规则来源标记为
+`user:<path>`。注册表是单次验证的不可变数据，不会 hack、patch 或修改 egglog 包，
+也不会把用户规则永久加入进程级全局集合。
+
+代数规则进入 Z3 Real 准入门；事实相关规则必须满足 predicate gate。参数化关系规则由
+ETV 从谓词生成，并用针对当前程序对的 SMT 义务证明适用条件。没有验证器的自定义
+关系规则只能 `admitted_unverified`，其实际使用会降低报告的 soundness 等级。
 
 ## 参数化与内存义务
 
@@ -109,9 +123,9 @@ SMT 证明的是规则条件，不直接宣布最终程序等价。规则必须�
 `etv/egraph.py` 使用 `egglog==13.2.0`。每个整图或子图义务的过程是：
 
 1. 插入两侧未归一化根；
-2. 饱和事实派生的 scalar/load/store 关系规则；
+2. 饱和谓词派生的 scalar/load/store 关系规则；
 3. 若根未合并，饱和经 Z3 准入的代数规则和 PairSpec 规则；
-4. 若显式启用 LLM，可生成带 fact gate 的候选规则并重新准入；
+4. 若显式启用 LLM，可生成带 predicate gate 的候选规则并重新准入；
 5. 只有两侧根属于同一 e-class 才完成计算证明。
 
 报告分别记录规则准入、逐规则 match 数、是否实际使用、每阶段 e-node/e-class 数与
@@ -120,7 +134,8 @@ SMT 证明的是规则条件，不直接宣布最终程序等价。规则必须�
 ## 子图划分
 
 当 `llm.enabled=true` 且 `partition.enabled=true` 时，划分器把两侧完整内部 Program、
-PairSpec 和计算根发送给 LLM 一次。模型只提出语义对应的左右路径。ETV 确定性检查：
+PairSpec 谓词、自然语言上下文和计算根发送给 LLM 一次。模型只提出语义对应的左右
+路径。ETV 确定性检查：
 
 - 每个 root family 完整覆盖；
 - 同侧路径唯一且只嵌套或互不相交；

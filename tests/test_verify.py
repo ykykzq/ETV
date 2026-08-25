@@ -68,6 +68,9 @@ def test_writes_json_and_markdown_artifacts(tmp_path):
     assert (tmp_path / "report.json").is_file()
     markdown = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "Status: **PROVED**" in markdown
+    assert "Soundness: `formal_under_declared_predicates`" in markdown
+    assert "LLM-only context" in markdown
+    assert "Rewrite registry" in markdown
     assert "It does not prove" in markdown
 
 
@@ -160,6 +163,11 @@ def test_fact_gated_trusted_rewrite_is_used_and_audited(tmp_path):
         for block in report["blocks"]
         if block["kind"] == "COMPUTE"
     )
+    assert report["soundness"]["level"] == "conditional_on_unverified_rewrites"
+    assert (
+        "unverified rewrite rule: specialized_sub_is_add"
+        in report["soundness"]["conditional_on"]
+    )
 
 
 def test_fact_gated_rewrite_is_skipped_when_requirement_is_missing(tmp_path):
@@ -172,7 +180,7 @@ def test_fact_gated_rewrite_is_skipped_when_requirement_is_missing(tmp_path):
         if item["id"] == "specialized_sub_is_add"
     )
     assert admission["status"] == "skipped"
-    assert admission["validation"]["fact_checks"][0]["satisfied"] is False
+    assert admission["validation"]["predicate_checks"][0]["satisfied"] is False
 
 
 def test_parametric_2d_to_1d_shape_relation_is_proved():
@@ -183,7 +191,10 @@ def test_parametric_2d_to_1d_shape_relation_is_proved():
     assert report["proof"]["parametric_domain"]["complete_for_parameter_domain"] is True
     assert report["proof"]["egraph"]["root_pairs"] == 1
     assert report["proof"]["egraph"]["initial_state"]["unmatched_root_pairs"] == 1
-    assert report["proof"]["egraph"]["after_fact_rewrites"]["unmatched_root_pairs"] == 0
+    assert (
+        report["proof"]["egraph"]["after_predicate_rewrites"]["unmatched_root_pairs"]
+        == 0
+    )
     assert report["proof"]["egraph"]["stats"]["iterations"] > 0
     assert all(
         check["result"] in {"sat", "unsat"}

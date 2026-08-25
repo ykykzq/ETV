@@ -1,4 +1,4 @@
-"""Fixed-rank symbolic obligations and fact-derived relational rewrites."""
+"""Fixed-rank symbolic obligations and predicate-derived relational rewrites."""
 
 from __future__ import annotations
 
@@ -318,7 +318,7 @@ class SymbolicValueRewriter:
             validator=(
                 "pair_spec_role_mapping"
                 if evidence == ProofLevel.TRUSTED_AXIOM
-                else "pair_facts_and_z3_unsat"
+                else "pair_predicates_and_z3_unsat"
             ),
             statement=f"{lhs.render()} == {rhs.render()}",
             requires=("PairSpec role mapping", "symbolic output domain"),
@@ -425,7 +425,7 @@ class SymbolicValueRewriter:
                 canonical,
                 {
                     "result": "unsat",
-                    "logic": "symbolic integer arithmetic under PairSpec facts",
+                    "logic": "symbolic integer arithmetic under PairSpec predicates",
                     "premises": {
                         "role_mapping": {
                             "side": self.side,
@@ -523,7 +523,7 @@ def _store_rule(
         lhs=lhs,
         rhs=rhs,
         evidence=ProofLevel.PARAMETRIC_SMT,
-        validator="pair_facts_and_z3_unsat",
+        validator="pair_predicates_and_z3_unsat",
         statement=f"{render_pattern(lhs)} == {render_pattern(rhs)}",
         requires=("PairSpec output role mapping", "symbolic output domain"),
         kind="relational",
@@ -533,7 +533,7 @@ def _store_rule(
     admission["status"] = "proved"
     admission["validation"] = {
         "result": "unsat",
-        "logic": "symbolic integer arithmetic under PairSpec facts",
+        "logic": "symbolic integer arithmetic under PairSpec predicates",
         "premises": {
             "role_mapping": {
                 "side": side,
@@ -927,7 +927,7 @@ def verify_parametric_pair(
         blocks.append(
             _proof_block(
                 "LOAD",
-                "physical loads are retained until fact-derived, SMT-conditioned "
+                "physical loads are retained until predicate-derived, SMT-conditioned "
                 "rewrites map them to logical reads",
                 {
                     "rewrite_rule_ids": [item["id"] for item in load_rewrites],
