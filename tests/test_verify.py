@@ -4,10 +4,11 @@ from pathlib import Path
 import pytest
 
 from etv.llm import LLMAssistance
-from etv.model import Expr, Sort, Status
+from etv.ir import Expr, Sort
+from etv.model import Status
 from etv.reporting import write_report
 from etv.schema import parse_rewrite_rule
-from etv.verify import _definedness_issue, verify_spec
+from etv.verify import _definedness_issue, verify_internal_spec as verify_spec
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"

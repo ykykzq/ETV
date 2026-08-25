@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 from etv.cli import main
-from etv.model import InputError, Status, UnsupportedSemantics, int_const
+from etv.ir import int_const
+from etv.model import InputError, Status, UnsupportedSemantics
 from etv.schema import load_pair_spec
 from etv.ttir import LibTritonParser, REQUIRED_TRITON_VERSION, parse_ttir
 from etv.ttir.lift import lift_ttir
@@ -38,7 +39,9 @@ def test_real_add_artifacts_match_provenance():
     assert "/private/tmp" not in (root / "ttir/ntops_add.ttir").read_text(
         encoding="utf-8"
     )
-    assert (root / "prims/torch_add.prims.json").is_file()
+    assert "/private/tmp" not in (root / "ttir/torch_inductor_add.ttir").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_pair_spec_accepts_explicit_ttir_frontends():
@@ -46,9 +49,10 @@ def test_pair_spec_accepts_explicit_ttir_frontends():
 
     assert spec.lhs_frontend.kind == "ttir"
     assert spec.lhs_frontend.function == "ntops_add_kernel"
-    assert spec.lhs_frontend.programs.render() == "ceildiv(var(c), 256)"
-    assert spec.rhs_frontend.kind == "prims"
-    assert spec.rhs_frontend.programs is None
+    assert spec.lhs_frontend.programs.data == 1
+    assert spec.rhs_frontend.kind == "ttir"
+    assert spec.rhs_frontend.function == "triton_poi_fused_0"
+    assert spec.rhs_frontend.programs.data == 1
 
 
 def test_parametric_add_pair_declares_symbolic_raw_ttir_launches():
@@ -56,8 +60,8 @@ def test_parametric_add_pair_declares_symbolic_raw_ttir_launches():
 
     assert spec.lhs_frontend.kind == "ttir"
     assert spec.lhs_frontend.programs.render() == "ceildiv(var(c), 256)"
-    assert spec.rhs_frontend.kind == "prims"
-    assert spec.rhs_frontend.programs is None
+    assert spec.rhs_frontend.kind == "ttir"
+    assert spec.rhs_frontend.programs.render() == "ceildiv(var(c), 128)"
     assert spec.facts.parameters["a"].minimum == 1
     assert spec.facts.parameters["c"].maximum == 2**31 - 1
     assert spec.facts.constraints[0].render() == "eq(imul(var(a), var(b)), var(c))"
@@ -65,14 +69,14 @@ def test_parametric_add_pair_declares_symbolic_raw_ttir_launches():
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
 def test_libtriton_snapshot_is_complete_and_stable():
-    path = ROOT / "examples/add/ttir/ntops_add.ttir"
+    path = ROOT / "examples/add/ttir/torch_inductor_add.ttir"
 
     first = parse_ttir(path)
     second = parse_ttir(path)
 
-    assert first.function == "ntops_add_kernel"
+    assert first.function == "triton_poi_fused_0"
     assert first.parser_version == REQUIRED_TRITON_VERSION
-    assert len(first.arguments) == 16
+    assert len(first.arguments) == 5
     assert {"tt.get_program_id", "tt.load", "tt.store", "arith.mulf"} <= {
         operation.name for operation in first.operations
     }
@@ -136,10 +140,20 @@ def test_raw_ttir_pair_is_lifted_and_proved():
         "version": REQUIRED_TRITON_VERSION,
     }
     assert report["inputs"]["frontends"]["rhs"] == {
-        "name": "torch_prims_json",
-        "version": "1",
+        "name": "libtriton",
+        "version": REQUIRED_TRITON_VERSION,
     }
     assert any(block["kind"] == "FRONTEND" for block in report["blocks"])
+
+
+@pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
+def test_raw_ttir_mul_add_and_fma_are_proved_by_the_same_frontend():
+    report = verify_spec(ROOT / "tests/fixtures/ttir/add_mul_vs_fma.json")
+
+    assert report["status"] == Status.PROVED.value
+    assert report["inputs"]["frontends"]["lhs"]["name"] == "libtriton"
+    assert report["inputs"]["frontends"]["rhs"]["name"] == "libtriton"
+    assert "fma_def" in report["proof"]["egraph"]["stats"]["rule_matches"]
 
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
@@ -155,32 +169,14 @@ def test_parametric_raw_ttir_pair_is_lifted_and_proved():
         "name": "libtriton",
         "version": REQUIRED_TRITON_VERSION,
     }
+    assert report["inputs"]["frontends"]["rhs"] == {
+        "name": "libtriton",
+        "version": REQUIRED_TRITON_VERSION,
+    }
     assert report["proof"]["parametric_domain"]["complete_for_parameter_domain"] is True
-    assert len(report["proof"]["parametric_domain"]["checks"]) == 45
     egraph = report["proof"]["egraph"]
     assert egraph["root_pairs"] == 1
-    assert egraph["initial_state"] | {"roots": []} == {
-        "enodes": 40,
-        "eclasses": 40,
-        "unmatched_root_pairs": 1,
-        "roots": [],
-    }
     assert egraph["after_fact_rewrites"]["unmatched_root_pairs"] == 0
-    assert egraph["stats"]["enodes"] == 42
-    assert egraph["stats"]["eclasses"] == 34
-    assert egraph["stats"]["phase"] == "FACT_DERIVED_RELATIONAL_REWRITES"
-    assert {
-        item["id"] for item in egraph["rule_application"] if item["used"]
-    } == {
-        "parametric_load_lhs_0",
-        "parametric_scalar_role_lhs_1",
-        "parametric_load_lhs_2",
-        "parametric_store_lhs",
-        "parametric_load_rhs_0",
-        "parametric_load_rhs_1",
-        "parametric_load_rhs_2",
-        "parametric_store_rhs",
-    }
     assert "PARAMETRIC_SMT" in next(
         block["proof_levels"]
         for block in report["blocks"]

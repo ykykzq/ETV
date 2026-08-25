@@ -11,22 +11,20 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, 
 
 from .egraph import EGraph
 from .evaluator import SideRoles, eval_expr, evaluate_program
+from .ir import Expr, Program, Sort
 from .llm import LLMError, propose_rules
 from .model import (
     Evaluation,
-    Expr,
     InputError,
     PairSpec,
     PartitionConfig,
     ProofLevel,
-    Program,
-    Sort,
     Status,
     UnsupportedSemantics,
     pairwise,
 )
 from .partition import PartitionError, PartitionPlan, propose_partition_plan
-from .schema import load_pair_spec
+from .schema import load_internal_pair_spec, load_pair_spec, load_program
 from .parametric import ParametricFailure, verify_parametric_pair
 from .ttir import load_program_artifact
 from .z3_validator import admitted_rules
@@ -148,7 +146,7 @@ def _base_report(spec: PairSpec) -> dict:
             ),
             "PairSpec no-alias declarations",
             "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
-            "Semantic TTIR evaluator and memory-token model",
+            "ETV IR evaluator and memory-token model",
         ],
         "blocks": [],
         "unsupported": [],
@@ -162,8 +160,7 @@ def _base_report(spec: PairSpec) -> dict:
             ),
             "does_not_prove": [
                 "IEEE-754 or bitwise GPU equality",
-                "formal correctness of the raw-TTIR-to-Semantic-TTIR lifting implementation",
-                "formal correctness of the Torch-Prims-to-ETV lifting implementation",
+                "formal correctness of the raw-TTIR-to-ETV-IR lifting implementation",
                 (
                     "dynamic rank, unbounded loops, or shapes outside the declared parameter domain"
                     if spec.facts.parameters
@@ -1047,55 +1044,49 @@ def verify_pair(spec: PairSpec) -> dict:
             _block("FRONTEND", Status.UNKNOWN, str(exc), reason=exc.code)
         )
         return _finish(report, Status.UNKNOWN, exc.code)
+    return _verify_lifted_pair(report, spec, lhs_program, rhs_program, require_ttir=True)
+
+
+def verify_internal_pair(spec: PairSpec, lhs_program: Program, rhs_program: Program) -> dict:
+    """Run the proof core on pre-lifted Semantic IR for verifier tests."""
+
+    return _verify_lifted_pair(
+        _base_report(spec), spec, lhs_program, rhs_program, require_ttir=False
+    )
+
+
+def _verify_lifted_pair(
+    report: dict,
+    spec: PairSpec,
+    lhs_program: Program,
+    rhs_program: Program,
+    require_ttir: bool,
+) -> dict:
     report["inputs"]["frontends"] = {
         "lhs": {"name": lhs_program.frontend, "version": lhs_program.frontend_version},
         "rhs": {"name": rhs_program.frontend, "version": rhs_program.frontend_version},
     }
-    if lhs_program.frontend == "libtriton" or rhs_program.frontend == "libtriton":
-        report["trusted_axioms"].append(
-            "ETV TTIR-to-Semantic-TTIR lifting implementation"
-        )
-        report["blocks"].append(
-            _block(
-                "FRONTEND",
-                Status.PROVED,
-                "raw modules were parsed and verified by pinned libtriton before semantic lifting",
-                (ProofLevel.STRUCTURAL,),
-                details=report["inputs"]["frontends"],
-            )
-        )
-    if (
-        lhs_program.frontend == "torch_prims_json"
-        or rhs_program.frontend == "torch_prims_json"
+    if require_ttir and any(
+        program.frontend != "libtriton" for program in (lhs_program, rhs_program)
     ):
+        raise InputError(
+            "verify_pair requires both programs to be lifted from raw TTIR",
+            "TTIR_PAIR_REQUIRED",
+        )
+    if require_ttir:
         report["trusted_axioms"].append(
-            "ETV Torch-Prims-to-internal-IR lifting implementation"
+            "ETV TTIR-to-semantic-IR lifting implementation"
         )
         report["blocks"].append(
             _block(
                 "FRONTEND",
                 Status.PROVED,
-                "the strict fixed-rank Torch Prims graph was type-checked and "
-                "lifted directly without TorchInductor",
+                "both raw TTIR modules were parsed and verified by pinned libtriton "
+                "before lifting into the common semantic IR",
                 (ProofLevel.STRUCTURAL,),
                 details=report["inputs"]["frontends"],
             )
         )
-    heterogeneous_symbolic_pair = {
-        lhs_program.frontend,
-        rhs_program.frontend,
-    } == {"libtriton", "torch_prims_json"}
-    if heterogeneous_symbolic_pair and not spec.facts.parameters:
-        report["blocks"].append(
-            _block(
-                "PARAMETER_DOMAIN",
-                Status.UNKNOWN,
-                "TTIR-versus-Prims verification requires fixed-rank symbolic "
-                "parameters, including singleton domains for fixed specializations",
-                reason="SYMBOLIC_FACTS_REQUIRED",
-            )
-        )
-        return _finish(report, Status.UNKNOWN, "SYMBOLIC_FACTS_REQUIRED")
 
     if spec.semantic_mode != "abstract_float":
         report["unsupported"].append(
@@ -1412,5 +1403,18 @@ def verify_spec(path: Path) -> dict:
     try:
         spec = load_pair_spec(path)
         return verify_pair(spec)
+    except InputError as exc:
+        return _invalid_report(path, exc)
+
+
+def verify_internal_spec(path: Path) -> dict:
+    """Verify a Semantic IR fixture without exposing it as a production frontend."""
+
+    path = Path(path)
+    try:
+        spec = load_internal_pair_spec(path)
+        lhs_program = load_program(spec.lhs_path)
+        rhs_program = load_program(spec.rhs_path)
+        return verify_internal_pair(spec, lhs_program, rhs_program)
     except InputError as exc:
         return _invalid_report(path, exc)

@@ -1,151 +1,119 @@
 # ETV
 
-ETV（Equivalence for TTIR Verification）验证九齿生成的 TTIR kernel 与 Torch Prims
-参考程序是否具有相同的可观察输出。两侧使用不同前端，但会被提升到同一个类型化
-内部表示，再通过带条件的 e-graph 重写完成等价判定。
+ETV（Equivalence for TTIR Verification）验证两份 raw TT IR kernel 在给定
+PairSpec 前提下是否具有相同的可观察输出内存。两侧输入统一为 `.ttir`/`.mlir`：
 
 ```text
-ntops Add -> ninetoothed -> Triton -> raw TTIR --+
-                                                 +-> ETV IR -> 成对子图 -> 条件规则 -> e-graph
-PyTorch Add -> TorchRefsMode/make_fx -> Prims ---+
+lhs.ttir -> libtriton parse/verify -> TTIR snapshot -> ETV IR --+
+                                                               +-> SMT + egglog -> verdict
+rhs.ttir -> libtriton parse/verify -> TTIR snapshot -> ETV IR --+
 ```
 
-Torch 侧不经过 TorchInductor，也不生成 Triton kernel。用户输入仍是两个程序和一份
-PairSpec：左侧 raw TTIR、右侧 `etv-prims-program-v1`、角色/shape/指针对应事实以及
-验证契约。
+ETV IR 是面向验证的共同语义表示，描述 launch、逐 lane 地址、mask、load、算术和
+store；它不是 e-graph。证明阶段才把 ETV IR 中的表达式编码进 egglog e-graph，利用
+重写与同余闭包判断两侧 `observe_store` 是否进入同一个 e-class。
 
-ETV 严格返回以下结果之一：
+## 结果
 
-- `PROVED`：在 PairSpec 的全部前提下，Output 可观察内存等价；
-- `DISPROVED`：找到了可重放的地址、掩码或抽象值反例；
-- `UNKNOWN`：缺少事实、语义、规则或资源，无法闭合证明。
+- `PROVED`：在 PairSpec 全部前提下，可观察 Output 内存等价；
+- `DISPROVED`：找到可重放的地址、mask 或抽象数值反例；
+- `UNKNOWN`：输入超出语义子集，或事实、定义域、规则、资源不足。
 
-## 参数化范围
+当前浮点模式 `ABSTRACT_FLOAT` 使用精确数学值，不代表 IEEE-754、容差或 GPU 位级
+等价。当前 MVP 面向固定 rank、单 kernel、单 store 的无环逐点程序。
 
-当前支持固定 rank、符号维度和符号 launch 规模，不支持动态 rank。例如在
-`a>0`、`b>0`、`c>0`、`a*b=c` 的前提下，可验证二维 `[a,b]` 九齿 Add 与二维
-Torch Prims Add 对任意允许的 `a,b,c` 等价。
-
-参数化路径不会先把 load 直接归一化成同一个叶子。进入 e-graph 的初始根保留：
-
-- 两侧物理 block/标量端点；
-- `pid/lane` 经逻辑输出 `k` 替换后的符号地址；
-- load/store mask；
-- 完整 `observe_store(address, mask, value)`。
-
-ETV 从 PairSpec 角色映射、shape 关系和 launch 关系产生 load/scalar/store 条件规则。
-Z3 只证明这些规则在声明参数域上的条件；最终只有规则在 egglog 中实际匹配、并使
-两侧 store 根进入同一个 e-class，才能返回 `PROVED`。规则准入和规则应用分别记录。
-
-## 快速开始
+## 安装
 
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python -m pip install -e '.[dev,ttir]'
 .venv/bin/python -m pytest
 ```
 
-安装 Triton/libtriton 3.7.1 后运行参数化真实输入边界：
+Linux 可直接安装 `ttir` extra。macOS 需要源码构建 Triton 3.7.1，见
+[依赖与环境](docs/dependencies.md)。
+
+## 使用
+
+固定 `[8,16]` 的真实 Add 程序对：
+
+```bash
+.venv/bin/python -m etv check examples/add/pair.json --out build/add
+```
+
+左侧来自 ntops/ninetoothed，右侧来自 PyTorch/TorchInductor；两侧都是真实生成的
+TT IR。预期结果：
+
+```text
+PROVED ntops_add_vs_torch_inductor_add: OBSERVABLE_MEMORY_EQUIVALENT
+```
+
+参数化的 256-lane 二维 TT IR 对 128-lane 一维 TT IR：
 
 ```bash
 .venv/bin/python -m etv check examples/add/pair_parametric.json \
   --out build/add_parametric
 ```
 
-预期输出：
+该例在 `a>0, b>0, c>0, a*b=c` 下证明地址、mask、覆盖和计算等价。
 
-```text
-PROVED parametric_ninetoothed_add_vs_torch_prims_add: OBSERVABLE_MEMORY_EQUIVALENT
-```
-
-固定 `[8,16]` 上游样例：
+解析单个 TT IR 并导出稳定快照：
 
 ```bash
-.venv/bin/python -m etv check examples/add/pair.json \
-  --out build/add_upstream
-```
-
-不安装 libtriton 也可运行等价的内部 IR/Prims 参数化回归：
-
-```bash
-.venv/bin/python -m etv check \
-  tests/fixtures/semantic/specs/add_parametric_prims.json \
-  --out build/add_parametric_prims
-```
-
-检查任一输入：
-
-```bash
-.venv/bin/python -m etv inspect examples/add/prims/torch_add.prims.json
 .venv/bin/python -m etv parse examples/add/ttir/ntops_add.ttir \
-  --out build/ntops_add.snapshot.json
+  --out build/ntops_add.snapshot.json --no-assembly
+.venv/bin/python -m etv inspect examples/add/ttir/torch_inductor_add.ttir
 ```
 
-Linux 可通过 `.[dev,ttir]` 安装 raw TTIR 前端；macOS 的源码构建步骤见
-[依赖与环境](docs/dependencies.md)。
+`check` 和 `inspect` 不接受 Semantic JSON 或 Prims。`tests/fixtures/semantic` 中的
+JSON 只供证明内核单元测试使用，通过 Python 专用 API `verify_internal_spec` 进入，
+不属于用户输入协议；raw TT IR 集成夹具位于 `tests/fixtures/ttir`。
 
-## 规则与 LLM
+## PairSpec
 
-内建代数规则默认先由 Z3 Real 证明。PairSpec 自定义规则支持 `required`、
-`best_effort`、`trusted` 三种准入策略。参数化 load/store 规则由 ETV 根据 PairSpec
-自动生成，并附带 mask、地址和角色条件的证明记录。
-
-常规规则无法连接待验证根时，可以显式启用 DeepSeek：模型先选择表达式节点，再
-生成必须引用现有 fact gate 的候选规则。模型输出经过严格 schema 和既有准入流程；
-模型本身不能给出 `PROVED`。凭据只从 `DEEPSEEK_API_KEY` 读取。
-
-对于较大的纯计算图，也可以在 PairSpec 同时设置 `llm.enabled=true` 和
-`partition.enabled=true`。ETV 向 DeepSeek 发送一次左右完整程序、PairSpec 上下文和
-全部计算根族；模型只提出左右子图根。ETV 随后检查整根覆盖、路径唯一性、左右依赖
-拓扑、无环性和类型，并按子图依赖顺序分别运行 egglog。已经证明的子图才会在父图
-中替换为同名类型化边界输入。提案非法或局部证明失败时自动回退到原整图验证，且把
-原因写入 `proof.partitioning`。
+PairSpec 同时描述两侧入口与 host launch、物理参数到逻辑角色的映射、shape/stride
+事实、参数约束、no-alias 前提和可观察输出：
 
 ```json
 {
-  "llm": {"enabled": true, "generate_rules": false},
-  "partition": {"enabled": true, "min_partitions": 2, "max_partitions": 16}
+  "lhs": "lhs.ttir",
+  "rhs": "rhs.ttir",
+  "frontends": {
+    "lhs": {"kind": "ttir", "function": "lhs_kernel", "programs": 1},
+    "rhs": {"kind": "ttir", "function": "rhs_kernel", "programs": 1}
+  }
 }
 ```
 
-## 语义边界
+TT IR 本身不包含 host launch grid，因此 `programs` 必须显式给出，也可以是
+`ceildiv(c, 256)` 之类的符号表达式。完整格式见
+[TT IR 输入与验证过程](docs/verification_process.md)。
 
-当前 `ABSTRACT_FLOAT` 将浮点操作解释为数学实数。因此 `PROVED` 不表示 IEEE-754、
-容差或 GPU 位级等价。当前还不支持动态 rank、循环、归约、多 kernel、原子操作、
-shared memory 或 buffer 分配边界证明。
+## 等式饱和与 LLM
 
-libtriton、Prims 提升器、ETV 内存模型、Z3、egglog 与 PairSpec 前提都位于当前可信
-计算基。实际使用的未经验证规则会进入报告的信任警告。
+内建代数规则先由 Z3 Real 证明。布局、地址、mask、标量 ABI 等关系规则由 ETV 根据
+PairSpec 事实生成，并由参数化 SMT 查询证明适用条件；只有规则在 egglog 中实际匹配
+并合并根，才会关闭等价目标。用户或 LLM 新增的非代数规则可按当前策略作为可信规则
+准入，但若实际使用，报告会标为 `admitted_unverified` 并列入信任警告。
 
-## 命令
-
-```text
-etv check SPEC [--out DIR] [--json]
-etv inspect PROGRAM
-etv parse INPUT [--function NAME] [--out FILE] [--no-assembly]
-etv rules [--json]
-etv validate-rule [RULE_ID]
-etv explain REPORT_JSON
-```
-
-`check` 退出码为 `PROVED=0`、`DISPROVED=1`、`UNKNOWN/输入错误=2`。
+可选子图划分让 LLM 扫描完整左右程序并提出对应子图边界。ETV 自己检查根覆盖、路径
+唯一性、左右依赖拓扑、无环性和类型，再按依赖顺序分别验证；LLM 不决定等价结论。
 
 ## 仓库结构
 
 ```text
-etv/prims.py                   严格 Prims JSON 读取与内部 IR 提升
-etv/ttir/                     libtriton 解析、快照与 TTIR 提升
-etv/parametric.py             符号义务与 fact-derived 条件规则
-etv/egraph.py                 egglog 适配、逐轮状态和规则应用日志
-etv/llm.py                    可选节点选择与条件规则候选
-etv/partition.py              整程序 LLM 扫描、成对子图检查与依赖 DAG
-tools/extract_add_pair.py     九齿 TTIR/Torch Prims 输入提取
-examples/add/                 Add 程序对、PairSpec 与 provenance
-docs/prims_format.md          Prims 输入格式
-docs/verification_process.md  完整验证契约
-docs/add_parametric_verification_details.md 参数化 Add 逐步重写轨迹
+etv/ir.py                     TT IR 提升后的共同语义 IR
+etv/ttir/libtriton.py         固定版本 libtriton 解析、验证与快照
+etv/ttir/lift.py              TT IR 到 ETV IR 的语义提升
+etv/schema.py                 TT IR PairSpec 与内部测试夹具 schema
+etv/parametric.py             参数化 SMT 义务和事实派生规则
+etv/egraph.py                 egglog 编码、饱和与应用日志
+etv/partition.py              LLM 成对子图提议与机器检查
+etv/verify.py                 端到端证明编排
+tools/extract_add_pair.py     ntops/TorchInductor 双 TT IR 提取
+examples/add/                 程序对、PairSpec、源代码与来源哈希
 ```
 
-详细设计见[架构](docs/architecture.md)，当前覆盖与缺口见
-[实现状态](docs/implementation_status.md)。
+进一步阅读：[架构](docs/architecture.md)、[完整验证过程](docs/verification_process.md)、
+[实现状态](docs/implementation_status.md)和[真实 Add 验证](docs/add_validation.md)。

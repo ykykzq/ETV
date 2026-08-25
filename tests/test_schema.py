@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from etv.model import InputError
-from etv.schema import load_pair_spec, load_program
+from etv.schema import load_internal_pair_spec, load_pair_spec, load_program
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"
@@ -12,7 +12,7 @@ FIXTURES = ROOT / "tests/fixtures/semantic"
 
 def test_loads_example_program_and_spec():
     program = load_program(FIXTURES / "programs/add_ntops_2d.json")
-    spec = load_pair_spec(FIXTURES / "specs/add_proved.json")
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_proved.json")
 
     assert program.name == "ntops_add_2d"
     assert program.lanes == 128
@@ -24,9 +24,9 @@ def test_loads_example_program_and_spec():
 def test_loads_side_specific_bindings_from_real_pair():
     spec = load_pair_spec(ROOT / "examples/add/pair.json")
 
-    assert spec.facts.for_side("lhs").bindings["arg4"].render() == "var(a)"
-    assert spec.facts.for_side("rhs").bindings["torch_dim0"].render() == "var(a)"
-    assert spec.facts.for_side("rhs").bindings["torch_dim1"].render() == "var(b)"
+    assert spec.facts.for_side("lhs").bindings["arg4"] == 8
+    assert spec.facts.for_side("rhs").bindings["arg4"] == 128
+    assert spec.lhs_frontend.kind == spec.rhs_frontend.kind == "ttir"
 
 
 def test_unknown_schema_key_is_rejected(tmp_path):
@@ -57,7 +57,7 @@ def test_unmapped_contract_role_is_rejected(tmp_path):
     path.write_text(json.dumps(source), encoding="utf-8")
 
     with pytest.raises(InputError, match="output_role"):
-        load_pair_spec(path)
+        load_internal_pair_spec(path)
 
 
 def test_loads_fact_gated_rewrite_with_llm_provenance(tmp_path):
@@ -89,7 +89,7 @@ def test_loads_fact_gated_rewrite_with_llm_provenance(tmp_path):
     path = tmp_path / "spec.json"
     path.write_text(json.dumps(source), encoding="utf-8")
 
-    spec = load_pair_spec(path)
+    spec = load_internal_pair_spec(path)
 
     declaration = spec.rewrite_rules[0]
     assert declaration.kind == "trusted_fact"
@@ -108,7 +108,7 @@ def test_partitioning_requires_explicit_llm_enablement(tmp_path):
     path.write_text(json.dumps(source), encoding="utf-8")
 
     with pytest.raises(InputError, match="requires llm.enabled"):
-        load_pair_spec(path)
+        load_internal_pair_spec(path)
 
 
 def test_trusted_rewrite_without_fact_gate_is_rejected(tmp_path):
@@ -127,11 +127,11 @@ def test_trusted_rewrite_without_fact_gate_is_rejected(tmp_path):
     path.write_text(json.dumps(source), encoding="utf-8")
 
     with pytest.raises(InputError, match="require at least one fact gate"):
-        load_pair_spec(path)
+        load_internal_pair_spec(path)
 
 
 def test_loads_symbolic_parameter_domain_and_constraint():
-    spec = load_pair_spec(FIXTURES / "specs/add_parametric_shapes.json")
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_parametric_shapes.json")
 
     assert spec.facts.parameters["a"].minimum == 1
     assert spec.facts.parameters["c"].maximum == 2**31 - 1
@@ -152,6 +152,26 @@ def test_shared_binding_can_reference_symbolic_parameters(tmp_path):
     path = tmp_path / "symbolic-binding.json"
     path.write_text(json.dumps(source), encoding="utf-8")
 
-    spec = load_pair_spec(path)
+    spec = load_internal_pair_spec(path)
 
     assert spec.facts.bindings["numel"].render() == "imul(var(a), var(b))"
+
+
+def test_production_pair_spec_rejects_internal_ir_frontends():
+    with pytest.raises(InputError) as error:
+        load_pair_spec(FIXTURES / "specs/add_proved.json")
+
+    assert error.value.code == "TTIR_PAIR_REQUIRED"
+
+
+@pytest.mark.parametrize("missing", ["kind", "function", "programs"])
+def test_production_pair_spec_requires_explicit_ttir_metadata(tmp_path, missing):
+    source = json.loads((ROOT / "examples/add/pair.json").read_text(encoding="utf-8"))
+    source["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
+    source["rhs"] = str(ROOT / "examples/add/ttir/torch_inductor_add.ttir")
+    del source["frontends"]["lhs"][missing]
+    path = tmp_path / "missing-frontend-field.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    with pytest.raises(InputError):
+        load_pair_spec(path)

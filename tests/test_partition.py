@@ -4,11 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from etv.model import Expr, LLMConfig, PartitionConfig, Sort, Status
+from etv.ir import Expr, Sort
+from etv.model import LLMConfig, PartitionConfig, Status
 from etv.partition import PartitionError, propose_partition_plan
 from etv.reporting import render_markdown
-from etv.schema import load_pair_spec, load_program
-from etv.verify import verify_spec
+from etv.schema import load_internal_pair_spec, load_program
+from etv.verify import verify_internal_spec as verify_spec
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"
@@ -40,7 +41,7 @@ def _op(name, *args):
 
 
 def _partition_spec():
-    spec = load_pair_spec(FIXTURES / "specs/add_proved.json")
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_proved.json")
     return replace(
         spec,
         llm=LLMConfig(enabled=True, generate_rules=False),

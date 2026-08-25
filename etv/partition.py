@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from .llm import DeepSeekClient, LLMError, _nodes, _resolve
-from .model import Expr, PairSpec, Program, Sort
+from .ir import Expr, Program, Sort
+from .model import PairSpec
 
 _PARTITION_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 

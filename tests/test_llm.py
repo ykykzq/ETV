@@ -1,6 +1,6 @@
 from etv.llm import DeepSeekClient, propose_rules
-from etv.model import Expr, Sort
-from etv.schema import load_pair_spec
+from etv.ir import Expr, Sort
+from etv.schema import load_internal_pair_spec
 
 
 class FakeDeepSeekClient(DeepSeekClient):
@@ -47,7 +47,7 @@ def test_deepseek_assistance_selects_nodes_and_parses_conditional_rules(tmp_path
     source["llm"] = {"enabled": True}
     path = tmp_path / "llm.json"
     path.write_text(json.dumps(source), encoding="utf-8")
-    spec = load_pair_spec(path)
+    spec = load_internal_pair_spec(path)
     lhs = Expr(
         "fadd",
         args=(

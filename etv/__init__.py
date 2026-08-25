@@ -1,4 +1,4 @@
-"""ETV: symbolic equivalence verification for TTIR and Torch Prims programs."""
+"""ETV: symbolic equivalence verification for pairs of raw TTIR programs."""
 
 from .model import ProofLevel, Status
 from .verify import verify_spec

@@ -1,84 +1,69 @@
 # 实现状态
 
-## 已完成路径
-
-| 用例 | 结果 |
-| --- | --- |
-| 九齿 Add raw TTIR vs Torch Add Prims，固定 `[8,16]` singleton 参数域 | `PROVED`；使用符号关系规则，不走 TorchInductor |
-| 九齿形态二维 `[a,b]` TTIR vs Torch 二维 Prims，`a*b=c` | `PROVED`；任意允许的正 i32 维度 |
-| Semantic IR 二维 Add vs Prims Add | `PROVED`；无需 libtriton 的相同重写路径回归 |
-| mul+add vs FMA | `PROVED`；应用经 Z3 验证的 `fma_def` |
-| 错误 stride/mask/compute | `DISPROVED` 并给出反例 |
-| 缺少 no-alias 或符号关系 | `UNKNOWN`/非 `PROVED` |
-| 含 `scf.for` 的 TTIR | parse/verify 成功，提升返回 `UNKNOWN` |
-
-当前测试共 58 项。无 libtriton 环境为 52 项通过、6 项 raw TTIR 测试跳过；安装
-Triton/libtriton 3.7.1 后运行全部 58 项。
-
-## 组件矩阵
+## 已完成
 
 | 组件 | 状态 | 说明 |
 | --- | --- | --- |
-| PairSpec/结果 schema | 已完成 | 严格字段、角色、事实、参数域、契约和规则策略 |
-| raw TTIR 前端 | 已完成基础路径 | libtriton 3.7.1 parse/verify/快照与无环逐点提升 |
-| Torch Prims 前端 | 已完成基础路径 | 严格 `etv-prims-program-v1`，固定 rank、显式广播、核心逐点 op |
-| TorchInductor 路径 | 已移除 | Torch 侧不再生成 Triton/TTIR |
-| 固定 rank 符号 shape | 已完成基础路径 | 维度值与 launch 规模符号化，不支持动态 rank |
-| 参数/shape 关系 | 已完成 | Z3 Int 参数域和 `a*b=c` 一类机器可读约束 |
-| 覆盖、唯一写入、地址、竞争 | 已完成单 store 路径 | 参数化 SMT 反例查询 |
-| 未归一化 load/store 根 | 已完成 | 保留 side、物理端点、offset、mask、value |
-| fact-derived 关系规则 | 已完成 | scalar/load/store 条件规则，规则准入与应用分离 |
-| e-graph | 已完成 | egglog 13.2.0、整图或逐子图独立饱和、同余及逐轮日志 |
-| 代数规则 | 已完成当前集合 | 17 条内建规则默认经 Z3 Real 证明 |
-| 自定义条件规则 | 已完成 | required/best_effort/trusted 策略与信任警告 |
-| LLM 辅助 | 可选路径已完成 | DeepSeek 节点选择、带 fact gate 规则生成、严格 schema/provenance |
-| 成对子图划分 | 已完成纯计算基础路径 | 一次整程序 LLM 扫描、根覆盖/路径/依赖 DAG 检查、逐子图 egglog 与组合证明 |
-| 具体反例 | 已完成当前算术子集 | 地址、mask 与精确有理数值反例 |
-| 报告 | 已完成 | schema v4，输入哈希、条件证明、规则应用、迭代轨迹、信任边界 |
-| 循环/归约 | 未实现 | `scf.for`、`tt.reduce` 不提升 |
-| 控制流/副作用子程序划分 | 未实现 | 当前只切分已提升的纯浮点表达式树，不切分 store、循环或 shared memory |
-| 多 program/kernel orchestration | 未实现 | 单 kernel、单 store |
-| IEEE-754/容差 | 未实现 | 当前为 `ABSTRACT_FLOAT` |
-| 独立 proof certificate | 未实现 | egglog 与 ETV 编码仍在可信计算基 |
+| 正式输入边界 | 已完成 | 两侧只接受 raw `.ttir`/`.mlir`，必须显式入口与 launch |
+| libtriton 前端 | 已完成基础路径 | 固定 3.7.1，parse、verify、完整遍历和稳定快照 |
+| 共同内部 IR | 已完成 | 独立 `etv/ir.py`，与 PairSpec model、e-graph 分离 |
+| TT IR 语义提升 | 已完成逐点子集 | program/lane、指针、mask、load/store、整数和浮点表达式 |
+| PairSpec | 已完成 | 角色、binding、参数域、约束、no-alias、观察契约和限制 |
+| 固定规模验证 | 已完成 | 有限 launch/lane 枚举、地址/mask/覆盖与抽象值反例 |
+| 参数化验证 | 已完成基础路径 | 固定 rank 符号 shape、launch、`a*b=c` 等 SMT 关系 |
+| 等式饱和 | 已完成 | egglog 13.2.0、事实规则、代数规则、同余与应用日志 |
+| 规则准入 | 已完成当前集合 | 代数规则用 Z3；布局规则依赖 PairSpec fact/SMT 条件 |
+| LLM 规则辅助 | 可选路径已完成 | 节点选择、候选规则、fact gate、严格 schema 和审计 |
+| LLM 子图划分 | 可选路径已完成 | 整程序扫描、成对子图、依赖 DAG 检查和组合证明 |
+| 报告 | 已完成 | schema v4、哈希、前端版本、义务、规则、e-graph、反例 |
 
-## 当前判定边界
+## 当前样例
 
-对 TTIR/Prims 异构输入，ETV 要求 `facts.parameters`。即使固定 shape 也使用 singleton
-参数域。验证成功必须同时满足：
+`examples/add/pair.json` 是固定 `[8,16]` 的真实程序对：
 
-```text
-参数/launch/覆盖/地址条件已证明
-and fact-derived load/store 规则实际匹配
-and （完整 observe_store 根进入同一 e-class
-     or 所有依赖有序子图根分别进入同一 e-class 并完成组合）
-```
+- 左侧：ntops Add -> ninetoothed -> Triton -> TT IR；
+- 右侧：PyTorch 表达式 -> FakeTensor FX -> TorchInductor -> Triton -> TT IR；
+- 左侧 256 lane，右侧 128 lane；
+- 两侧经同一 libtriton 前端和同一内部 IR 后验证。
 
-SMT 不直接比较最终抽象浮点程序；物理 load 也不会在进入 e-graph 前被重命名成同一
-read。`initial_state`、`rule_application` 和 `after_fact_rewrites` 共同防止这种退化。
+`examples/add/pair_parametric.json` 是参数化回归：二维 256-lane TT IR 对一维
+128-lane TT IR，在正 i32 参数与 `a*b=c` 下证明等价。它不是声称固定规模
+TorchInductor kernel 对任意 shape 通用，而是专门构造的符号 TT IR 前端/后端回归。
 
-## LLM 与规则生成
+在 macOS arm64、Python 3.12.13、源码构建的 libtriton 3.7.1 环境中，当前完整测试为
+`59 passed`、无跳过。正式固定例和参数化例均返回
+`PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`；参数化报告包含 45 个 SMT 检查。
 
-现有 LLM 路径在确定性规则失败后运行：先选择节点，再生成必须依赖已有 fact 的规则。
-模型不能决定结论。候选规则可能由 Z3 证明，也可在 PairSpec 明确选择的弱化策略下
-作为可信公理；后者若实际使用，会进入最终报告警告。
+内部 JSON 夹具覆盖正确、错误 stride、错误 mask、错误计算、FMA、规则策略、LLM 和
+子图划分。它们只测试证明核心，不属于生产前端。
 
-尚缺：候选规则隔离仓库、自动边界条件综合、跨程序对规则晋升、独立验证证书。
+## 未实现或有限支持
 
-## 子图划分
+- 动态 rank；
+- `scf.for`、`tt.reduce` 等循环和归约语义；
+- 多 store effect、原子操作、shared memory 和 barrier；
+- 多 kernel orchestration；
+- 多维 program grid 的完整语义；
+- buffer 分配大小与 GPU 内存安全；
+- IEEE-754、快速数学、容差和位级等价；
+- 独立 proof certificate；
+- 自动证明 TT IR 到内部 IR 提升器本身正确。
 
-PairSpec 可通过 `partition.enabled` 启用划分，同时必须设置 `llm.enabled`。模型一次扫描
-左右完整程序与全部计算根，返回成对子图路径；ETV 重新计算覆盖、唯一归属、左右依赖
-拓扑与拓扑序。每个子图独立饱和，已证明的子图用共同边界 token 连接父图。模型的
-语义标签和路径提议不是可信等价公理，所有局部对仍须由现有规则体系证明。
+libtriton 能解析但提升器不支持的合法 TT IR 返回 `UNKNOWN`。这一区分保证“完整语法
+前端”不被误解为“完整 Triton 语义验证器”。
 
-当前缺口是跨 store、控制流、归约、共享内存和多 kernel 的 region 划分；也尚未根据
-e-node 预算自动决定是否启用、调整粒度或二次划分。
+## 信任缺口
 
-## 下一步
+代数重写默认要求 Z3 证明。依赖布局、ABI 或输入事实的关系规则由 ETV 根据 PairSpec
+生成并附带 SMT 条件。用户或 LLM 新增的非代数规则暂时允许在事实 gate 满足后作为
+可信规则；若它实际参与证明，报告会记录 `admitted_unverified`、规则来源和警告。
+错误事实或错误可信规则会破坏结论健全性，当前系统无法自动弥补。
 
-1. 扩展 Prims dtype/layout/view/reshape 语义，并让 stride 对应成为显式关系规则；
-2. 将整数证明扩展为与 TTIR 溢出完全一致的位向量/混合整数模型；
-3. 为 `div/sqrt/rsqrt` 增加机器可读定义域谓词；
-4. 增加 e-graph explanation/proof certificate 导出；
-5. 只有覆盖、归纳、单位元、归约顺序和地址义务齐备后才支持循环/归约；
-6. 将划分从纯表达式树扩展到显式 region/内存 effect，并为跨分区等式建立接口摘要。
+## 后续优先级
+
+1. 扩展 TT IR 提升语义到 view/layout、归约和结构化控制流；
+2. 将整数模型扩展为与 TT IR 溢出属性一致的位向量/混合整数证明；
+3. 为浮点定义域、IEEE-754 与快速数学建立可选语义；
+4. 将子图划分从纯表达式树扩展到 region 和显式内存 effect；
+5. 导出 egglog explanation 或可独立重放的证明证书；
+6. 更新上游 ntops 版本并建立全算子 TorchInductor TT IR 可提取性矩阵。

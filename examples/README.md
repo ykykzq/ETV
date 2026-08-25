@@ -1,36 +1,37 @@
 # 示例
 
-`examples/add` 展示同一 Add 语义的两条输入路线：
+`add/` 包含两套双 TT IR 程序对。
 
-```text
-左侧：ntops -> ninetoothed -> Triton -> raw TTIR
-右侧：PyTorch -> TorchRefsMode/make_fx -> Torch Prims JSON
-```
+## 真实固定规模 Add
 
-Torch 侧不经过 TorchInductor。
-
-| 路径 | 内容 |
+| 文件 | 内容 |
 | --- | --- |
-| `add/pair.json` | 固定 `[8,16]` PairSpec |
-| `add/pair_parametric.json` | 固定 rank、符号维度 `a,b,c` 的 PairSpec |
-| `add/provenance.json` | 上游提交、工具链和 artifact SHA-256 |
-| `add/sources/ntops_add.triton.py` | ninetoothed 生成的 Triton 源码 |
-| `add/sources/ntops_add.triton.json` | ninetoothed SSA/布局元数据 |
-| `add/sources/torch_prims_add.fx.txt` | PyTorch 2.8 捕获的 Prims FX 图 |
-| `add/prims/torch_add.prims.json` | 严格、可重放、固定 rank 的符号 Prims 输入 |
-| `add/ttir/ntops_add.ttir` | Triton 3.7.1 为 CUDA sm80 生成的九齿侧 TTIR |
-| `add/ttir/parametric_2d_add.ttir` | 参数化二维 TTIR 验证输入 |
+| `add/ttir/ntops_add.ttir` | ntops/ninetoothed/Triton 生成的左侧 TT IR |
+| `add/ttir/torch_inductor_add.ttir` | PyTorch/TorchInductor/Triton 生成的右侧 TT IR |
+| `add/pair.json` | 固定 `[8,16]`、128 元素的 PairSpec |
+| `add/provenance.json` | 上游提交、工具版本、生成链和文件哈希 |
+| `add/sources/` | 两侧 Triton 源、TorchInductor 原始源码与 FX 图 |
+
+运行：
 
 ```bash
-.venv/bin/python -m etv check examples/add/pair_parametric.json \
-  --out build/add_parametric
+python -m etv check examples/add/pair.json --out build/add
 ```
 
-结果应为：
+## 参数化 Add
 
-```text
-PROVED parametric_ninetoothed_add_vs_torch_prims_add: OBSERVABLE_MEMORY_EQUIVALENT
+| 文件 | 内容 |
+| --- | --- |
+| `add/ttir/parametric_2d_add.ttir` | 二维 shape 参数、256 lane |
+| `add/ttir/parametric_1d_add.ttir` | 线性 numel 参数、128 lane |
+| `add/pair_parametric.json` | `a>0,b>0,c>0,a*b=c` 的 PairSpec |
+
+运行：
+
+```bash
+python -m etv check examples/add/pair_parametric.json --out build/add_parametric
 ```
 
-来源与固定实例见[Add 验证](../docs/add_validation.md)，逐条规则与 e-graph 变化见
-[参数化 Add 验证全过程](../docs/add_parametric_verification_details.md)。
+两个正式示例的左右程序都由 TT IR 前端读取。Semantic JSON 仅存在于
+`tests/fixtures/semantic`，不属于示例或用户输入格式；其他小型 TT IR 集成夹具位于
+`tests/fixtures/ttir`。

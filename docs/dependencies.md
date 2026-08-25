@@ -16,7 +16,7 @@ DeepSeek HTTPS API 发送候选表达式和可用 fact gate；客户端使用 Py
 不增加运行时包依赖。Z3、egglog 与 libtriton 均通过 Python API 导入，不解析 CLI 输出。
 
 子图划分复用同一个 DeepSeek 客户端，不引入新的运行时包。启用
-`partition.enabled` 后会发送一次左右完整 Semantic Program、PairSpec 事实和计算根
+`partition.enabled` 后会发送一次左右完整 ETV IR Program、PairSpec 事实和计算根
 摘要；API key 仍只从 `DEEPSEEK_API_KEY` 读取，报告只保存模型/usage 与请求响应哈希。
 
 egglog 13.2.0 要求 Python 3.11 以上，因此 ETV 不再支持原来的 Python 3.9 基础路径。其 wheel 同时包含 Rust egglog 绑定；上游包还声明了 `typing-extensions`、`black`、`graphviz`、`anywidget`、`cloudpickle>=3` 和 `opentelemetry-api` 等传递依赖。本工程不直接调用其中的 notebook/可视化功能，但保留上游完整依赖集合以避免维护非官方裁剪包。
@@ -30,7 +30,8 @@ egglog 13.2.0 要求 Python 3.11 以上，因此 ETV 不再支持原来的 Pytho
 | `pytest` | `8.4.2` | 单元测试、集成测试和 CLI 测试 |
 | `hypothesis` | `6.141.1` | 整数恒等式的性质测试 |
 
-直接开发依赖记录在 `requirements-dev.txt` 中，传递依赖由 pip 解析。仅运行 Semantic JSON/Prims 路径可通过以下命令重建环境：
+直接开发依赖记录在 `requirements-dev.txt` 中，传递依赖由 pip 解析。仅运行证明内核
+单元测试（raw TT IR 集成测试会跳过）可通过以下命令重建环境：
 
 ```bash
 python3.12 -m venv .venv
@@ -50,8 +51,8 @@ python3.12 -m venv .venv
 | --- | --- | --- |
 | `InfiniTensor/ntops` | `9ae4166ad342e4745f0eed13a5a20d069e994fc0` | 被验证 Add 的上游实现和布局 arrangement |
 | `InfiniTensor/ninetoothed` | `efe519d1b12a820e7aa605d775af3d52c8b0d605`，0.26.0 | 从 ntops DSL/SSA 生成 Triton 源码 |
-| PyTorch | `2.8.0` | `TorchRefsMode`、`make_fx` 和 Prims 图捕获；不使用 TorchInductor |
-| Triton/libtriton | `3.7.1` | 仅九齿侧 AST 前端、TTIR pass 和最终 parser/verifier |
+| PyTorch | `2.8.0` | FakeTensor FX、TorchInductor GraphLowering 与 Triton kernel codegen |
+| Triton/libtriton | `3.7.1` | 两侧 AST 前端、TTIR pass 和最终 parser/verifier |
 
 实现期间隔离环境中由 PyTorch/ninetoothed 解析出的主要传递依赖包括
 `numpy==2.3.4`、`sympy==1.14.0`、`mpmath==1.3.0`、`filelock==3.32.2`、
@@ -88,7 +89,8 @@ python3.12 -m venv /tmp/etv-triton-venv
 /tmp/etv-triton-venv/bin/python -m pip install \
   'cmake>=3.20,<4.0' 'ninja>=1.11.1' 'pybind11>=2.13.1' \
   setuptools wheel lit
-TRITON_BUILD_PROTON=OFF MAX_JOBS=4 \
+TRITON_BUILD_PROTON=OFF \
+TRITON_APPEND_CMAKE_ARGS=-DTRITON_BUILD_UT=OFF MAX_JOBS=4 \
   /tmp/etv-triton-venv/bin/python -m pip install \
   --no-build-isolation -e /path/to/triton
 /tmp/etv-triton-venv/bin/python -m pip install -e '.[dev]'
@@ -107,19 +109,22 @@ TRITON_BUILD_PROTON=OFF MAX_JOBS=4 \
 | Homebrew Python | `3.12.13` | Triton 3.7.1 支持的解释器 |
 | CMake | Homebrew `4.4.1`；隔离环境 `3.31.10` | Triton 构建；官方要求 `<4.0`，实际构建使用 3.31.10 |
 | Ninja | `1.13.x` | 并行构建 libtriton |
-| pybind11 | `3.0.4` | Python C++ 绑定构建 |
+| pybind11 | `3.1.0` | Python C++ 绑定构建 |
 | lit | `18.1.8` | Triton 构建系统工具 |
 | Triton 锁定 LLVM | v3.7.1 构建脚本下载的 macOS arm64 包 | MLIR/Triton 编译基础设施 |
 
 这些构建产物位于隔离的 `/tmp` 环境，不提交到仓库。
+`TRITON_BUILD_UT=OFF` 只关闭 Triton 自己的 C++ 单元测试和 googletest 下载，不关闭
+libtriton Python 模块，也不影响本工程随后执行的 TT IR 集成测试。
 
 ## 已验证环境
 
 - macOS 26 arm64；
 - Python 3.12.13；
 - 从官方 `v3.7.1` 标签构建的 libtriton；
-- 真实生成的 ntops/ninetoothed Add TTIR 与 Torch Prims 图通过两条独立前端提升，
-  程序对经 fact-derived load/store 重写得到 `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`；
+- 真实生成的 ntops/ninetoothed Add TTIR 与 TorchInductor Add TTIR 通过相同 libtriton
+  前端、独立语义提升得到内部 IR，程序对经关系/代数重写得到
+  `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`；
 - 包含 `scf.for`/`scf.yield` 的测试模块通过完整解析，并正确保持在语义提升边界之外。
 
 SymPy 由 PyTorch 提取环境传递安装，但 ETV 不使用它进行规则准入。内建代数规则
@@ -128,4 +133,7 @@ SymPy 由 PyTorch 提取环境传递安装，但 ETV 不使用它进行规则准
 
 ## 依赖信任
 
-libtriton 的 parser/verifier、Z3、egglog 13.2.0、ETV 的 egglog term 编码和语义提升器属于当前可信计算基。Pytest 和 Hypothesis 只影响开发证据。任何实际应用且标记为 `admitted_unverified` 的规则都属于输入信任边界；报告只会暴露该风险，无法弥补错误规则造成的不健全性。
+libtriton 的 parser/verifier、Z3、egglog 13.2.0、ETV 的 egglog term 编码和 TT IR
+语义提升器属于当前可信计算基。Pytest 和 Hypothesis 只影响开发证据。任何实际应用且
+标记为 `admitted_unverified` 的规则都属于输入信任边界；报告只会暴露该风险，无法
+弥补错误规则造成的不健全性。

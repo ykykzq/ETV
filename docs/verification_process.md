@@ -1,346 +1,218 @@
 # 完整验证过程
 
-本文描述 ETV 0.5.0 的输入契约、符号化、条件规则、e-graph 判定和结果边界。
-
-## 验证目标
-
-对 PairSpec 前提 `P`、左侧九齿 TTIR 程序 `L` 和右侧 Torch Prims 程序 `R`：
+本文同时定义输入契约、语义、等价判定、等式饱和和信任边界。正式目标为：在
+PairSpec 前提 `P` 下，证明两份 TT IR 程序 `L`、`R` 对全部可观察输出地址产生相同
+最终值：
 
 ```text
-P => Defined(L) and Defined(R)
-     and ObservableOutput(L) = ObservableOutput(R)
+P => ObservableMemory(L) = ObservableMemory(R)
 ```
 
-参数化结论量化所有声明的 shape/launch 参数和所有抽象输入值。rank 本身固定，不在
-量化范围内。当前只支持单输出、单 store、无循环的逐点子集。
+## 1. 输入验证
 
-## 输入
+`load_pair_spec` 首先严格解析 `etv-pair-v1`，拒绝未知字段、重复物理端点、非法参数
+域、未声明入口、缺失 launch 或非 TT IR 路径。生产约束为：
 
-一次异构验证包含三个文件：
+```text
+lhs.kind = rhs.kind = ttir
+lhs,rhs suffix in {.ttir,.mlir}
+lhs.function and rhs.function are nonempty
+lhs.programs and rhs.programs are integer expressions
+```
 
-1. 九齿侧 raw TTIR；
-2. Torch 侧 `etv-prims-program-v1`；
-3. `etv-pair-v1` PairSpec。
+PairSpec 还必须声明物理 ABI 到逻辑角色的映射、共享/单侧事实、no-alias 前提和观察
+契约。TT IR 不编码 host grid，`programs` 是必须信任的外部事实。
 
-PairSpec 片段：
+## 2. libtriton 解析与快照
+
+两份 TT IR 独立经过固定 Triton 3.7.1 的相同步骤：
+
+1. 注册 Triton 和 MLIR 内置方言；
+2. 解析整个 module；
+3. 执行 module verifier；
+4. 选择 PairSpec 指定的入口函数；
+5. 遍历 operation/operand/result/block/region/attribute；
+6. 生成带输入 SHA-256 和规范化 assembly 的 TTIR snapshot。
+
+原始文本不通过正则表达式构成语义前端。正则只用于把 libtriton 已打印的单行 assembly
+关联到快照节点，供诊断和当前有限属性读取；解析和 IR 合法性由 libtriton 决定。
+
+## 3. TT IR 提升到内部 IR
+
+提升器把入口参数表示为物理 scalar 或 block，把向量操作表示为“给定 lane 索引时的
+元素表达式”。`program_id` 和 lane 保留为整数变量，指针由 block 与 offset 分离。
+
+例如：
+
+```text
+%pid   = tt.get_program_id x
+%index = %pid * 128 + tt.make_range(0,128)
+%ptr   = tt.addptr %base, %index
+%value = tt.load %ptr, %mask, %zero
+```
+
+提升为：
+
+```text
+load(base,
+     iadd(imul(pid,128),lane),
+     lt(iadd(imul(pid,128),lane),numel),
+     0)
+```
+
+store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Program 是普通不可变
+语义对象，不包含等价类；后续有限求值、SMT、划分和 egglog 都读取它。
+
+合法但未建模的 TT IR 返回 `UNKNOWN`，例如 region、循环、归约、原子操作或不支持的
+类型。`UNKNOWN` 表示没有结论，而不是不等价。
+
+## 4. 语义模式
+
+当前只实现 `abstract_float`：
+
+- 浮点常量解释为精确有理数；
+- `fadd/fsub/fmul/fdiv/fma` 等解释为数学实数运算；
+- 不模拟舍入、NaN、无穷、signed zero、flush-to-zero 或 fast-math；
+- `div/sqrt/rsqrt` 等部分函数必须证明定义域，否则返回 `UNKNOWN`。
+
+整数用于地址和 shape。固定规模求值检查 signed i32 范围与除零；参数化路径通过 Z3
+加入定义性/范围义务。当前整数模型仍不是完整的 TT IR 位向量语义。
+
+## 5. ABI 与内存契约
+
+同名物理参数不会自动对齐。PairSpec 可声明：
 
 ```json
-{
-  "lhs": "ttir/parametric_2d_add.ttir",
-  "rhs": "prims/torch_add.prims.json",
-  "frontends": {
-    "lhs": {
-      "kind": "ttir",
-      "function": "parametric_2d_add",
-      "programs": {"op": "ceildiv", "args": [{"var": "c"}, 256]}
-    },
-    "rhs": {"kind": "prims"}
-  },
-  "facts": {
-    "side_bindings": {
-      "lhs": {"arg4": {"var": "a"}, "arg5": {"var": "b"}},
-      "rhs": {"torch_dim0": {"var": "a"}, "torch_dim1": {"var": "b"}}
-    },
-    "parameters": {"a": {"min": 1}, "b": {"min": 1}, "c": {"min": 1}},
-    "constraints": [
-      {"op": "eq", "args": [{"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}, {"var": "c"}]}
-    ]
-  },
-  "llm": {"enabled": true, "generate_rules": false},
-  "partition": {"enabled": true, "min_partitions": 2, "max_partitions": 16}
+"Alpha": {
+  "lhs": {"kind": "scalar", "name": "arg2"},
+  "rhs": {"kind": "scalar_block", "name": "arg1", "index": 0}
 }
 ```
 
-末尾两个字段是可选的子图划分配置。划分开启时必须显式开启 LLM；若只需划分而不需
-失败后的规则生成，可将 `generate_rules` 设为 `false`。
+这表示左侧按值标量和右侧指针下标 0 的读取具有同一逻辑角色。`block`、
+`scalar_block`、`scalar` 的差异保留到关系规则实际应用。
 
-未知字段、错误 frontend 元数据、重复物理角色、错误 sort、未绑定符号、空参数域、
-无效资源限制或非法规则都会在验证前被拒绝。
+当前内存语义只观察 `contract.output_role`。`require_disjoint` 中的角色必须被
+`facts.disjoint` 覆盖，否则无法排除写输出改变后续输入读取，结果为 `UNKNOWN`。
+系统不证明实际 allocation 大小或越界安全。
 
-## 第一步：两侧前端提升
+## 6. 固定规模义务
 
-### TTIR
+当 PairSpec 没有符号参数时，ETV 枚举两侧全部 `program x lane`：
 
-libtriton 3.7.1 注册所有内置方言、解析模块并运行 IR verifier。ETV 随后提升已支持
-的逐点操作：program id、range/splat/broadcast、整数索引、比较、pointer add、
-load/store 和抽象浮点运算。未知合法 TTIR op 返回 `UNKNOWN`，不会文本猜测。
+1. 求值 store 的 logical index、offset 和 mask；
+2. 检查单个逻辑元素没有重复活动写；
+3. 检查活动逻辑域恰好覆盖 `[0, output_numel)`；
+4. 比较两侧每个逻辑元素的 output offset 和 mask；
+5. 保留两侧 value 表达式进入计算等价证明。
 
-TTIR 中没有 host grid，PairSpec 的 `programs` 是必要输入。该表达式参与后续符号
-证明，而不是先求成一个固定常量。
+地址或 mask 不同可直接给出具体反例。值表达式不同则交给 egglog；无法合并时，Z3
+尝试构造抽象输入值模型，找到则为 `DISPROVED(COMPUTE_MISMATCH)`。
 
-### Prims
+有限枚举结论只覆盖 PairSpec 中固定的 launch 和 binding，不外推其他 shape。
 
-Prims 前端严格读取固定 rank 输入和显式节点。广播必须由
-`prims.broadcast_in_dim` 表示。每个张量被提升为 `element(indices)` 纯函数，输入
-读取保留为物理 load。输出 shape 的乘积形成逻辑域。
+## 7. 参数化义务
 
-Torch 侧不经过 TorchInductor。Prims 的内部 `programs/lanes` 只用于共同逻辑表示，
-不是 GPU launch 推断。
-
-## 第二步：共同参数与角色
-
-ETV 合并共享 binding 和左右单侧 binding。以下量保持符号：
-
-- 固定 rank 的每个 shape dimension；
-- TTIR launch program 数和相关规模；
-- `pid`、`lane`；
-- 任意逻辑输出位置 `k`；
-- load/store offset 和 mask 中的整数表达式。
-
-以下内容不符号化：rank、TTIR tensor lane 数、操作 arity 和数据类型。它们必须在
-前端结构上确定。
-
-角色映射不会立即改写表达式。物理端点先保留 side 标签，例如：
+存在 `facts.parameters` 时，ETV 对任意逻辑元素 `k` 建立两侧 writer：
 
 ```text
-lhs:arg0   -> Input
-rhs:input  -> Input
-lhs:arg2   -> Alpha
-rhs:alpha[0] -> Alpha
+0 <= k < output_numel
+pid  = k div lanes
+lane = k rem lanes
 ```
 
-映射是之后生成关系规则的条件之一。
+SMT 依次检查：
 
-## 第三步：符号安全与覆盖义务
+- 参数/约束域可满足；
+- launch program 数、index、offset 的整数定义性；
+- 每个合法 `k` 存在且只有一个活动 writer；
+- writer mask 在合法域为真；
+- output offset 与逻辑地址一致；
+- 所需 load 的 mask、地址和角色映射成立；
+- 两侧 output 观察对应。
 
-令：
+每项通过“寻找反例”的查询完成，`unsat` 表示该义务在全部参数域内成立。查询文本哈希、
+Z3 版本和结论进入报告。
+
+## 8. 重写规则准入
+
+规则分三类：
+
+### 代数规则
+
+内建和默认自定义代数规则被翻译为 Z3 Real 等式。ETV 查询是否存在使左右不等的赋值；
+仅 `unsat` 才按 `ALGEBRAIC` 准入。例如交换律、结合律和 `fma(a,b,c) = a*b+c`。这些
+证明只对 `ABSTRACT_FLOAT` 有效。
+
+### 事实派生关系规则
+
+scalar/load/store 规则连接两侧物理表示。它们必须引用具体角色、地址、mask、shape 和
+launch 事实，参数化时还要有 SMT 义务证据。它们不是通用代数恒等式。
+
+### 未验证可信规则
+
+布局、库语义或 LLM 提出的非代数规则如果尚无验证器，可在显式 fact gate 和当前策略
+下作为 `TRUSTED_AXIOM` 准入。这是已知缺陷。报告记录：声明、事实检查、来源、是否匹配、
+使用次数和“未经形式验证”的警告。未实际使用的可信规则不污染最终证明等级；实际
+使用则进入 `trusted_axioms` 和 `does_not_prove`。
+
+LLM 不能添加无条件可信规则，不能修改事实，也不能直接合并根。
+
+## 9. egglog 等式饱和
+
+ETV 把内部 IR 表达式编码为 egglog term。一次义务按阶段执行：
 
 ```text
-D(a,b,c) := parameter ranges and a*b=c and all required i32 definedness
-K(k)     := 0 <= k < c
+insert(lhs_root, rhs_root)
+run(fact-derived relational rules)
+if roots differ: run(validated algebraic/custom rules)
+if roots differ and LLM enabled: admit and run LLM candidates
+check(same_eclass(lhs_root, rhs_root))
 ```
 
-除参数域非空检查外，ETV 都查询：
+所有当前可能导致等价的情况在统一 e-graph 内考虑：代数形态、角色对应、scalar-block
+读取、不同 layout 的地址映射、不同 lane/launch、mask 和完整 store 观察。同余闭包会
+把已合并子表达式传播到父表达式。
+
+饱和受 `max_iterations`、`max_enodes`、`timeout_ms` 限制。耗尽资源返回 `UNKNOWN`，
+不会以“没有找到证明”推断不等价。
+
+## 10. 子图划分
+
+可选 LLM 划分发生在计算证明前。模型一次扫描左右完整 Program 和所有根，返回成对
+表达式路径。ETV 重新计算覆盖、唯一性、sort、左右父子拓扑和 DAG。通过后：
+
+1. 先验证叶子子图；
+2. 已证明子图替换为左右同名类型化 boundary input；
+3. 验证父图；
+4. 所有根分区证明后用 `DECOMPOSITION + CONGRUENCE` 组合。
+
+非法提议、API 失败或局部义务未证明都会回退整图验证。LLM 的语义标签不是证明。
+
+## 11. 最终状态
+
+`PROVED` 要求：
 
 ```text
-D and counterexample
+输入/语义/ABI/定义域/覆盖/地址/mask 必要义务全部关闭
+and
+(所有完整 observe_store 根在同一 e-class
+ or 所有依赖有序子图义务分别证明并完成组合)
 ```
 
-`UNSAT` 表示整个参数域中不存在该类反例。证明义务包括：
+`DISPROVED` 要求具体反例，如输出地址、活动 mask 或抽象输入值使两侧结果不同。
+`UNKNOWN` 用于输入错误、语义未实现、事实不足、规则不足、定义域未证明或资源耗尽。
 
-1. 参数域非空，输出元素数始终为正；
-2. 每侧 launch 数为正且整数运算有定义；
-3. active lane 的 logical index 落在契约范围；
-4. canonical writer `pid=k div lanes, lane=k rem lanes` 有效且 mask 为真；
-5. 每个逻辑输出只有一个 writer；
-6. active store 地址单射，无写竞争；
-7. 对应输出地址满足声明关系。
+## 12. 信任边界与保证
 
-这些查询关闭执行定义性和规则条件，但不直接宣布两侧程序等价。
+`PROVED` 在声明的 PairSpec 前提和 `ABSTRACT_FLOAT` 语义下建立可观察输出内存等价。
+它不证明：
 
-## 第四步：建立未归一化重写目标
+- TT IR 到 ETV IR 提升器本身的形式正确性；
+- libtriton、Z3、egglog 或 ETV 编码无缺陷；
+- PairSpec 角色、shape、launch、no-alias 事实真实；
+- 未验证可信规则正确；
+- IEEE-754/位级 GPU 等价；
+- allocation bounds、并发、shared memory 或多 kernel 行为。
 
-对任意 `k`，ETV 将 canonical writer 代入内部表达式，但不消除物理 load。例如：
-
-```text
-lhs_value = fadd(
-  load(lhs:arg0, lhs_offset(k,b), lhs_mask(k,a,b), 0),
-  fmul(input(lhs:arg2),
-       load(lhs:arg1, lhs_offset(k,b), lhs_mask(k,a,b), 0)))
-
-rhs_value = fadd(
-  load(rhs:input, rhs_offset(k,a,b), true, 0),
-  fmul(load(rhs:alpha, 0, true, 0),
-       load(rhs:other, rhs_offset(k,a,b), true, 0)))
-```
-
-最终待验证根为：
-
-```text
-lhs_root = observe_store(lhs:arg3, lhs_output_offset, lhs_store_mask, lhs_value)
-rhs_root = observe_store(rhs:output, rhs_output_offset, true, rhs_value)
-```
-
-两根初始必须不同。若前端错误地提前删除 side/地址/mask，测试中的
-`initial_state.unmatched_root_pairs == 1` 会失败。
-
-## 第五步：生成并验证关系规则
-
-### load 规则
-
-每个被观察 load 生成一条 ground 条件规则：
-
-```text
-load(side:physical_block, physical_offset(k), mask(k), default)
-  -> read(LogicalRole, k)
-```
-
-准入条件为：
-
-1. PairSpec 将该物理端点映射到 `LogicalRole`；
-2. 在 `D and K(k)` 下 mask 恒真；
-3. 在同一域上 physical offset 对应逻辑位置 `k`；
-4. 所有整数中间值有定义。
-
-rank-0 scalar block 规则把 offset 0 的 load 改写为 `input(Alpha)`。
-
-### scalar 规则
-
-直接 scalar ABI 由 PairSpec 角色事实产生：
-
-```text
-input(lhs:arg2) -> input(Alpha)
-```
-
-该映射属于 PairSpec 的可信前提。
-
-### store 规则
-
-每侧生成：
-
-```text
-observe_store(side:physical_output, offset(k), mask(k), value)
-  -> observe_store(Output, k, true, value)
-```
-
-`value` 是 pattern 变量，因此 load/计算子树仍须通过自己的规则和同余闭包连接。
-
-每条自动规则在报告中同时有：
-
-- `rule_admission`：条件、求解器结果和 query hash；
-- `rule_application`：egglog match count 和是否实际使用。
-
-准入成功但 match 为 0 的规则不构成证明证据。
-
-## 第六步：可选的成对子图划分
-
-当 `partition.enabled=true` 时，ETV 在计算重写前对两侧完整程序做一次 LLM 扫描。
-请求包含完整 launch/store 语义、PairSpec 上下文和全部待验证计算根；相同左右拓扑
-的根实例组成 family，模型只需为每个 family 选择对应的左右节点路径。
-
-ETV 对返回值执行以下机器检查：每个 family 必须有唯一整根分区；同侧路径不得重复；
-非根分区必须是浮点运算节点；左右最近父分区必须相同；依赖 DAG 必须无环；分区数
-必须落在配置范围。模型提供的 `semantic` 只用于日志，不参与证明。
-
-例如模型可以给出：
-
-```json
-{
-  "partitions": [
-    {
-      "id": "scale_other",
-      "family": "family_0",
-      "semantic": "Alpha 乘 Other",
-      "lhs_path": "root.args[1]",
-      "rhs_path": "root.args[1]"
-    },
-    {
-      "id": "output_add",
-      "family": "family_0",
-      "semantic": "与 Input 相加",
-      "lhs_path": "root",
-      "rhs_path": "root"
-    }
-  ]
-}
-```
-
-ETV 自动得到 `scale_other -> output_add`。先用独立 e-graph 证明乘法子图，再把左右
-乘法根替换为同一个 `input(partition:...)`，最后证明加法父图。根分区覆盖没有单独
-选出的节点，因此划分不会丢掉程序语义。任何提案/局部证明失败都回退到整图路径；
-局部抽象反例不直接成为全程序反例。
-
-## 第七步：e-graph 重写
-
-若启用并成功完成第六步，以下阶段在每个 `SubgraphBatch` 的独立 e-graph 中运行，
-顺序为依赖子图到父图；否则在原联合图中运行。
-
-执行阶段为：
-
-```text
-FACT_DERIVED_RELATIONAL_REWRITES
-ALGEBRAIC_REWRITES                 # 需要时
-LLM_ASSISTED_REWRITES              # 显式启用且前两阶段失败时
-```
-
-第一阶段运行 load/scalar/store 规则。egglog 将 canonical 表示 union 到原表达式的
-e-class，随后通过同余闭包逐层合并 `fmul`、`fadd` 和 `observe_store` 父节点。
-
-如果计算结构仍不同，第二阶段运行 17 条内建抽象代数规则及 PairSpec 规则。代数规则
-默认须通过 Z3 Real 的 `lhs != rhs` 不可满足检查。规则本身的证明与应用日志分离。
-
-每轮记录：
-
-```json
-{
-  "iteration": 1,
-  "before": {"enodes": 31, "eclasses": 31},
-  "after": {"enodes": 33, "eclasses": 25},
-  "rule_matches": {"parametric_load_lhs_0": 1},
-  "updated": true
-}
-```
-
-实际数值取决于输入；这是报告结构示例。
-
-## 第八步：规则缺失时的 LLM 辅助
-
-当根仍未连接且 `llm.enabled=true`：
-
-1. 模型从现有表达式树选择左右节点路径；
-2. 模型生成必须复制现有 fact requirement 的候选规则；
-3. schema 拒绝未知 op、未绑定 metavariable、无条件规则和非法 provenance；
-4. 候选按相同策略准入；
-5. 只有重新饱和后的 e-class 合并影响结论。
-
-LLM 请求/响应 hash、模型、token usage、选择节点和规则 ID 进入报告。API key 只从
-环境变量读取，不写入 PairSpec 或报告。
-
-子图验证期间禁用额外规则生成，避免每个小图再次调用模型。若局部证明失败，回退的
-整图验证仍可按本节流程使用原有规则生成能力。
-
-## 第九步：判定
-
-参数化异构路径的成功条件是：
-
-```text
-all required symbolic obligations proved
-and (
-  eclass(lhs_observe_store_root) == eclass(rhs_observe_store_root)
-  or all paired subgraph obligations are proved in dependency order and composed
-)
-```
-
-不是以下任一条件：
-
-- 两个未符号化样例恰好输出相同；
-- SMT 直接比较最终浮点表达式；
-- 字符串形式相同；
-- LLM 声称相同；
-- load 在进入 e-graph 前被强制重命名为同一叶子。
-
-安全/地址反例可产生 `DISPROVED`。规则不足且没有可信反例时为 `UNKNOWN`。任何必要
-义务为 `UNKNOWN` 都不能被 e-graph 的局部等式覆盖。
-
-## 报告关键字段
-
-```text
-inputs.frontends
-proof.parametric_domain.checks
-proof.parametric_domain.rewrite_targets
-proof.parametric_domain.fact_derived_rewrites
-proof.partitioning
-proof.rule_admission
-proof.egraph.initial_state
-proof.egraph.after_fact_rewrites
-proof.egraph.stats.iteration_trace
-proof.egraph.rule_application
-proof.egraph.unverified_rule_uses
-```
-
-`report.json` 是确定性的，不记录墙上时钟时间。`report.md` 汇总 proof blocks、规则
-和信任边界。
-
-## 当前限制
-
-- 只量化固定 rank 的维度值，不支持动态 rank；
-- 单 store、单可观察 Output；
-- 子图划分仅支持提升后的无副作用纯计算表达式树，不切分控制流、内存副作用或多 store；
-- 不支持循环、归约、多 kernel、原子和 shared memory；
-- Prims 仅支持文档列出的逐点子集和显式广播；
-- `ABSTRACT_FLOAT` 不是 IEEE-754；
-- 暂无独立 proof certificate；
-- 未验证规则可在显式策略下使用，但会降低证明可信度并被报告。
-
-Add 的逐条规则及每轮图变化见
-[参数化 Add 验证全过程](add_parametric_verification_details.md)。
+因此报告必须与输入哈希、事实、规则应用日志和信任警告一起解释，不能只读取顶层状态。

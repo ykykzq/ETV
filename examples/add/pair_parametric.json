@@ -1,46 +1,44 @@
 {
   "format": "etv-pair-v1",
-  "pair_id": "parametric_ninetoothed_add_vs_torch_prims_add",
+  "pair_id": "parametric_2d_add_vs_1d_add",
   "lhs": "ttir/parametric_2d_add.ttir",
-  "rhs": "prims/torch_add.prims.json",
+  "rhs": "ttir/parametric_1d_add.ttir",
   "frontends": {
     "lhs": {
       "kind": "ttir",
       "function": "parametric_2d_add",
       "programs": {"op": "ceildiv", "args": [{"var": "c"}, 256]}
     },
-    "rhs": {"kind": "prims"}
+    "rhs": {
+      "kind": "ttir",
+      "function": "parametric_1d_add",
+      "programs": {"op": "ceildiv", "args": [{"var": "c"}, 128]}
+    }
   },
   "semantic_mode": "abstract_float",
   "roles": {
     "Alpha": {
       "lhs": {"kind": "scalar", "name": "arg2"},
-      "rhs": {"kind": "scalar_block", "name": "alpha", "index": 0}
+      "rhs": {"kind": "scalar_block", "name": "arg1", "index": 0}
     },
     "Input": {
       "lhs": {"kind": "block", "name": "arg0"},
-      "rhs": {"kind": "block", "name": "input"}
+      "rhs": {"kind": "block", "name": "arg0"}
     },
     "Other": {
       "lhs": {"kind": "block", "name": "arg1"},
-      "rhs": {"kind": "block", "name": "other"}
+      "rhs": {"kind": "block", "name": "arg2"}
     },
     "Output": {
       "lhs": {"kind": "block", "name": "arg3"},
-      "rhs": {"kind": "block", "name": "output"}
+      "rhs": {"kind": "block", "name": "arg3"}
     }
   },
   "facts": {
     "bindings": {},
     "side_bindings": {
-      "lhs": {
-        "arg4": {"var": "a"},
-        "arg5": {"var": "b"}
-      },
-      "rhs": {
-        "torch_dim0": {"var": "a"},
-        "torch_dim1": {"var": "b"}
-      }
+      "lhs": {"arg4": {"var": "a"}, "arg5": {"var": "b"}},
+      "rhs": {"arg4": {"var": "c"}}
     },
     "parameters": {
       "a": {"min": 1},

@@ -1,4 +1,4 @@
-"""Sound, deliberately bounded lifting from parsed TTIR to Semantic TTIR."""
+"""Sound, deliberately bounded lifting from parsed TTIR to ETV IR."""
 
 from __future__ import annotations
 
@@ -8,17 +8,16 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Callable, Dict, List, Tuple, Union
 
-from ..model import (
+from ..ir import (
     Expr,
-    InputError,
     Program,
     Sort,
     StoreTemplate,
-    UnsupportedSemantics,
     bool_const,
     float_const,
     int_const,
 )
+from ..model import InputError, UnsupportedSemantics
 from .model import TTIRModule, TTIROperation
 
 
@@ -548,7 +547,7 @@ def lift_ttir(module: TTIRModule, programs: Expr) -> Program:
             continue
         else:
             raise UnsupportedSemantics(
-                f"operation {name} is valid TTIR but has no Semantic TTIR lifting rule",
+                f"operation {name} is valid TTIR but has no ETV IR lifting rule",
                 "TTIR_OP_UNSUPPORTED",
             )
 

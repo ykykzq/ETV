@@ -10,7 +10,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
-from .model import Expr, InputError, PairSpec
+from .ir import Expr
+from .model import InputError, PairSpec
 from .rules import Rule
 from .schema import parse_rewrite_rule
 

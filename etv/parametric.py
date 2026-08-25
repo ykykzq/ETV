@@ -9,15 +9,11 @@ from typing import Any, Mapping, Optional, Sequence
 import z3
 
 from .evaluator import SideRoles, build_side_roles
+from .ir import Expr, Program, Sort, bool_const, int_const
 from .model import (
-    Expr,
     PairSpec,
-    Program,
     ProofLevel,
-    Sort,
     Status,
-    bool_const,
-    int_const,
 )
 from .rules import Rule, node, pattern_from_expr, render_pattern, var
 

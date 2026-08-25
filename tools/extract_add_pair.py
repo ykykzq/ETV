@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Reproduce the real ninetoothed-TTIR/Torch-Prims Add pair used by ETV.
+"""Reproduce the real ntops/TorchInductor Add TTIR pair used by ETV.
 
 The script intentionally requires local checkouts at pinned commits. It does not
-clone repositories or execute a CUDA kernel. Only the ninetoothed side is lowered
-through Triton; the Torch side is captured as an explicit Prims graph.
+clone repositories or execute a CUDA kernel. Both modules pass through Triton's
+AST frontend and TTIR optimization pipeline for an offline CUDA sm80 target.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import importlib.util
 import json
@@ -17,6 +18,7 @@ import sys
 import types
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 
@@ -34,6 +36,7 @@ EXPECTED_VERSIONS = {
 SHAPE = (8, 16)
 NUMEL = 128
 NTOPS_BLOCK = 256
+INDUCTOR_XBLOCK = 128
 
 
 def _sha256(path: Path) -> str:
@@ -122,69 +125,126 @@ def _generate_ntops_source(ntops_repo: Path, ninetoothed_repo: Path, sources: Pa
     return path
 
 
-def _prims_program() -> dict[str, Any]:
-    dimension = lambda name: {"var": name}
-    shape = [dimension("torch_dim0"), dimension("torch_dim1")]
-    return {
-        "format": "etv-prims-program-v1",
-        "name": "torch_add_prims",
-        "inputs": [
-            {"name": "input", "dtype": "float32", "shape": shape},
-            {"name": "alpha", "dtype": "float32", "shape": []},
-            {"name": "other", "dtype": "float32", "shape": shape},
-        ],
-        "nodes": [
-            {
-                "name": "broadcast_alpha",
-                "op": "prims.broadcast_in_dim",
-                "args": ["alpha"],
-                "shape": shape,
-                "broadcast_dimensions": [],
-            },
-            {
-                "name": "scaled_other",
-                "op": "prims.mul",
-                "args": ["broadcast_alpha", "other"],
-            },
-            {"name": "result", "op": "prims.add", "args": ["input", "scaled_other"]},
-        ],
-        "output": {"value": "result", "block": "output"},
-    }
+def _fake_a100_properties() -> SimpleNamespace:
+    return SimpleNamespace(
+        name="NVIDIA A100-SXM4-40GB",
+        major=8,
+        minor=0,
+        multi_processor_count=108,
+        regs_per_multiprocessor=65536,
+        max_threads_per_multi_processor=2048,
+        total_memory=40 * 1024**3,
+        warp_size=32,
+        gcnArchName="",
+    )
 
 
-def _generate_prims_sources(sources: Path, prims: Path) -> tuple[Path, Path]:
+def _extract_inductor_kernel(wrapper: str, name: str) -> str:
+    marker = f"async_compile.triton('{name}', '''\n"
+    start = wrapper.find(marker)
+    if start < 0:
+        raise RuntimeError(f"TorchInductor wrapper omitted {name}")
+    start += len(marker)
+    end = wrapper.find("\n''', device_str='cuda')", start)
+    if end < 0:
+        raise RuntimeError(f"cannot locate the end of {name}")
+    return "\n".join(line.rstrip() for line in wrapper[start:end].splitlines()) + "\n"
+
+
+def _jit_compile_adapter(generated: str, name: str) -> str:
+    tree = ast.parse(generated)
+    function = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == name
+        ),
+        None,
+    )
+    if function is None or function.end_lineno is None:
+        raise RuntimeError(f"generated source omitted function {name}")
+    lines = generated.splitlines()
+    definition = function.lineno - 1
+    jit_line = next(
+        (
+            index
+            for index in range(definition - 1, -1, -1)
+            if lines[index].strip() == "@triton.jit"
+        ),
+        None,
+    )
+    if jit_line is None:
+        raise RuntimeError(f"generated function {name} has no @triton.jit decorator")
+    body = "\n".join(lines[jit_line : function.end_lineno])
+    return "import triton\nimport triton.language as tl\n\n\n" + body + "\n"
+
+
+def _generate_inductor_sources(sources: Path) -> tuple[Path, Path, Path]:
     import torch
-    import torch._dynamo  # Initialize make_fx support before entering TorchRefsMode.
-    from torch._prims.context import TorchRefsMode
+    import torch.utils._triton as torch_triton
+    import triton.compiler.compiler as triton_compiler
+    from torch._dynamo.device_interface import CudaInterface
+    from torch._inductor.debug import DebugContext
+    from torch._inductor.graph import GraphLowering
+    from torch._inductor.virtualized import V
+    from torch._subclasses.fake_tensor import FakeTensorMode
     from torch.fx.experimental.proxy_tensor import make_fx
+    from torch.utils._triton import has_triton, has_triton_package
+
+    properties = _fake_a100_properties()
+    torch.cuda.get_device_properties = lambda device=None: properties
+    torch.cuda.get_device_capability = lambda device=None: (8, 0)
+    torch.cuda.current_device = lambda: 0
+    torch.cuda.device_count = lambda: 1
 
     def reference(input_tensor, alpha, other):
-        return input_tensor + alpha * other
+        return (input_tensor + alpha * other,)
 
-    input_tensor = torch.empty(SHAPE, device="meta", dtype=torch.float32)
-    alpha = torch.empty((), device="meta", dtype=torch.float32)
-    other = torch.empty(SHAPE, device="meta", dtype=torch.float32)
-    with TorchRefsMode():
-        graph = make_fx(reference)(input_tensor, alpha, other)
+    mode = FakeTensorMode()
+    with mode:
+        input_tensor = torch.empty(SHAPE, device="cuda", dtype=torch.float32)
+        alpha = torch.empty((), device="cuda", dtype=torch.float32)
+        other = torch.empty(SHAPE, device="cuda", dtype=torch.float32)
+        graph = make_fx(reference, tracing_mode="fake")(input_tensor, alpha, other)
 
-    operations = [
-        str(node.target)
-        for node in graph.graph.nodes
-        if node.op == "call_function"
-    ]
-    expected = [
-        "prims.broadcast_in_dim.default",
-        "prims.mul.default",
-        "prims.add.default",
-    ]
-    if operations != expected:
-        raise RuntimeError(f"unexpected Torch Prims graph: {operations}")
+    torch.cuda.is_available = lambda: True
+    triton_compiler.triton_key = lambda: "triton-3.7.1"
+    CudaInterface.is_available = staticmethod(lambda: True)
+    CudaInterface.Worker.current_device = staticmethod(lambda: 0)
+    CudaInterface.Worker.get_device_properties = staticmethod(
+        lambda device=None: properties
+    )
+    CudaInterface.get_device_properties = staticmethod(lambda device=None: properties)
+    has_triton_package.cache_clear()
+    has_triton.cache_clear()
+    if not has_triton():
+        raise RuntimeError("TorchInductor did not recognize the pinned Triton installation")
 
-    graph_path = sources / "torch_prims_add.fx.txt"
+    # This is report metadata only; avoid initializing the CUDA driver offline.
+    torch_triton.triton_hash_with_backend = (
+        lambda: "triton-3.7.1-cuda-sm80-offline"
+    )
+    lowering = GraphLowering(
+        graph,
+        example_inputs=[input_tensor, alpha, other],
+        is_inference=True,
+    )
+    lowering.freeze_runtime_asserts()
+    with DebugContext(), V.set_fake_mode(mode), V.set_graph_handler(lowering):
+        lowering.run(input_tensor, alpha, other)
+        wrapper, _kernels = lowering.codegen()
+
+    kernel_name = "triton_poi_fused_0"
+    generated = _extract_inductor_kernel(wrapper.value, kernel_name)
+    raw_path = sources / "torch_inductor_add.generated.py"
+    raw_path.write_text(generated, encoding="utf-8")
+    adapter_path = sources / "torch_inductor_add.triton.py"
+    adapter_path.write_text(
+        _jit_compile_adapter(generated, kernel_name), encoding="utf-8"
+    )
+    graph_path = sources / "torch_inductor_add.fx.txt"
     graph_path.write_text(str(graph.graph).rstrip() + "\n", encoding="utf-8")
-    prims_path = prims / "torch_add.prims.json"
-    _write_json(prims_path, _prims_program())
-    return prims_path, graph_path
+    return raw_path, adapter_path, graph_path
 
 
 def _compile_ttir(
@@ -240,33 +300,29 @@ def _pair_spec() -> dict[str, Any]:
     endpoint = lambda kind, name, **extra: {"kind": kind, "name": name, **extra}
     return {
         "format": "etv-pair-v1",
-        "pair_id": "ntops_add_vs_torch_prims_add",
+        "pair_id": "ntops_add_vs_torch_inductor_add",
         "lhs": "ttir/ntops_add.ttir",
-        "rhs": "prims/torch_add.prims.json",
+        "rhs": "ttir/torch_inductor_add.ttir",
         "frontends": {
-            "lhs": {
-                "kind": "ttir",
-                "function": "ntops_add_kernel",
-                "programs": {"op": "ceildiv", "args": [{"var": "c"}, NTOPS_BLOCK]},
-            },
-            "rhs": {"kind": "prims"},
+            "lhs": {"kind": "ttir", "function": "ntops_add_kernel", "programs": 1},
+            "rhs": {"kind": "ttir", "function": "triton_poi_fused_0", "programs": 1},
         },
         "semantic_mode": "abstract_float",
         "roles": {
             "Alpha": {
                 "lhs": endpoint("scalar", "arg2"),
-                "rhs": endpoint("scalar_block", "alpha", index=0),
+                "rhs": endpoint("scalar_block", "arg1", index=0),
             },
-            "Input": {"lhs": endpoint("block", "arg0"), "rhs": endpoint("block", "input")},
-            "Other": {"lhs": endpoint("block", "arg1"), "rhs": endpoint("block", "other")},
-            "Output": {"lhs": endpoint("block", "arg3"), "rhs": endpoint("block", "output")},
+            "Input": {"lhs": endpoint("block", "arg0"), "rhs": endpoint("block", "arg0")},
+            "Other": {"lhs": endpoint("block", "arg1"), "rhs": endpoint("block", "arg2")},
+            "Output": {"lhs": endpoint("block", "arg3"), "rhs": endpoint("block", "arg3")},
         },
         "facts": {
-            "bindings": {},
+            "bindings": {"X": NUMEL},
             "side_bindings": {
                 "lhs": {
-                    "arg4": {"var": "a"},
-                    "arg5": {"var": "b"},
+                    "arg4": 8,
+                    "arg5": 16,
                     "arg6": 16,
                     "arg7": 1,
                     "arg8": 8,
@@ -278,31 +334,14 @@ def _pair_spec() -> dict[str, Any]:
                     "arg14": 16,
                     "arg15": 1,
                 },
-                "rhs": {
-                    "torch_dim0": {"var": "a"},
-                    "torch_dim1": {"var": "b"},
-                },
+                "rhs": {"arg4": NUMEL},
             },
-            "parameters": {
-                "a": {"min": SHAPE[0], "max": SHAPE[0]},
-                "b": {"min": SHAPE[1], "max": SHAPE[1]},
-                "c": {"min": NUMEL, "max": NUMEL},
-            },
-            "constraints": [
-                {
-                    "op": "eq",
-                    "args": [
-                        {"op": "imul", "args": [{"var": "a"}, {"var": "b"}]},
-                        {"var": "c"},
-                    ],
-                }
-            ],
             "assumptions": [],
             "disjoint": [["Input", "Other", "Output"]],
         },
         "contract": {
             "output_role": "Output",
-            "output_numel": {"var": "c"},
+            "output_numel": {"var": "X"},
             "require_full_coverage": True,
             "require_disjoint": ["Input", "Other", "Output"],
         },
@@ -325,10 +364,8 @@ def main() -> int:
     ninetoothed_repo = args.ninetoothed_repo.resolve()
     output = args.output
     sources = output / "sources"
-    prims = output / "prims"
     ttir = output / "ttir"
     sources.mkdir(parents=True, exist_ok=True)
-    prims.mkdir(parents=True, exist_ok=True)
     ttir.mkdir(parents=True, exist_ok=True)
 
     _require_checkout(ntops_repo, NTOPS_COMMIT, "ntops")
@@ -346,8 +383,9 @@ def main() -> int:
     ntops_metadata = sources / "ntops_add.triton.json"
     if not ntops_metadata.is_file():
         raise RuntimeError("ninetoothed did not emit ntops_add.triton.json")
-    prims_program, fx_graph = _generate_prims_sources(sources, prims)
+    inductor_raw, inductor_adapter, fx_graph = _generate_inductor_sources(sources)
     ntops_ttir = ttir / "ntops_add.ttir"
+    inductor_ttir = ttir / "torch_inductor_add.ttir"
     _compile_ttir(
         ntops_source,
         "ntops_add_kernel",
@@ -356,11 +394,26 @@ def main() -> int:
         ntops_ttir,
         "examples/add/sources/ntops_add.triton.py",
     )
+    _compile_ttir(
+        inductor_adapter,
+        "triton_poi_fused_0",
+        {
+            "in_ptr0": "*fp32",
+            "in_ptr1": "*fp32",
+            "in_ptr2": "*fp32",
+            "out_ptr0": "*fp32",
+            "xnumel": "i32",
+            "XBLOCK": "constexpr",
+        },
+        {"XBLOCK": INDUCTOR_XBLOCK},
+        inductor_ttir,
+        "examples/add/sources/torch_inductor_add.triton.py",
+    )
     spec_path = output / "pair.json"
     _write_json(spec_path, _pair_spec())
     provenance = {
         "format": "etv-extracted-pair-provenance-v1",
-        "pair_id": "ntops_add_vs_torch_prims_add",
+        "pair_id": "ntops_add_vs_torch_inductor_add",
         "operator": "add(input, other, alpha) = input + alpha * other",
         "specialization": {
             "shape": list(SHAPE),
@@ -368,6 +421,7 @@ def main() -> int:
             "numel": NUMEL,
             "target": "cuda:sm80",
             "ntops_block": NTOPS_BLOCK,
+            "torch_inductor_xblock": INDUCTOR_XBLOCK,
         },
         "upstreams": {
             "ntops": {
@@ -387,16 +441,20 @@ def main() -> int:
         "generation": {
             "lhs": "ntops Add -> ninetoothed SSA lowering -> Triton AST -> optimized TTIR",
             "rhs": (
-                "PyTorch tensor expression -> TorchRefsMode/make_fx -> explicit "
-                "Torch Prims graph"
+                "PyTorch tensor expression -> FakeTensor FX -> TorchInductor Triton "
+                "-> Triton AST -> optimized TTIR"
             ),
             "rhs_fx_expression": "input_tensor + alpha_tensor * other",
             "ntops_test_reference": "torch.add(input, other, alpha=python_scalar)",
-            "compatibility_shims": [],
+            "compatibility_shims": [
+                "Expose triton_key() so PyTorch recognizes pinned Triton 3.7.1.",
+                "Return an offline backend hash instead of initializing CUDA.",
+                "Provide fixed A100/sm80 properties to TorchInductor scheduling.",
+            ],
             "cuda_execution": False,
-            "prims_export": (
-                "The fixed-rank FX trace is checked for broadcast_in_dim, mul, add "
-                "and serialized with symbolic dimension slots."
+            "inductor_adapter": (
+                "Removed only the pointwise launch decorator and retained the exact "
+                "@triton.jit function for offline AST compilation."
             ),
         },
         "artifacts": {
@@ -404,9 +462,11 @@ def main() -> int:
             for path in (
                 ntops_source,
                 ntops_metadata,
-                prims_program,
+                inductor_raw,
+                inductor_adapter,
                 fx_graph,
                 ntops_ttir,
+                inductor_ttir,
                 spec_path,
             )
         },

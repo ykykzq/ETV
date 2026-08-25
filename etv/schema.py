@@ -1,4 +1,4 @@
-"""Strict JSON readers for internal programs, PairSpecs, and rewrite declarations."""
+"""Strict readers for TTIR PairSpecs and proof-core test fixtures."""
 
 from __future__ import annotations
 
@@ -8,9 +8,17 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Tuple
 
+from .ir import (
+    Expr,
+    Program,
+    Sort,
+    StoreTemplate,
+    bool_const,
+    float_const,
+    int_const,
+)
 from .model import (
     Contract,
-    Expr,
     FactContext,
     FrontendSpec,
     InputError,
@@ -19,16 +27,10 @@ from .model import (
     Parameter,
     PairSpec,
     PartitionConfig,
-    Program,
     ProofLevel,
     RulePolicy,
     RoleEndpoint,
     RolePair,
-    Sort,
-    StoreTemplate,
-    bool_const,
-    float_const,
-    int_const,
 )
 from .rules import (
     FactRequirement,
@@ -226,6 +228,8 @@ def load_program(path: Path) -> Program:
         programs=parse_expr(launch["programs"], f"{path}.launch.programs"),
         lanes=lanes,
         stores=tuple(stores),
+        frontend="semantic_fixture",
+        frontend_version="1",
     )
 
 
@@ -458,7 +462,7 @@ def parse_rewrite_rule(value: Any, where: str = "rewrite_rule") -> Rule:
     return _rewrite_rule(value, where)
 
 
-def load_pair_spec(path: Path) -> PairSpec:
+def _load_pair_spec(path: Path, require_ttir: bool) -> PairSpec:
     path = path.resolve()
     raw = _read_json(path)
     _only_keys(
@@ -769,30 +773,49 @@ def load_pair_spec(path: Path) -> PairSpec:
     _only_keys(frontends_raw, {"lhs", "rhs"}, f"{path}.frontends")
 
     def parse_frontend(side: str) -> FrontendSpec:
+        if require_ttir and side not in frontends_raw:
+            raise InputError(
+                f"{path}.frontends.{side} must explicitly declare a TTIR frontend",
+                "TTIR_PAIR_REQUIRED",
+            )
         value = frontends_raw.get(side, {})
         where = f"{path}.frontends.{side}"
         if not isinstance(value, dict):
             raise InputError(f"{where} must be an object")
         _only_keys(value, {"kind", "function", "programs"}, where)
-        kind = value.get("kind", "auto")
-        if kind not in {"auto", "semantic_json", "ttir", "prims"}:
+        if require_ttir and "kind" not in value:
             raise InputError(
-                f"{where}.kind must be auto, semantic_json, ttir, or prims"
+                f"{where}.kind must explicitly be ttir", "TTIR_PAIR_REQUIRED"
+            )
+        kind = value.get("kind", "ttir" if require_ttir else "semantic_json")
+        allowed = {"ttir"} if require_ttir else {"semantic_json"}
+        if kind not in allowed:
+            expected = "ttir" if require_ttir else "semantic_json"
+            raise InputError(
+                f"{where}.kind must be {expected}", "TTIR_PAIR_REQUIRED"
             )
         function = value.get("function")
-        if function is not None and (not isinstance(function, str) or not function):
-            raise InputError(f"{where}.function must be a non-empty string")
         programs = value.get("programs")
-        if kind == "prims" and (function is not None or programs is not None):
+        if kind == "ttir":
+            if not isinstance(function, str) or not function:
+                raise InputError(f"{where}.function must name the TTIR entry function")
+            if programs is None:
+                raise InputError(
+                    f"{where}.programs is required because TTIR does not encode the host launch grid"
+                )
+        elif function is not None or programs is not None:
             raise InputError(
-                f"{where} Prims graphs encode their output domain and do not accept function or programs"
+                f"{where} internal Semantic IR fixtures do not accept function or programs"
             )
+        parsed_programs = (
+            None if programs is None else parse_expr(programs, f"{where}.programs")
+        )
+        if parsed_programs is not None and parsed_programs.sort != Sort.INT:
+            raise InputError(f"{where}.programs must be an integer expression")
         return FrontendSpec(
             kind=kind,
             function=function,
-            programs=(
-                None if programs is None else parse_expr(programs, f"{where}.programs")
-            ),
+            programs=parsed_programs,
         )
 
     rewrite_rules_raw = raw.get("rewrite_rules", [])
@@ -817,11 +840,25 @@ def load_pair_spec(path: Path) -> PairSpec:
             f"rewrite rule id conflicts with builtin rule(s): {', '.join(conflicting_rule_ids)}"
         )
 
+    lhs_path = (base / lhs).resolve()
+    rhs_path = (base / rhs).resolve()
+    if require_ttir:
+        for side, artifact in (("lhs", lhs_path), ("rhs", rhs_path)):
+            if artifact.suffix not in {".ttir", ".mlir"}:
+                raise InputError(
+                    f"{path}.{side} must reference a raw .ttir or .mlir file",
+                    "TTIR_PAIR_REQUIRED",
+                )
+            if not artifact.is_file():
+                raise InputError(
+                    f"{path}.{side} does not exist: {artifact}", "READ_ERROR"
+                )
+
     return PairSpec(
         pair_id=pair_id,
         source=path,
-        lhs_path=(base / lhs).resolve(),
-        rhs_path=(base / rhs).resolve(),
+        lhs_path=lhs_path,
+        rhs_path=rhs_path,
         semantic_mode=semantic_mode,
         roles=tuple(roles),
         facts=FactContext(
@@ -851,3 +888,15 @@ def load_pair_spec(path: Path) -> PairSpec:
         llm=LLMConfig(**llm_values),
         partition=PartitionConfig(**partition_values),
     )
+
+
+def load_pair_spec(path: Path) -> PairSpec:
+    """Load the production PairSpec contract: both artifacts must be raw TTIR."""
+
+    return _load_pair_spec(path, require_ttir=True)
+
+
+def load_internal_pair_spec(path: Path) -> PairSpec:
+    """Load Semantic IR fixtures used only to test the proof core."""
+
+    return _load_pair_spec(path, require_ttir=False)

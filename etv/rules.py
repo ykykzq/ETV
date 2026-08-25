@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Any, Optional, Tuple
 
-from .model import Expr, FactContext, ProofLevel, Sort
+from .ir import Expr, Sort
+from .model import FactContext, ProofLevel
 
 
 @dataclass(frozen=True)

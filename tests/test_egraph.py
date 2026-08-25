@@ -1,5 +1,6 @@
 from etv.egraph import EGraph
-from etv.model import Expr, Limits, Sort
+from etv.ir import Expr, Sort
+from etv.model import Limits
 from etv.z3_validator import validated_builtin_rules
 
 

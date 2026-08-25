@@ -1,4 +1,4 @@
-"""Finite-domain symbolic evaluator for the Semantic TTIR MVP."""
+"""Finite-domain symbolic evaluator for ETV IR."""
 
 from __future__ import annotations
 
@@ -6,20 +6,15 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Dict, Mapping, Tuple, Union
 
+from .ir import Expr, Program, Sort, bool_const, float_const, int_const
 from .model import (
     Evaluation,
-    Expr,
     FactContext,
     InputError,
     LaneRecord,
     PairSpec,
-    Program,
     RoleEndpoint,
-    Sort,
     UnsupportedSemantics,
-    bool_const,
-    float_const,
-    int_const,
 )
 
 Concrete = Union[int, bool, Expr]

@@ -5,22 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter
 from pathlib import Path
 from typing import Iterable, Optional
 
-from .model import Expr, Status
+from .model import Status
 from .reporting import render_markdown, write_report
 from .schema import InputError
-from .ttir import load_program_artifact, parse_ttir
+from .ttir import parse_ttir
 from .verify import verify_spec
 from .z3_validator import validated_builtin_rules
-
-
-def _walk(expr: Expr) -> Iterable[Expr]:
-    yield expr
-    for arg in expr.args:
-        yield from _walk(arg)
 
 
 def _check(args: argparse.Namespace) -> int:
@@ -42,31 +35,17 @@ def _check(args: argparse.Namespace) -> int:
 
 def _inspect(args: argparse.Namespace) -> int:
     path = Path(args.program)
-    if path.suffix in {".ttir", ".mlir"}:
-        try:
-            module = parse_ttir(path, function=args.function)
-        except InputError as exc:
-            print(f"UNKNOWN {getattr(exc, 'code', 'INVALID_INPUT')}: {exc}", file=sys.stderr)
-            return 2
-        print(json.dumps(module.to_json(include_assembly=False), indent=2, sort_keys=True))
-        return 0
     try:
-        program = load_program_artifact(path)
+        if path.suffix not in {".ttir", ".mlir"}:
+            raise InputError(
+                "inspect accepts only raw .ttir or .mlir files",
+                "TTIR_PAIR_REQUIRED",
+            )
+        module = parse_ttir(path, function=args.function)
     except InputError as exc:
         print(f"UNKNOWN {getattr(exc, 'code', 'INVALID_INPUT')}: {exc}", file=sys.stderr)
         return 2
-    operations = Counter()
-    for store in program.stores:
-        for root in (store.logical_index, store.offset, store.mask, store.value):
-            operations.update(expr.op for expr in _walk(root))
-    value = {
-        "name": program.name,
-        "source": str(program.source),
-        "lanes": program.lanes,
-        "stores": len(program.stores),
-        "operations": {key: operations[key] for key in sorted(operations)},
-    }
-    print(json.dumps(value, indent=2, sort_keys=True))
+    print(json.dumps(module.to_json(include_assembly=False), indent=2, sort_keys=True))
     return 0
 
 
@@ -122,7 +101,7 @@ def _explain(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="etv",
-        description="Symbolic equivalence verification for TTIR and Torch Prims programs",
+        description="Symbolic equivalence verification for pairs of raw TTIR programs",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -133,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.set_defaults(handler=_check)
 
     inspect = subparsers.add_parser(
-        "inspect", help="inspect a Semantic JSON, Torch Prims, or raw TTIR program"
+        "inspect", help="inspect a raw TTIR program"
     )
     inspect.add_argument("program")
     inspect.add_argument("--function", help="TTIR function to inspect when the module is ambiguous")

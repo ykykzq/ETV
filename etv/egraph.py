@@ -13,7 +13,8 @@ from egglog import Expr as EgglogExpr
 from egglog import StringLike, eq, rule, ruleset, union, var
 from egglog.bindings import EggSmolError
 
-from .model import Expr, Limits
+from .ir import Expr
+from .model import Limits
 from .rules import Pattern, Rule, pattern_variables
 
 

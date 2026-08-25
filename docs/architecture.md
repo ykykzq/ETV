@@ -1,97 +1,93 @@
-# 架构
+# 系统架构
 
-## 总体数据流
+## 分层设计
 
-```text
-九齿侧                                      Torch 侧
-ntops -> ninetoothed -> Triton -> raw TTIR   PyTorch -> TorchRefsMode -> Prims JSON
-                         |                                  |
-                         v                                  v
-                libtriton parse/verify              strict Prims schema
-                         |                                  |
-                         +--------> 共同 ETV IR <------------+
-                                      |
-                           固定 rank 参数与事实环境
-                                      |
-                  launch/index/mask/address 条件证明（SMT）
-                                      |
-                    生成带证明条件的 load/store 关系规则
-                                      |
-                    可选：LLM 提议成对子图根（一次整程序扫描）
-                                      |
-                  ETV 检查覆盖/归属/依赖 DAG/类型并逐子图验证
-                                      |
-                  fact rewrites -> algebraic rewrites -> LLM rule fallback
-                                      |
-                         根同 e-class 才能判定等价
-                                      |
-                       PROVED / DISPROVED / UNKNOWN
-```
-
-两个前端不要求源 IR 相同，也不把 Torch 参考程序伪装成 GPU kernel。Prims 图描述纯
-张量函数；提升器将其嵌入逻辑逐元素域。TTIR 则保留真实 `program_id/lane`、mask、
-pointer offset 和 store。二者通过 PairSpec 声明的角色、shape、指针和 launch 事实
-建立关系。
-
-## 输入边界
-
-### 九齿侧
-
-`tools/extract_add_pair.py` 仍使用原有链路：固定 ntops/ninetoothed 提交生成 Triton
-源码，再由 Triton 3.7.1 AST 前端和 TTIR pass 生成 raw TTIR。验证时
-`etv/ttir/libtriton.py` 注册完整方言、解析、运行 IR verifier，并生成稳定快照；
-`etv/ttir/lift.py` 只提升已建模的无环逐点子集。
-
-TTIR 不编码 host launch grid，因此 `frontends.lhs.programs` 必须由 PairSpec 给出，
-并且可以是 shape 参数的表达式，例如 `ceildiv(c,256)`。
-
-### Torch 侧
-
-Torch 侧不再经过 TorchInductor。提取工具在 `TorchRefsMode` 中用 `make_fx` 得到 Prims
-图，并写为 `etv-prims-program-v1`。`etv/prims.py` 严格检查固定 rank shape、显式
-`broadcast_in_dim`、SSA 引用、arity 和支持的逐点 op，再直接提升到共同 IR。
-
-Prims 图没有 GPU launch。内部 `programs=product(output_shape), lanes=1` 仅表示逻辑
-张量观察域，不能解释为 Torch 的实际 kernel 配置。格式见[Prims 输入](prims_format.md)。
-
-### PairSpec
-
-`etv/schema.py` 读取 `etv-pair-v1`，拒绝未知字段、重复物理角色、未绑定符号、非法
-参数域和不完整规则。关键事实包括：
-
-- `parameters`：固定 rank 各维值和 launch 规模的量化域；
-- `constraints`：如 `a*b=c`；
-- `side_bindings`：TTIR 参数、Prims shape 槽位到共同参数的映射；
-- `roles`：物理 block/scalar/scalar-block 到逻辑 Input/Other/Alpha/Output；
-- `disjoint`：no-alias 前提；
-- `contract`：可观察输出和逻辑元素数。
-
-raw TTIR 与 Prims 的异构验证必须声明 `facts.parameters`。固定 `[8,16]` 示例也使用
-`a=[8,8]`、`b=[16,16]`、`c=[128,128]` 的 singleton 参数域，避免退回非符号化
-的有限枚举来判定这类程序对。
-
-## 共同内部表示
-
-`etv/model.py` 定义不可变的 `Expr/Program/StoreTemplate`。前端差异保留到重写之前：
+ETV 的正式输入是两份 raw TT IR 和一份 PairSpec。前端、共同语义表示与证明数据结构
+是三个不同层次：
 
 ```text
-TTIR load:  load(lhs:arg0, complex_offset(k,b), k<a*b, 0)
-Prims load: load(rhs:input, row_major_offset(k,a,b), true, 0)
+文件层            解析层             语义层             证明层
+lhs/rhs.ttir  ->  libtriton IR  ->  ETV Program/Expr  ->  SMT + egglog e-graph
+pair.json     ->  PairSpec      ->  facts/contract    ->  proof obligations
 ```
 
-物理端点带 side 标签，不能因名称偶合而 hash-cons 到同一节点。输出根也不是单独的
-浮点值，而是：
+这一区分很重要：内部 IR 不是 e-graph。`Program`、`StoreTemplate` 和 `Expr` 是不可变、
+类型化的程序语义；e-graph 是验证过程中临时建立的等价类数据结构。同一内部 IR 表达式
+可以被有限枚举器、SMT 编码器、子图划分器和 egglog 后端共同消费。
+
+## 双 TT IR 前端
+
+`etv.schema.load_pair_spec` 强制以下条件：
+
+1. `lhs`、`rhs` 都指向 `.ttir` 或 `.mlir`；
+2. `frontends.lhs.kind` 和 `frontends.rhs.kind` 都显式为 `ttir`；
+3. 两侧都声明入口 `function`；
+4. 两侧都声明 host launch 的 `programs` 表达式。
+
+TT IR 没有完整 host launch 信息，因此 ETV 不根据 kernel 内容猜 grid。缺失
+`programs` 会以 `TTIR_LAUNCH_REQUIRED` 拒绝；非 TT IR 输入会以
+`TTIR_PAIR_REQUIRED` 拒绝。
+
+`etv/ttir/libtriton.py` 精确要求 Triton 3.7.1。它注册 Triton/MLIR 方言，通过
+libtriton 解析文件、执行 module verifier，并遍历完整 operation/operand/result 图，
+生成 `TTIRModule` 快照。快照保留类型、属性、block、region、location 和规范化 assembly，
+可用于诊断；语义提升不依赖正则表达式重新解析原文件。
+
+`etv/ttir/lift.py` 将已验证快照提升到共同 IR。目前建模的核心子集包括：
+
+- `tt.get_program_id`、`tt.make_range`、`tt.splat`、`tt.broadcast`；
+- `tt.addptr`、`tt.load`、`tt.store`；
+- `arith.constant`、整数算术/比较、浮点逐点算术、`arith.select`；
+- `math.sqrt`、`math.rsqrt` 等已列入语义的纯操作。
+
+libtriton 可以完整解析但提升器尚不支持的 region、循环、归约或副作用会返回
+`UNKNOWN`，不会绕过或猜测语义。
+
+## 内部语义 IR
+
+`etv/ir.py` 定义：
+
+- `Sort`：`int`、`bool`、`abstract_float`；
+- `Expr`：类型化不可变表达式；
+- `StoreTemplate`：逻辑索引、物理 offset、mask 和 value；
+- `Program`：入口、launch program 数、lane 数和 store 集合。
+
+典型 load 表达式为：
+
+```text
+load(side:physical_block, offset(pid,lane), mask(pid,lane), default)
+```
+
+典型输出观察根为：
 
 ```text
 observe_store(side:physical_output, offset(k), mask(k), value(k))
 ```
 
-因此地址、mask、load、标量 ABI 和计算任一层未建立关系，最终 store 根都不会相等。
+两侧物理名称和 side 标签始终保留。不能仅因为两个变量都叫 `arg0` 就视为相同输入；
+它们必须经 PairSpec 角色映射和已准入关系规则连接。
 
-## 参数符号化
+为提高证明内核测试速度，`load_internal_pair_spec`、`load_program` 和
+`verify_internal_spec` 可读取 `etv-semantic-program-v1` 测试夹具。这是 Python 内部
+测试 API，不由 CLI 暴露，也不是第三种生产前端。
 
-`etv/parametric.py` 保留固定 rank 的维度值、TTIR program 数、`pid/lane` 和任意逻辑
-输出 `k`。它用 canonical writer：
+## PairSpec 与事实
+
+PairSpec 提供 TT IR 本身缺少的跨程序关系：
+
+- `roles`：物理 block/scalar/scalar-block 到逻辑 Input/Other/Alpha/Output；
+- `bindings` 与 `side_bindings`：常量、shape、stride、numel 等参数；
+- `parameters` 与 `constraints`：例如正 i32 的 `a,b,c` 以及 `a*b=c`；
+- `disjoint`：输入与输出的 no-alias 前提；
+- `contract`：观察哪个角色、观察多少逻辑元素、是否要求完整覆盖；
+- `limits`：饱和迭代、e-node 和超时上限。
+
+事实是证明前提，不是从程序中“推测”出来的结论。报告逐项记录其来源为
+`TRUSTED_AXIOM`。
+
+## 参数化与内存义务
+
+参数化路径使用任意逻辑输出 `k`，并对每一侧写成：
 
 ```text
 pid  = k div lanes
@@ -99,84 +95,52 @@ lane = k rem lanes
 0 <= k < output_numel
 ```
 
-Z3 证明参数域非空、整数定义性、launch 覆盖、mask、唯一写入、地址单射和对应地址
-关系。这些结果是条件规则的准入证据，不会直接把两侧表达式替换成相同叶子。
+Z3 检查参数域非空、整数定义性/无溢出、launch 覆盖、mask、唯一写入、地址范围和
+两侧对应关系。通过后生成三类关系规则：
 
-## 条件规则
+1. scalar role：物理标量或 scalar block 读取映射为逻辑标量；
+2. load：满足地址和 mask 条件的物理读取映射为 `read(LogicalRole,k)`；
+3. store：物理观察映射为规范化 `observe_store(Output,k,true,value)`。
 
-参数化路径自动生成三类关系规则：
+SMT 证明的是规则条件，不直接宣布最终程序等价。规则必须随后在 egglog 中匹配。
 
-1. scalar role：`input(lhs:arg2) -> input(Alpha)`；
-2. load：`load(side:physical, offset, mask, default) -> read(LogicalRole,k)`；
-3. store：`observe_store(side:physical_output,offset,mask,v) -> observe_store(Output,k,true,v)`。
+## 等式饱和
 
-每条 load/store 规则的报告包含：
+`etv/egraph.py` 使用 `egglog==13.2.0`。每个整图或子图义务的过程是：
 
-- PairSpec 物理端点到逻辑角色的映射；
-- `0<=k<output_numel` 与全部 shape/launch 约束；
-- mask 恒真的反例查询及其 `UNSAT` 结果；
-- 地址等于 canonical logical address 的反例查询及其 `UNSAT` 结果；
-- query hash、Z3 版本和规则 statement。
+1. 插入两侧未归一化根；
+2. 饱和事实派生的 scalar/load/store 关系规则；
+3. 若根未合并，饱和经 Z3 准入的代数规则和 PairSpec 规则；
+4. 若显式启用 LLM，可生成带 fact gate 的候选规则并重新准入；
+5. 只有两侧根属于同一 e-class 才完成计算证明。
 
-规则的“条件成立”和“实际应用”严格分开。前者进入 `rule_admission`，后者由 egglog
-匹配次数进入 `rule_application`。只有后者导致的 e-class 合并可关闭等价目标。
+报告分别记录规则准入、逐规则 match 数、是否实际使用、每阶段 e-node/e-class 数与
+未验证规则警告。e-graph 负责等价类和同余闭包；它不替代内部 IR、SMT 或内存模型。
 
-## e-graph 阶段
+## 子图划分
 
-`etv/egraph.py` 使用 `egglog==13.2.0`。执行顺序为：
+当 `llm.enabled=true` 且 `partition.enabled=true` 时，划分器把两侧完整内部 Program、
+PairSpec 和计算根发送给 LLM 一次。模型只提出语义对应的左右路径。ETV 确定性检查：
 
-1. 插入当前义务的两侧根（整图或一个子图）并记录 `initial_state`；
-2. 运行 fact-derived relational rewrites；
-3. 若仍未合并，运行经 Z3 准入的代数规则和 PairSpec 自定义规则；
-4. 若仍未合并且显式启用 LLM，选择未匹配子节点并生成带 fact gate 的候选规则；
-5. 重新准入并饱和；根仍不相等则返回反例或 `UNKNOWN`。
+- 每个 root family 完整覆盖；
+- 同侧路径唯一且只嵌套或互不相交；
+- 左右 sort 一致；
+- 左右父子依赖拓扑一致；
+- 分区 DAG 无环且数量在限制内。
 
-每轮记录前后 e-node/e-class 数、逐规则 match count 和 `updated`。e-graph 不删除旧
-表示；规则把右侧表示加入相同 e-class，并由同余闭包向父节点传播。
+通过检查后按子到父建立独立 e-graph。只有子图已证明，父图才能把它替换成共同的
+类型化边界输入。提案无效或局部证明失败时回退整图验证，LLM 不直接提供等价公理。
 
-## 成对子图划分
+## 结果和信任边界
 
-`etv/partition.py` 实现可选的“大图提议、小图证明”路径。启用条件为 PairSpec 同时
-声明 `llm.enabled=true` 与 `partition.enabled=true`。划分器只调用一次
-`program_partitioning` API，请求包含：
+正式报告包含输入及哈希、libtriton 版本、全部前提、SMT 查询结果、规则准入/应用、
+egglog 状态、可选划分审计和反例。当前可信计算基包括：
 
-- 左右完整 `Program` 的 launch、全部 store 字段和表达式；
-- PairSpec 角色、binding、约束、assumption 与观察契约；
-- 验证阶段全部计算根，按忽略叶子具体值的左右结构分成 root family；
-- 每个 family 的代表表达式及所有可选节点路径。
+- PairSpec 声明的角色、shape、launch 和 no-alias 事实；
+- libtriton parser/verifier；
+- TT IR 到 ETV IR 提升器；
+- ETV 整数/内存语义与 SMT 编码；
+- Z3、egglog 及 ETV 的 term 编码；
+- 实际应用且未被形式验证的可信规则。
 
-LLM 返回 `id/family/semantic/lhs_path/rhs_path`，只负责提出语义边界。ETV 不接受
-模型给出的覆盖结论、依赖边或等价结论，而是确定性地检查：
-
-1. 每个 family 恰有一个 `root/root` 分区，因此整棵计算树不会漏掉；
-2. 同侧路径不重复，非根分区不能选择叶子；
-3. 左右对应分区的 sort 均为 `abstract_float`；
-4. 根据路径包含关系计算最近父分区，左右父 ID 必须一致；
-5. 依赖图必须无环，分区总数满足 PairSpec 限制。
-
-路径树使同一程序中的分区只能嵌套或互不相交。每个父分区只保留自身独占节点，直接
-子分区替换为左右同名的 `input(partition:...)`。验证按子到父的拓扑顺序进行；只有
-子分区已证明等价，父分区才能使用该共同边界。每个 `SubgraphBatch` 建立独立
-e-graph，从而限制单次饱和看到的图规模。所有根分区都证明后，`DECOMPOSITION` 与
-同余性完成组合证明。
-
-无效提案、API 错误或任一局部义务未证明时，ETV 不使用划分结论，而是记录
-`SUBGRAPH_PARTITION` 非必要块并回退到原来的单图验证。局部抽象反例不会直接升级为
-全程序 `DISPROVED`，因为边界输入值未必在原程序中可达。
-
-## LLM 边界
-
-LLM 有两条相互独立的可选路径：`etv/partition.py` 在计算证明前做一次整程序划分
-提议；`etv/llm.py` 在确定性规则失败后选择节点并提出候选规则。模型不能修改输入
-事实、绕过结构检查、直接 union 根或决定最终状态。代数候选仍按策略交给 Z3；
-非代数候选若被信任，实际使用会作为 `TRUSTED_AXIOM` 和健全性警告写入报告。
-
-## 结果与信任边界
-
-`PROVED` 要求所有必要安全/覆盖义务关闭，并且全部 store 根经规则应用后属于同一
-e-class；启用划分时则要求每个依赖有序子图根进入对应 e-class 并完成组合。报告
-schema v4 包含输入哈希、前端版本、参数查询、划分审计、规则准入、规则应用、逐轮
-e-graph 状态和未验证规则警告。
-
-当前可信计算基包括 PairSpec 前提、libtriton、两个提升器、符号整数编码、Z3、
-egglog term 编码/同余维护和内存观察模型。尚无独立 proof certificate。
+当前没有独立 proof certificate。详细判定流程见[完整验证过程](verification_process.md)。

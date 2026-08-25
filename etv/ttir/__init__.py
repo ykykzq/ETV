@@ -1,4 +1,4 @@
-"""Raw TTIR parsing and Semantic TTIR lifting."""
+"""Raw TTIR parsing, verification, snapshotting, and ETV IR lifting."""
 
 from .frontend import load_program_artifact
 from .libtriton import REQUIRED_TRITON_VERSION, LibTritonParser, parse_ttir

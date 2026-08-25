@@ -4,26 +4,26 @@ from etv.cli import main
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "tests/fixtures/semantic/specs"
+FIXTURES = ROOT / "tests/fixtures/semantic"
 
 
-def test_cli_exit_codes_and_artifacts(tmp_path, capsys):
-    proved = main(
+def test_check_cli_rejects_internal_ir_pair(tmp_path, capsys):
+    result = main(
         [
             "check",
-            str(FIXTURES / "add_proved.json"),
+            str(FIXTURES / "specs/add_proved.json"),
             "--out",
-            str(tmp_path / "proof"),
+            str(tmp_path / "rejected"),
         ]
     )
-    disproved = main(["check", str(FIXTURES / "add_bad_mask.json")])
-    unknown = main(["check", str(FIXTURES / "add_missing_alias.json")])
 
-    assert proved == 0
-    assert disproved == 1
-    assert unknown == 2
-    assert (tmp_path / "proof/report.json").is_file()
-    output = capsys.readouterr().out
-    assert "PROVED add_ntops_2d_vs_inductor_linear" in output
-    assert "DISPROVED add_bad_mask" in output
-    assert "UNKNOWN add_missing_alias_fact" in output
+    assert result == 2
+    assert (tmp_path / "rejected/report.json").is_file()
+    assert "UNKNOWN add_proved: TTIR_PAIR_REQUIRED" in capsys.readouterr().out
+
+
+def test_inspect_cli_rejects_internal_ir_program(capsys):
+    result = main(["inspect", str(FIXTURES / "programs/add_ntops_2d.json")])
+
+    assert result == 2
+    assert "TTIR_PAIR_REQUIRED" in capsys.readouterr().err
