@@ -1,0 +1,12 @@
+module {
+  tt.func public @loop(%arg0: !tt.ptr<i32>, %arg1: i32) {
+    %c0_i32 = arith.constant 0 : i32
+    %c1_i32 = arith.constant 1 : i32
+    %sum = scf.for %i = %c0_i32 to %arg1 step %c1_i32 iter_args(%acc = %c0_i32) -> (i32) : i32 {
+      %next = arith.addi %acc, %i : i32
+      scf.yield %next : i32
+    }
+    tt.store %arg0, %sum : !tt.ptr<i32>
+    tt.return
+  }
+}

@@ -35,7 +35,8 @@ def test_rebuild_propagates_child_equality_by_congruence():
     graph.rebuild()
 
     assert graph.equivalent(neg_a, neg_b)
-    assert any(item.get("kind") == "congruence" for item in graph.merge_log)
+    assert graph.backend["name"] == "egglog"
+    assert graph.backend["version"] == "13.2.0"
 
 
 def test_add_and_sub_do_not_merge():
@@ -48,3 +49,15 @@ def test_add_and_sub_do_not_merge():
     graph.saturate(rules, Limits())
 
     assert not graph.equivalent(add_root, sub_root)
+
+
+def test_egglog_enode_budget_is_reported_before_saturation():
+    a, b = value("a"), value("b")
+    graph = EGraph()
+    graph.add_expr(Expr("fadd", args=(a, b), sort=Sort.FLOAT))
+    rules, _ = validated_builtin_rules()
+
+    stats = graph.saturate(rules, Limits(max_enodes=1))
+
+    assert stats["stop_reason"] == "ENODE_LIMIT"
+    assert stats["iterations"] == 0

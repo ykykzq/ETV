@@ -6,7 +6,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
+
+if TYPE_CHECKING:
+    from .rules import Rule
 
 
 class Status(str, Enum):
@@ -134,6 +137,17 @@ class Program:
     programs: Expr
     lanes: int
     stores: Tuple[StoreTemplate, ...]
+    frontend: str = "semantic_json"
+    frontend_version: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class FrontendSpec:
+    """How one side of a PairSpec is parsed and launched."""
+
+    kind: str = "auto"
+    function: Optional[str] = None
+    programs: Optional[Expr] = None
 
 
 @dataclass(frozen=True)
@@ -188,6 +202,9 @@ class PairSpec:
     facts: FactContext
     contract: Contract
     limits: Limits
+    lhs_frontend: FrontendSpec = FrontendSpec()
+    rhs_frontend: FrontendSpec = FrontendSpec()
+    rewrite_rules: Tuple["Rule", ...] = ()
 
     def role(self, logical: str) -> RolePair:
         for role in self.roles:

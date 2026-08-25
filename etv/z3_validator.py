@@ -8,7 +8,14 @@ from typing import Any, Dict, Mapping, Tuple
 
 import z3
 
+from .model import PairSpec
 from .rules import Pattern, Rule, builtin_rules
+
+
+TRUSTED_RULE_WARNING = (
+    "This fact-gated rewrite is assumed equivalent without SMT or formal validation; "
+    "an incorrect PairSpec fact or rewrite can make PROVED unsound."
+)
 
 
 def _term(pattern: Pattern, variables: Dict[str, Any]) -> Any:
@@ -34,6 +41,14 @@ def _term(pattern: Pattern, variables: Dict[str, Any]) -> Any:
 
 
 def validate_rule(rule: Rule, timeout_ms: int = 2_000) -> dict:
+    if rule.kind != "algebraic":
+        value = rule.to_json()
+        value["status"] = "rejected"
+        value["validation"] = {
+            "result": "wrong_validator",
+            "detail": "only algebraic rules may enter the Z3 Real admission gate",
+        }
+        return value
     variables: Dict[str, Any] = {}
     try:
         lhs = _term(rule.lhs, variables)
@@ -80,4 +95,42 @@ def validated_builtin_rules() -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
         results.append(result)
         if result["status"] == "proved":
             accepted.append(rule)
+    return tuple(accepted), tuple(results)
+
+
+def admitted_rules(spec: PairSpec) -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
+    builtin_accepted, builtin_results = validated_builtin_rules()
+    accepted = list(builtin_accepted)
+    results = list(builtin_results)
+    for declaration in spec.rewrite_rules:
+        if declaration.kind == "algebraic":
+            result = validate_rule(declaration)
+            if result["status"] == "proved":
+                accepted.append(declaration)
+            results.append(result)
+            continue
+
+        checks = [
+            {
+                "requirement": requirement.to_json(),
+                "satisfied": requirement.evaluate(spec.facts),
+            }
+            for requirement in declaration.fact_requirements
+        ]
+        result = declaration.to_json()
+        if all(check["satisfied"] for check in checks):
+            result["status"] = "admitted_unverified"
+            result["validation"] = {
+                "result": "trusted",
+                "fact_checks": checks,
+                "warning": TRUSTED_RULE_WARNING,
+            }
+            accepted.append(declaration)
+        else:
+            result["status"] = "skipped"
+            result["validation"] = {
+                "result": "fact_requirements_not_met",
+                "fact_checks": checks,
+            }
+        results.append(result)
     return tuple(accepted), tuple(results)

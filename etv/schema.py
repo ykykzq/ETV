@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Tuple
@@ -11,10 +12,12 @@ from .model import (
     Contract,
     Expr,
     FactContext,
+    FrontendSpec,
     InputError,
     Limits,
     PairSpec,
     Program,
+    ProofLevel,
     RoleEndpoint,
     RolePair,
     Sort,
@@ -23,6 +26,7 @@ from .model import (
     float_const,
     int_const,
 )
+from .rules import FactRequirement, Pattern, Rule, builtin_rules, node, number, pattern_variables, render_pattern, var
 
 
 FORMAT_PROGRAM = "etv-semantic-program-v1"
@@ -60,6 +64,8 @@ _SORT = {
     **{name: Sort.BOOL for name in ("lt", "le", "gt", "ge", "eq", "ne", "and", "or", "not")},
     **{name: Sort.FLOAT for name in ("fadd", "fsub", "fmul", "fdiv", "fneg", "fsqrt", "frsqrt", "fma")},
 }
+
+_RULE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 
 
 def _read_json(path: Path) -> Mapping[str, Any]:
@@ -220,12 +226,187 @@ def _strings(value: Any, where: str) -> Tuple[str, ...]:
     return tuple(value)
 
 
+def _rewrite_pattern(value: Any, where: str) -> Pattern:
+    if isinstance(value, bool):
+        return node("const_bool", data=value, match_data=True, sort=Sort.BOOL)
+    if isinstance(value, int):
+        return node("const_int", data=value, match_data=True, sort=Sort.INT)
+    if isinstance(value, float):
+        fraction = Fraction(str(value))
+        return number(fraction.numerator, fraction.denominator)
+    if not isinstance(value, dict):
+        raise InputError(f"{where} must be a pattern object or literal")
+
+    if set(value) == {"match"}:
+        name = value["match"]
+        if not isinstance(name, str) or not _RULE_ID.fullmatch(name):
+            raise InputError(f"{where}.match must be an identifier")
+        return var(name)
+    if set(value) == {"float"}:
+        try:
+            fraction = Fraction(str(value["float"]))
+        except (ValueError, ZeroDivisionError) as exc:
+            raise InputError(f"{where}.float is not an exact rational literal") from exc
+        return number(fraction.numerator, fraction.denominator)
+    if set(value) == {"input"}:
+        role = value["input"]
+        if not isinstance(role, str) or not role:
+            raise InputError(f"{where}.input must be a non-empty logical role")
+        return node("input", data=role, match_data=True)
+    if set(value) == {"read"}:
+        read = value["read"]
+        if not isinstance(read, dict):
+            raise InputError(f"{where}.read must be an object")
+        _only_keys(read, {"role", "offset"}, f"{where}.read")
+        role = read.get("role")
+        if not isinstance(role, str) or not role or "offset" not in read:
+            raise InputError(f"{where}.read requires a role and offset")
+        return node(
+            "read",
+            _rewrite_pattern(read["offset"], f"{where}.read.offset"),
+            data=role,
+            match_data=True,
+        )
+
+    _only_keys(value, {"op", "args", "data", "sort"}, where)
+    op = value.get("op")
+    if op not in _ARITY:
+        raise InputError(f"unsupported rewrite operation {op!r} in {where}")
+    args = value.get("args")
+    if not isinstance(args, list) or len(args) != _ARITY[op]:
+        raise InputError(f"{where}.{op} expects {_ARITY[op]} argument(s)")
+    sort_raw = value.get("sort")
+    if sort_raw is None:
+        sort = Sort.FLOAT if op == "select" else _SORT[op]
+    else:
+        try:
+            sort = Sort(sort_raw)
+        except ValueError as exc:
+            raise InputError(f"{where}.sort must be int, bool, or abstract_float") from exc
+    return node(
+        op,
+        *(_rewrite_pattern(arg, f"{where}.{op}[{index}]") for index, arg in enumerate(args)),
+        data=value.get("data"),
+        match_data="data" in value,
+        sort=sort,
+    )
+
+
+def _rule_requirement(value: Any, where: str) -> FactRequirement:
+    if not isinstance(value, dict):
+        raise InputError(f"{where} must be an object")
+    kind = value.get("kind")
+    if kind == "binding_equals":
+        _only_keys(value, {"kind", "name", "value"}, where)
+        name = value.get("name")
+        expected = value.get("value")
+        if not isinstance(name, str) or not name:
+            raise InputError(f"{where}.name must be a non-empty binding name")
+        if not isinstance(expected, int) or isinstance(expected, bool):
+            raise InputError(f"{where}.value must be an integer")
+        return FactRequirement(kind=kind, name=name, value=expected)
+    if kind == "assumption":
+        _only_keys(value, {"kind", "text"}, where)
+        text = value.get("text")
+        if not isinstance(text, str) or not text:
+            raise InputError(f"{where}.text must be a non-empty assumption")
+        return FactRequirement(kind=kind, value=text)
+    if kind == "disjoint":
+        _only_keys(value, {"kind", "roles"}, where)
+        roles = _strings(value.get("roles"), f"{where}.roles")
+        if len(roles) < 2:
+            raise InputError(f"{where}.roles needs at least two roles")
+        return FactRequirement(kind=kind, roles=roles)
+    raise InputError(f"{where}.kind must be binding_equals, assumption, or disjoint")
+
+
+def _rewrite_rule(value: Any, where: str) -> Rule:
+    if not isinstance(value, dict):
+        raise InputError(f"{where} must be an object")
+    _only_keys(value, {"id", "kind", "lhs", "rhs", "statement", "requires", "provenance"}, where)
+    rule_id = value.get("id")
+    if not isinstance(rule_id, str) or not _RULE_ID.fullmatch(rule_id):
+        raise InputError(f"{where}.id must be a stable rule identifier")
+    kind = value.get("kind")
+    if kind not in {"algebraic", "trusted_fact"}:
+        raise InputError(f"{where}.kind must be algebraic or trusted_fact")
+    if "lhs" not in value or "rhs" not in value:
+        raise InputError(f"{where} requires lhs and rhs patterns")
+    lhs = _rewrite_pattern(value["lhs"], f"{where}.lhs")
+    rhs = _rewrite_pattern(value["rhs"], f"{where}.rhs")
+    if lhs.variable is not None:
+        raise InputError(f"{where}.lhs cannot be a bare match variable")
+    unbound = sorted(pattern_variables(rhs) - pattern_variables(lhs))
+    if unbound:
+        raise InputError(f"{where}.rhs has unbound match variable(s): {', '.join(unbound)}")
+
+    requirements_raw = value.get("requires", [])
+    if not isinstance(requirements_raw, list):
+        raise InputError(f"{where}.requires must be a list")
+    requirements = tuple(
+        _rule_requirement(item, f"{where}.requires[{index}]")
+        for index, item in enumerate(requirements_raw)
+    )
+    if kind == "trusted_fact" and not requirements:
+        raise InputError(f"{where} trusted_fact rules require at least one fact gate")
+    if kind == "algebraic" and requirements:
+        raise InputError(f"{where} algebraic rules cannot use PairSpec fact gates")
+
+    provenance_raw = value.get("provenance", {"generated_by": "human"})
+    if not isinstance(provenance_raw, dict):
+        raise InputError(f"{where}.provenance must be an object")
+    _only_keys(provenance_raw, {"generated_by", "generator", "prompt_sha256"}, f"{where}.provenance")
+    generated_by = provenance_raw.get("generated_by", "human")
+    if generated_by not in {"human", "llm"}:
+        raise InputError(f"{where}.provenance.generated_by must be human or llm")
+    generator = provenance_raw.get("generator")
+    prompt_sha256 = provenance_raw.get("prompt_sha256")
+    if generated_by == "llm":
+        if not isinstance(generator, str) or not generator:
+            raise InputError(f"{where}.provenance.generator is required for LLM rules")
+        if not isinstance(prompt_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", prompt_sha256):
+            raise InputError(f"{where}.provenance.prompt_sha256 must be a lowercase SHA-256")
+    elif generator is not None or prompt_sha256 is not None:
+        raise InputError(f"{where}.provenance generator metadata is only valid for LLM rules")
+
+    statement = value.get("statement", f"{render_pattern(lhs)} == {render_pattern(rhs)}")
+    if not isinstance(statement, str) or not statement:
+        raise InputError(f"{where}.statement must be a non-empty string")
+    return Rule(
+        rule_id=rule_id,
+        lhs=lhs,
+        rhs=rhs,
+        evidence=ProofLevel.ALGEBRAIC if kind == "algebraic" else ProofLevel.TRUSTED_AXIOM,
+        validator="z3_real_unsat" if kind == "algebraic" else "trusted_pair_fact",
+        statement=statement,
+        requires=("semantic_mode == abstract_float",),
+        kind=kind,
+        source=where,
+        fact_requirements=requirements,
+        generated_by=generated_by,
+        generator=generator,
+        prompt_sha256=prompt_sha256,
+    )
+
+
 def load_pair_spec(path: Path) -> PairSpec:
     path = path.resolve()
     raw = _read_json(path)
     _only_keys(
         raw,
-        {"format", "pair_id", "lhs", "rhs", "semantic_mode", "roles", "facts", "contract", "limits"},
+        {
+            "format",
+            "pair_id",
+            "lhs",
+            "rhs",
+            "frontends",
+            "semantic_mode",
+            "roles",
+            "facts",
+            "contract",
+            "limits",
+            "rewrite_rules",
+        },
         str(path),
     )
     if raw.get("format") != FORMAT_PAIR:
@@ -327,6 +508,46 @@ def load_pair_spec(path: Path) -> PairSpec:
         limit_values[key] = value
 
     base = path.parent
+    frontends_raw = raw.get("frontends", {})
+    if not isinstance(frontends_raw, dict):
+        raise InputError(f"{path}.frontends must be an object")
+    _only_keys(frontends_raw, {"lhs", "rhs"}, f"{path}.frontends")
+
+    def parse_frontend(side: str) -> FrontendSpec:
+        value = frontends_raw.get(side, {})
+        where = f"{path}.frontends.{side}"
+        if not isinstance(value, dict):
+            raise InputError(f"{where} must be an object")
+        _only_keys(value, {"kind", "function", "programs"}, where)
+        kind = value.get("kind", "auto")
+        if kind not in {"auto", "semantic_json", "ttir"}:
+            raise InputError(f"{where}.kind must be auto, semantic_json, or ttir")
+        function = value.get("function")
+        if function is not None and (not isinstance(function, str) or not function):
+            raise InputError(f"{where}.function must be a non-empty string")
+        programs = value.get("programs")
+        return FrontendSpec(
+            kind=kind,
+            function=function,
+            programs=None if programs is None else parse_expr(programs, f"{where}.programs"),
+        )
+
+    rewrite_rules_raw = raw.get("rewrite_rules", [])
+    if not isinstance(rewrite_rules_raw, list):
+        raise InputError(f"{path}.rewrite_rules must be a list")
+    rewrite_rules = tuple(
+        _rewrite_rule(item, f"{path}.rewrite_rules[{index}]")
+        for index, item in enumerate(rewrite_rules_raw)
+    )
+    rule_ids = [rule.rule_id for rule in rewrite_rules]
+    duplicate_rule_ids = sorted({rule_id for rule_id in rule_ids if rule_ids.count(rule_id) > 1})
+    builtin_rule_ids = {rule.rule_id for rule in builtin_rules()}
+    conflicting_rule_ids = sorted(set(rule_ids) & builtin_rule_ids)
+    if duplicate_rule_ids:
+        raise InputError(f"duplicate rewrite rule id(s): {', '.join(duplicate_rule_ids)}")
+    if conflicting_rule_ids:
+        raise InputError(f"rewrite rule id conflicts with builtin rule(s): {', '.join(conflicting_rule_ids)}")
+
     return PairSpec(
         pair_id=pair_id,
         source=path,
@@ -346,4 +567,7 @@ def load_pair_spec(path: Path) -> PairSpec:
             require_disjoint=require_disjoint,
         ),
         limits=Limits(**limit_values),
+        lhs_frontend=parse_frontend("lhs"),
+        rhs_frontend=parse_frontend("rhs"),
+        rewrite_rules=rewrite_rules,
     )

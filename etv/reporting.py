@@ -68,12 +68,22 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         egraph = proof.get("egraph")
         if egraph:
             stats = egraph.get("stats", {})
+            backend = stats.get("backend", {})
             lines.append(
-                f"E-graph: {stats.get('enodes')} e-nodes, {stats.get('eclasses')} e-classes, "
-                f"{stats.get('merges')} merges, stop reason `{stats.get('stop_reason')}`."
+                f"E-graph: `{backend.get('name')} {backend.get('version')}`, "
+                f"{stats.get('enodes')} e-nodes, {stats.get('eclasses')} e-classes, "
+                f"{stats.get('iterations')} iterations, stop reason `{stats.get('stop_reason')}`."
             )
-            rules = stats.get("rule_applications", {})
-            lines.append("Applied rules: " + (", ".join(f"`{key}` x{value}" for key, value in rules.items()) or "none"))
+            rules = stats.get("rule_matches", {})
+            lines.append("Matched rules: " + (", ".join(f"`{key}` x{value}" for key, value in rules.items()) or "none"))
+            trusted = egraph.get("trusted_rule_uses", [])
+            if trusted:
+                lines.extend(["", "### Unverified trusted rewrites", ""])
+                lines.extend(
+                    f"- `{item.get('id')}` matched {item.get('matches')} time(s): "
+                    f"{item.get('validation', {}).get('warning')}"
+                    for item in trusted
+                )
 
     lines.extend(["", "## Trust boundary", ""])
     lines.extend(f"- {item}" for item in report.get("trusted_axioms", []))

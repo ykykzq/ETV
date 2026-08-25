@@ -44,6 +44,17 @@ def test_machine_report_is_deterministic():
     assert verify_spec(path) == verify_spec(path)
 
 
+def test_all_admitted_rules_enter_the_unified_egglog_ruleset():
+    report = verify_spec(ROOT / "examples/specs/add_fma_proved.json")
+    egraph = report["proof"]["egraph"]
+
+    assert egraph["stats"]["backend"] == {"name": "egglog", "version": "13.2.0"}
+    assert set(egraph["admitted_rule_ids"]) == {
+        item["id"] for item in report["proof"]["rule_admission"] if item["status"] == "proved"
+    }
+    assert "fma_def" in egraph["stats"]["rule_matches"]
+
+
 def test_writes_json_and_markdown_artifacts(tmp_path):
     report = verify_spec(ROOT / "examples/specs/add_proved.json")
 
@@ -93,3 +104,49 @@ def test_partial_float_operations_require_proved_domains(tmp_path):
     report = verify_spec(spec_path)
     assert report["status"] == Status.UNKNOWN.value
     assert report["reason"] == "FLOAT_DEFINEDNESS_NOT_PROVED"
+
+
+def _write_trusted_rewrite_spec(tmp_path, include_fact):
+    source = json.loads((ROOT / "examples/specs/add_bad_compute.json").read_text(encoding="utf-8"))
+    source["lhs"] = str(ROOT / "examples/programs/add_ntops_2d.json")
+    source["rhs"] = str(ROOT / "examples/programs/add_inductor_bad_compute.json")
+    fact = "subtraction is equivalent to addition for this specialization"
+    if include_fact:
+        source["facts"]["assumptions"].append(fact)
+    source["rewrite_rules"] = [
+        {
+            "id": "specialized_sub_is_add",
+            "kind": "trusted_fact",
+            "statement": "specialized fsub(a, b) == fadd(a, b)",
+            "lhs": {"op": "fsub", "args": [{"match": "a"}, {"match": "b"}]},
+            "rhs": {"op": "fadd", "args": [{"match": "a"}, {"match": "b"}]},
+            "requires": [{"kind": "assumption", "text": fact}],
+        }
+    ]
+    path = tmp_path / "trusted.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+    return path
+
+
+def test_fact_gated_trusted_rewrite_is_used_and_audited(tmp_path):
+    report = verify_spec(_write_trusted_rewrite_spec(tmp_path, include_fact=True))
+
+    assert report["status"] == Status.PROVED.value
+    uses = report["proof"]["egraph"]["trusted_rule_uses"]
+    assert uses[0]["id"] == "specialized_sub_is_add"
+    assert uses[0]["matches"] > 0
+    assert "without SMT or formal validation" in uses[0]["validation"]["warning"]
+    assert "TRUSTED_AXIOM" in next(
+        block["proof_levels"] for block in report["blocks"] if block["kind"] == "COMPUTE"
+    )
+
+
+def test_fact_gated_rewrite_is_skipped_when_requirement_is_missing(tmp_path):
+    report = verify_spec(_write_trusted_rewrite_spec(tmp_path, include_fact=False))
+
+    assert report["status"] == Status.DISPROVED.value
+    admission = next(
+        item for item in report["proof"]["rule_admission"] if item["id"] == "specialized_sub_is_add"
+    )
+    assert admission["status"] == "skipped"
+    assert admission["validation"]["fact_checks"][0]["satisfied"] is False

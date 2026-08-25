@@ -12,6 +12,7 @@ from typing import Iterable, Optional
 from .model import Expr, Status
 from .reporting import render_markdown, write_report
 from .schema import InputError, load_program
+from .ttir import parse_ttir
 from .verify import verify_spec
 from .z3_validator import validated_builtin_rules
 
@@ -40,8 +41,17 @@ def _check(args: argparse.Namespace) -> int:
 
 
 def _inspect(args: argparse.Namespace) -> int:
+    path = Path(args.program)
+    if path.suffix in {".ttir", ".mlir"}:
+        try:
+            module = parse_ttir(path, function=args.function)
+        except InputError as exc:
+            print(f"UNKNOWN {getattr(exc, 'code', 'INVALID_INPUT')}: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(module.to_json(include_assembly=False), indent=2, sort_keys=True))
+        return 0
     try:
-        program = load_program(Path(args.program))
+        program = load_program(path)
     except InputError as exc:
         print(f"UNKNOWN {getattr(exc, 'code', 'INVALID_INPUT')}: {exc}", file=sys.stderr)
         return 2
@@ -57,6 +67,24 @@ def _inspect(args: argparse.Namespace) -> int:
         "operations": {key: operations[key] for key in sorted(operations)},
     }
     print(json.dumps(value, indent=2, sort_keys=True))
+    return 0
+
+
+def _parse(args: argparse.Namespace) -> int:
+    try:
+        module = parse_ttir(Path(args.input), function=args.function)
+    except InputError as exc:
+        print(f"UNKNOWN {getattr(exc, 'code', 'INVALID_INPUT')}: {exc}", file=sys.stderr)
+        return 2
+    value = module.to_json(include_assembly=not args.no_assembly)
+    encoded = json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    if args.out:
+        output = Path(args.out)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded, encoding="utf-8")
+        print(f"parsed {module.function}: {len(module.operations)} operations -> {output.resolve()}")
+    else:
+        print(encoded, end="")
     return 0
 
 
@@ -104,9 +132,17 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--json", action="store_true", help="print the full machine report")
     check.set_defaults(handler=_check)
 
-    inspect = subparsers.add_parser("inspect", help="inspect a Semantic TTIR program")
+    inspect = subparsers.add_parser("inspect", help="inspect a Semantic JSON or raw TTIR program")
     inspect.add_argument("program")
+    inspect.add_argument("--function", help="TTIR function to inspect when the module is ambiguous")
     inspect.set_defaults(handler=_inspect)
+
+    parse = subparsers.add_parser("parse", help="parse and verify raw TTIR with libtriton")
+    parse.add_argument("input", help="path to a .ttir or .mlir file")
+    parse.add_argument("--function", help="entry function when the module has multiple functions")
+    parse.add_argument("--out", help="write the etv-ttir-snapshot-v1 JSON file")
+    parse.add_argument("--no-assembly", action="store_true", help="omit canonical assembly from JSON")
+    parse.set_defaults(handler=_parse)
 
     rules = subparsers.add_parser("rules", help="list accepted equality rules")
     rules.add_argument("--json", action="store_true")

@@ -21,8 +21,9 @@ from .model import (
     UnsupportedSemantics,
     pairwise,
 )
-from .schema import load_pair_spec, load_program
-from .z3_validator import validated_builtin_rules
+from .schema import load_pair_spec
+from .ttir import load_program_artifact
+from .z3_validator import admitted_rules
 
 
 def _hash(path: Path) -> str:
@@ -82,8 +83,8 @@ def _base_report(spec: PairSpec) -> dict:
         for group in spec.facts.disjoint_groups
     )
     return {
-        "schema_version": 1,
-        "tool": {"name": "ETV", "version": "0.1.0"},
+        "schema_version": 2,
+        "tool": {"name": "ETV", "version": "0.3.0"},
         "pair_id": spec.pair_id,
         "status": Status.UNKNOWN.value,
         "reason": "NOT_RUN",
@@ -115,7 +116,7 @@ def _base_report(spec: PairSpec) -> dict:
             "proves": "equal final Output memory for all abstract input values in the enumerated launch domain",
             "does_not_prove": [
                 "IEEE-754 or bitwise GPU equality",
-                "correct lifting from raw TTIR to Semantic TTIR",
+                "formal correctness of the raw-TTIR-to-Semantic-TTIR lifting implementation",
                 "parametric shapes or unbounded loops",
                 "concurrent/shared-memory semantics",
                 "allocated-buffer bounds or GPU memory safety",
@@ -145,8 +146,8 @@ def _finish(report: dict, status: Status, reason: str, counterexample: Optional[
 
 def _invalid_report(path: Path, exc: Exception) -> dict:
     return {
-        "schema_version": 1,
-        "tool": {"name": "ETV", "version": "0.1.0"},
+        "schema_version": 2,
+        "tool": {"name": "ETV", "version": "0.3.0"},
         "pair_id": path.stem,
         "status": Status.UNKNOWN.value,
         "reason": getattr(exc, "code", "INVALID_INPUT"),
@@ -227,12 +228,6 @@ def _collect_leaves(expr: Expr, result: Set[str]) -> None:
         return
     for arg in expr.args:
         _collect_leaves(arg, result)
-
-
-def _collect_ops(expr: Expr, result: Set[str]) -> None:
-    result.add(expr.op)
-    for arg in expr.args:
-        _collect_ops(arg, result)
 
 
 def _constant_abstract(expr: Expr) -> Optional[Fraction]:
@@ -371,9 +366,29 @@ def _expected_numel(spec: PairSpec) -> int:
 
 
 def verify_pair(spec: PairSpec) -> dict:
-    lhs_program = load_program(spec.lhs_path)
-    rhs_program = load_program(spec.rhs_path)
     report = _base_report(spec)
+    try:
+        lhs_program = load_program_artifact(spec.lhs_path, spec.lhs_frontend)
+        rhs_program = load_program_artifact(spec.rhs_path, spec.rhs_frontend)
+    except UnsupportedSemantics as exc:
+        report["unsupported"].append(str(exc))
+        report["blocks"].append(_block("FRONTEND", Status.UNKNOWN, str(exc), reason=exc.code))
+        return _finish(report, Status.UNKNOWN, exc.code)
+    report["inputs"]["frontends"] = {
+        "lhs": {"name": lhs_program.frontend, "version": lhs_program.frontend_version},
+        "rhs": {"name": rhs_program.frontend, "version": rhs_program.frontend_version},
+    }
+    if lhs_program.frontend == "libtriton" or rhs_program.frontend == "libtriton":
+        report["trusted_axioms"].append("ETV TTIR-to-Semantic-TTIR lifting implementation")
+        report["blocks"].append(
+            _block(
+                "FRONTEND",
+                Status.PROVED,
+                "raw modules were parsed and verified by pinned libtriton before semantic lifting",
+                (ProofLevel.STRUCTURAL,),
+                details=report["inputs"]["frontends"],
+            )
+        )
 
     if spec.semantic_mode != "abstract_float":
         report["unsupported"].append(
@@ -645,8 +660,10 @@ def verify_pair(spec: PairSpec) -> dict:
         )
     )
 
-    accepted_rules, rule_validation = validated_builtin_rules()
-    report["proof"]["rule_validation"] = list(rule_validation)
+    accepted_rules, rule_admission = admitted_rules(spec)
+    report["proof"]["rule_admission"] = list(rule_admission)
+    # Retained for report consumers written against schema version 1.
+    report["proof"]["rule_validation"] = list(rule_admission)
     egraph = EGraph()
     root_pairs = []
     for logical_index in sorted(lhs_domain):
@@ -664,30 +681,14 @@ def verify_pair(spec: PairSpec) -> dict:
         if not egraph.equivalent(lhs_root, rhs_root)
     ]
     if initially_unmatched:
-        relevant_ops: Set[str] = set()
-        for logical_index, _, _ in initially_unmatched:
-            _collect_ops(lhs_map[logical_index].value, relevant_ops)
-            _collect_ops(rhs_map[logical_index].value, relevant_ops)
-        rule_families = {
-            "fadd": {"fadd_comm", "fadd_assoc", "fadd_zero"},
-            "fmul": {"fmul_comm", "fmul_assoc", "fmul_one", "fmul_zero"},
-            "fdiv": {"fdiv_one"},
-            "fsub": {"fsub_def"},
-            "fneg": {"fneg_involution"},
-            "fma": {"fma_def"},
-        }
-        relevant_rule_ids = set()
-        for op in relevant_ops:
-            relevant_rule_ids.update(rule_families.get(op, set()))
-        candidate_rules = tuple(rule for rule in accepted_rules if rule.rule_id in relevant_rule_ids)
-        saturation = egraph.saturate(candidate_rules, spec.limits)
+        saturation = egraph.saturate(accepted_rules, spec.limits)
     else:
-        candidate_rules = ()
         saturation = {
+            "backend": egraph.backend,
             "iterations": 0,
             "enodes": egraph.enode_count,
-            "eclasses": len(egraph.roots()),
-            "merges": len(egraph.merge_log),
+            "eclasses": egraph.eclass_count,
+            "rule_matches": {},
             "rule_applications": {},
             "stop_reason": "ROOTS_ALREADY_CONGRUENT",
         }
@@ -696,13 +697,37 @@ def verify_pair(spec: PairSpec) -> dict:
         for logical_index, lhs_root, rhs_root in root_pairs
         if not egraph.equivalent(lhs_root, rhs_root)
     ]
+    rule_matches = saturation["rule_matches"]
+    rule_log = []
+    for admission in rule_admission:
+        entry = dict(admission)
+        entry["matches"] = rule_matches.get(admission["id"], 0)
+        entry["used"] = entry["matches"] > 0
+        rule_log.append(entry)
+    trusted_rule_uses = [
+        entry
+        for entry in rule_log
+        if entry["kind"] == "trusted_fact" and entry["status"] == "admitted_unverified" and entry["used"]
+    ]
+    if trusted_rule_uses:
+        trusted_ids = ", ".join(entry["id"] for entry in trusted_rule_uses)
+        report["trusted_axioms"].append(f"unverified PairSpec rewrite rule(s): {trusted_ids}")
+        report["guarantees"]["does_not_prove"].append(
+            "soundness of fact-gated trusted rewrite rules declared by PairSpec"
+        )
+
     report["proof"]["egraph"] = {
         "stats": saturation,
         "root_pairs": len(root_pairs),
         "equivalent_root_pairs": len(root_pairs) - len(unmatched),
-        "candidate_rule_ids": [rule.rule_id for rule in candidate_rules],
-        "merge_ledger": egraph.merge_log,
-        "accepted_rules": [result for result in rule_validation if result["status"] == "proved"],
+        "admitted_rule_ids": [rule.rule_id for rule in accepted_rules],
+        "rule_log": rule_log,
+        "accepted_rules": [
+            result
+            for result in rule_admission
+            if result["status"] in {"proved", "admitted_unverified"}
+        ],
+        "trusted_rule_uses": trusted_rule_uses,
     }
 
     if unmatched:
@@ -731,7 +756,7 @@ def verify_pair(spec: PairSpec) -> dict:
             _block(
                 "COMPUTE",
                 Status.UNKNOWN,
-                "the accepted algebraic rules do not connect the compute roots",
+                "the admitted rewrite rules do not connect the compute roots",
                 reason="EGRAPH_NOT_EQUIVALENT",
                 details=details,
             )
@@ -739,8 +764,11 @@ def verify_pair(spec: PairSpec) -> dict:
         return _finish(report, Status.UNKNOWN, "EGRAPH_NOT_EQUIVALENT")
 
     used_levels = [ProofLevel.CONGRUENCE]
-    if saturation["rule_applications"]:
+    matched_ids = set(saturation["rule_matches"])
+    if any(rule.rule_id in matched_ids and rule.evidence == ProofLevel.ALGEBRAIC for rule in accepted_rules):
         used_levels.append(ProofLevel.ALGEBRAIC)
+    if trusted_rule_uses:
+        used_levels.append(ProofLevel.TRUSTED_AXIOM)
     report["blocks"].append(
         _block(
             "COMPUTE",
@@ -749,7 +777,7 @@ def verify_pair(spec: PairSpec) -> dict:
             used_levels,
             details={
                 "root_pairs": len(root_pairs),
-                "rule_applications": saturation["rule_applications"],
+                "rule_matches": saturation["rule_matches"],
                 "stop_reason": saturation["stop_reason"],
             },
         )
