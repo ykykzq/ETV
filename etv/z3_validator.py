@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from functools import lru_cache
 from typing import Any, Dict, Iterable, Mapping, Tuple
 
@@ -11,7 +12,11 @@ import z3
 from .casts import INTEGER_CAST_OPS, integer_width, normalize_cast_data
 from .ir import Sort
 from .model import PairSpec
+from .observability import get_logger, log_event
 from .rules import Pattern, Rule, builtin_rules
+
+
+LOGGER = get_logger(__name__)
 
 TRUSTED_RULE_WARNING = (
     "This predicate-gated rewrite is assumed equivalent without SMT or formal validation; "
@@ -109,6 +114,14 @@ def _term(
 
 
 def validate_rule(rule: Rule, timeout_ms: int = 2_000) -> dict:
+    log_event(
+        LOGGER,
+        logging.DEBUG,
+        "rewrite_validation_started",
+        "validating algebraic rewrite with Z3",
+        rule_id=rule.rule_id,
+        timeout_ms=timeout_ms,
+    )
     if rule.kind != "algebraic":
         value = rule.to_json()
         value["status"] = "rejected"
@@ -162,6 +175,15 @@ def validate_rule(rule: Rule, timeout_ms: int = 2_000) -> dict:
     value = rule.to_json()
     value["status"] = "proved" if result == z3.unsat else "rejected"
     value["validation"] = validation
+    log_event(
+        LOGGER,
+        logging.INFO if value["status"] == "proved" else logging.WARNING,
+        "rewrite_validation_finished",
+        "completed Z3 rewrite validation",
+        rule_id=rule.rule_id,
+        status=value["status"],
+        result=validation.get("result"),
+    )
     return value
 
 
@@ -181,6 +203,15 @@ def admitted_rules(
     spec: PairSpec,
     additional_rules: Iterable[Rule] = (),
 ) -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
+    additional_rules = tuple(additional_rules)
+    log_event(
+        LOGGER,
+        logging.DEBUG,
+        "rewrite_admission_started",
+        "admitting built-in and PairSpec rewrite rules",
+        additional_rules=len(additional_rules),
+        pair_rules=len(spec.rewrite_rules),
+    )
     builtin_accepted, builtin_results = validated_builtin_rules()
     accepted = list(builtin_accepted)
     results = list(builtin_results)
@@ -257,4 +288,15 @@ def admitted_rules(
                 "predicate_checks": checks,
             }
         results.append(result)
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "rewrite_admission_finished",
+        "rewrite admission completed",
+        accepted=len(accepted),
+        records=len(results),
+        unverified=sum(
+            1 for result in results if result.get("status") == "admitted_unverified"
+        ),
+    )
     return tuple(accepted), tuple(results)

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
+import logging
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from .llm import DeepSeekClient, LLMError, _nodes, _resolve
 from .ir import Expr, Program, Sort
 from .model import PairSpec
+from .observability import get_logger, log_event
 
 _PARTITION_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 
@@ -19,6 +21,9 @@ class PartitionError(LLMError):
     def __init__(self, message: str, audit: Optional[Mapping[str, Any]] = None) -> None:
         super().__init__(message)
         self.audit = dict(audit or {})
+
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -429,6 +434,16 @@ def propose_partition_plan(
 ) -> PartitionPlan:
     """Make one whole-pair LLM call, then validate and materialize its proposal."""
 
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "partition_request_started",
+        "requesting a paired subgraph partition",
+        root_count=len(roots),
+        min_partitions=spec.partition.min_partitions,
+        max_partitions=spec.partition.max_partitions,
+    )
+
     if not spec.partition.enabled:
         raise PartitionError("partitioning is disabled")
     if not roots:
@@ -487,6 +502,13 @@ def propose_partition_plan(
         payload,
     )
     if not isinstance(response, dict):
+        log_event(
+            LOGGER,
+            logging.WARNING,
+            "partition_response_rejected",
+            "partition response was not a JSON object",
+            response_type=type(response).__name__,
+        )
         raise PartitionError(
             "partition response must be a JSON object",
             {"whole_program_calls": 1, "call": call_audit},
@@ -520,7 +542,7 @@ def propose_partition_plan(
         }
         for batch in batches
     ]
-    return PartitionPlan(
+    plan = PartitionPlan(
         batches=batches,
         audit={
             "enabled": True,
@@ -543,3 +565,12 @@ def propose_partition_plan(
             "partitions": definitions,
         },
     )
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "partition_request_finished",
+        "partition proposal passed structural checks",
+        partitions=len(plan.batches),
+        families=len(families),
+    )
+    return plan

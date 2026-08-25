@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections import Counter
 from importlib.metadata import version
@@ -15,7 +16,11 @@ from egglog.bindings import EggSmolError
 
 from .ir import Expr
 from .model import Limits
+from .observability import get_logger, log_event
 from .rules import Pattern, Rule, pattern_variables
+
+
+LOGGER = get_logger(__name__)
 
 
 class Term(EgglogExpr):
@@ -167,6 +172,16 @@ class EGraph:
 
     def saturate(self, declarations: Iterable[Rule], limits: Limits) -> dict:
         admitted = tuple(declarations)
+        log_event(
+            LOGGER,
+            logging.DEBUG,
+            "egraph_saturation_started",
+            "starting egglog saturation",
+            rules=[rule_decl.rule_id for rule_decl in admitted],
+            max_iterations=limits.max_iterations,
+            max_enodes=limits.max_enodes,
+            timeout_ms=limits.timeout_ms,
+        )
         counts: Counter[str] = Counter()
         started = time.monotonic()
         iterations = 0
@@ -175,10 +190,30 @@ class EGraph:
 
         enodes, eclasses = self._counts()
         if enodes > limits.max_enodes:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "egraph_saturation_finished",
+                "egglog saturation skipped because the initial graph exceeded its budget",
+                iterations=iterations,
+                enodes=enodes,
+                eclasses=eclasses,
+                stop_reason="ENODE_LIMIT",
+            )
             return self._stats(
                 iterations, enodes, eclasses, counts, "ENODE_LIMIT", iteration_trace
             )
         if not admitted:
+            log_event(
+                LOGGER,
+                logging.INFO,
+                "egraph_saturation_finished",
+                "egglog saturation skipped because no rules were admitted",
+                iterations=iterations,
+                enodes=enodes,
+                eclasses=eclasses,
+                stop_reason="NO_ADMITTED_RULES",
+            )
             return self._stats(
                 iterations,
                 enodes,
@@ -241,6 +276,18 @@ class EGraph:
                         "matches": counts[rule_id],
                     }
                 )
+
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "egraph_saturation_finished",
+            "egglog saturation finished",
+            iterations=iterations,
+            enodes=enodes,
+            eclasses=eclasses,
+            stop_reason=stop_reason,
+            rule_matches=dict(counts),
+        )
 
         return self._stats(
             iterations, enodes, eclasses, counts, stop_reason, iteration_trace

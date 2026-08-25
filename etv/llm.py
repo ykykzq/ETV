@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
@@ -12,12 +13,16 @@ from typing import Any, Mapping, Optional, Sequence
 
 from .ir import Expr
 from .model import InputError, PairSpec
+from .observability import get_logger, log_event
 from .rules import Rule
 from .schema import parse_rewrite_rule
 
 
 class LLMError(RuntimeError):
     pass
+
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -33,8 +38,23 @@ class DeepSeekClient:
     def complete_json(
         self, purpose: str, system: str, payload: Mapping[str, Any]
     ) -> tuple[dict, dict]:
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "llm_request_started",
+            "starting LLM JSON request",
+            purpose=purpose,
+            model=self.config.model,
+        )
         api_key = os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "llm_request_rejected",
+                "LLM request requires DEEPSEEK_API_KEY",
+                purpose=purpose,
+            )
             raise LLMError(
                 "DEEPSEEK_API_KEY is required when PairSpec llm.enabled is true"
             )
@@ -70,6 +90,14 @@ class DeepSeekClient:
             ) as response:
                 raw = response.read()
         except (OSError, urllib.error.HTTPError, urllib.error.URLError) as exc:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "llm_request_failed",
+                "LLM request failed",
+                purpose=purpose,
+                error=type(exc).__name__,
+            )
             raise LLMError(
                 f"DeepSeek {purpose} request failed: {type(exc).__name__}"
             ) from exc
@@ -86,10 +114,28 @@ class DeepSeekClient:
             ValueError,
             json.JSONDecodeError,
         ) as exc:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "llm_response_invalid",
+                "LLM response could not be decoded as the expected JSON envelope",
+                purpose=purpose,
+                error=type(exc).__name__,
+            )
             raise LLMError(
                 f"DeepSeek {purpose} returned an invalid JSON response"
             ) from exc
-        return value, {
+        if not isinstance(value, dict):
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "llm_response_rejected",
+                "LLM response JSON must be an object",
+                purpose=purpose,
+                response_type=type(value).__name__,
+            )
+            raise LLMError(f"DeepSeek {purpose} returned a JSON value, not an object")
+        audit = {
             "purpose": purpose,
             "provider": "deepseek",
             "model": envelope.get("model", self.config.model),
@@ -97,6 +143,17 @@ class DeepSeekClient:
             "response_sha256": hashlib.sha256(raw).hexdigest(),
             "usage": envelope.get("usage", {}),
         }
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "llm_request_finished",
+            "LLM JSON request completed",
+            purpose=purpose,
+            model=audit["model"],
+            prompt_sha256=prompt_sha256,
+            response_sha256=audit["response_sha256"],
+        )
+        return value, audit
 
 
 def _nodes(expression: Expr, path: str = "root") -> list[dict]:
@@ -168,6 +225,17 @@ def propose_rules(
     client: Optional[DeepSeekClient] = None,
 ) -> LLMAssistance:
     """Select useful unmatched nodes and generate strictly parsed conditional rules."""
+
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "llm_rule_proposal_started",
+        "starting LLM-assisted rewrite proposal",
+        candidate_count=len(candidates),
+        enabled=spec.llm.enabled,
+        select_nodes=spec.llm.select_nodes,
+        generate_rules=spec.llm.generate_rules,
+    )
 
     if not spec.llm.enabled or not spec.llm.generate_rules:
         return LLMAssistance((), {"enabled": False, "calls": []})
@@ -305,7 +373,7 @@ def propose_rules(
             raise LLMError(f"DeepSeek generated duplicate rule id {rule.rule_id!r}")
         seen.add(rule.rule_id)
         rules.append(rule)
-    return LLMAssistance(
+    assistance = LLMAssistance(
         tuple(rules),
         {
             "enabled": True,
@@ -325,3 +393,12 @@ def propose_rules(
             "calls": calls,
         },
     )
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "llm_rule_proposal_finished",
+        "LLM-assisted rewrite proposal completed",
+        selected_nodes=len(selected),
+        generated_rules=len(assistance.rules),
+    )
+    return assistance

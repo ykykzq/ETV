@@ -146,10 +146,12 @@ etv/parametric.py             参数化 SMT 义务和谓词派生规则
 etv/rules.py                  内建规则库与 predicate requirement
 etv/egraph.py                 egglog 编码、饱和与应用日志
 etv/partition.py              LLM 成对子图提议与机器检查
+etv/observability.py          结构化运行日志与 run 关联
 etv/verify.py                 端到端证明编排
 tools/extract_add_pair.py     ntops/TorchInductor 双 TT IR 提取
 examples/add/                 程序对、PairSpec、源代码与来源哈希
 ```
 
 进一步阅读：[架构](docs/architecture.md)、[完整验证过程](docs/verification_process.md)、
-[实现状态](docs/implementation_status.md)和[真实 Add 验证](docs/add_validation.md)。
+[实现状态](docs/implementation_status.md)、[运行日志](docs/logging.md)和
+[真实 Add 验证](docs/add_validation.md)。

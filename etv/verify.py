@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import logging
 from collections import Counter
 from dataclasses import replace
 from fractions import Fraction
@@ -25,11 +26,21 @@ from .model import (
     UnsupportedSemantics,
     pairwise,
 )
+from .observability import (
+    context_values,
+    get_logger,
+    log_context,
+    log_event,
+    new_run_id,
+)
 from .partition import PartitionError, PartitionPlan, propose_partition_plan
 from .schema import load_internal_pair_spec, load_pair_spec, load_program
 from .parametric import ParametricFailure, verify_parametric_pair
 from .ttir import load_program_artifact
 from .z3_validator import admitted_rules
+
+
+LOGGER = get_logger(__name__)
 
 
 def _hash(path: Path) -> str:
@@ -260,6 +271,16 @@ def _finish(
         report["guarantees"][
             "establishes"
         ] = "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "verification_result",
+        "verification finished",
+        pair_id=report.get("pair_id"),
+        status=report.get("status"),
+        reason=report.get("reason"),
+        soundness=report.get("soundness", {}).get("level"),
+    )
     return report
 
 
@@ -662,6 +683,16 @@ def _complete_whole_compute_proof(
     relational_rules: Sequence[Any] = (),
     relational_admission: Sequence[Mapping[str, Any]] = (),
 ) -> dict:
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "compute_proof_started",
+        "starting whole-program compute proof",
+        root_pairs=len(root_expressions),
+        partition_enabled=spec.partition.enabled,
+        llm_enabled=spec.llm.enabled,
+        parametric=bool(spec.facts.parameters),
+    )
     definedness_issues = []
     for logical_index, lhs_expression, rhs_expression in root_expressions:
         for side, expression in (("lhs", lhs_expression), ("rhs", rhs_expression)):
@@ -695,6 +726,15 @@ def _complete_whole_compute_proof(
     )
 
     ordinary_rules, ordinary_admission = admitted_rules(spec)
+    log_event(
+        LOGGER,
+        logging.DEBUG,
+        "rewrite_rules_admitted",
+        "rewrite admission completed",
+        builtin_or_user_rules=len(ordinary_rules),
+        admission_records=len(ordinary_admission),
+        relational_rules=len(relational_rules),
+    )
     accepted_rules = tuple(relational_rules) + tuple(ordinary_rules)
     rule_admission = tuple(relational_admission) + tuple(ordinary_admission)
     egraph = EGraph()
@@ -1177,6 +1217,13 @@ def _complete_compute_proof(
     relational_admission: Sequence[Mapping[str, Any]] = (),
 ) -> dict:
     if spec.partition.enabled:
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "partition_started",
+            "starting LLM-assisted subgraph partitioning",
+            root_pairs=len(root_expressions),
+        )
         try:
             plan = propose_partition_plan(
                 spec, lhs_program, rhs_program, root_expressions
@@ -1190,8 +1237,22 @@ def _complete_compute_proof(
                 relational_admission,
             )
             if partitioned is not None:
+                log_event(
+                    LOGGER,
+                    logging.INFO,
+                    "partition_proved",
+                    "partitioned proof completed",
+                    partitions=len(plan.batches),
+                )
                 return partitioned
         except LLMError as exc:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "partition_fallback",
+                "partition proposal rejected; falling back to whole-program proof",
+                error=str(exc),
+            )
             failure_audit = exc.audit if isinstance(exc, PartitionError) else {}
             report["proof"]["partitioning"] = {
                 "enabled": True,
@@ -1223,19 +1284,52 @@ def _complete_compute_proof(
 
 
 def verify_pair(spec: PairSpec) -> dict:
-    report = _base_report(spec)
-    try:
-        lhs_program = load_program_artifact(spec.lhs_path, spec.lhs_frontend)
-        rhs_program = load_program_artifact(spec.rhs_path, spec.rhs_frontend)
-    except UnsupportedSemantics as exc:
-        report["unsupported"].append(str(exc))
-        report["blocks"].append(
-            _block("FRONTEND", Status.UNKNOWN, str(exc), reason=exc.code)
+    current = context_values()
+    with log_context(
+        run_id=current.get("run_id") or new_run_id(),
+        pair_id=spec.pair_id,
+        phase="frontend",
+    ):
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "frontend_load_started",
+            "loading and verifying both program artifacts",
+            lhs=str(spec.lhs_path),
+            rhs=str(spec.rhs_path),
+            lhs_frontend=spec.lhs_frontend,
+            rhs_frontend=spec.rhs_frontend,
         )
-        return _finish(report, Status.UNKNOWN, exc.code)
-    return _verify_lifted_pair(
-        report, spec, lhs_program, rhs_program, require_ttir=True
-    )
+        report = _base_report(spec)
+        try:
+            lhs_program = load_program_artifact(spec.lhs_path, spec.lhs_frontend)
+            rhs_program = load_program_artifact(spec.rhs_path, spec.rhs_frontend)
+        except UnsupportedSemantics as exc:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "frontend_failed",
+                "program frontend rejected the input",
+                code=exc.code,
+                error=str(exc),
+            )
+            report["unsupported"].append(str(exc))
+            report["blocks"].append(
+                _block("FRONTEND", Status.UNKNOWN, str(exc), reason=exc.code)
+            )
+            return _finish(report, Status.UNKNOWN, exc.code)
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "frontend_load_finished",
+            "both program artifacts loaded",
+            lhs_version=lhs_program.frontend_version,
+            rhs_version=rhs_program.frontend_version,
+        )
+        with log_context(phase="verification"):
+            return _verify_lifted_pair(
+                report, spec, lhs_program, rhs_program, require_ttir=True
+            )
 
 
 def verify_internal_pair(
@@ -1243,9 +1337,21 @@ def verify_internal_pair(
 ) -> dict:
     """Run the proof core on pre-lifted Semantic IR for verifier tests."""
 
-    return _verify_lifted_pair(
-        _base_report(spec), spec, lhs_program, rhs_program, require_ttir=False
-    )
+    current = context_values()
+    with log_context(
+        run_id=current.get("run_id") or new_run_id(),
+        pair_id=spec.pair_id,
+        phase="verification",
+    ):
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "internal_verification_started",
+            "starting verification on pre-lifted semantic IR",
+        )
+        return _verify_lifted_pair(
+            _base_report(spec), spec, lhs_program, rhs_program, require_ttir=False
+        )
 
 
 def _verify_lifted_pair(
@@ -1636,21 +1742,92 @@ def _verify_lifted_pair(
 
 def verify_spec(path: Path) -> dict:
     path = Path(path)
-    try:
-        spec = load_pair_spec(path)
+    current = context_values()
+    with log_context(
+        run_id=current.get("run_id") or new_run_id(),
+        spec=str(path.resolve()),
+        phase="schema",
+    ):
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "verification_started",
+            "starting PairSpec verification",
+            spec=str(path.resolve()),
+        )
+        try:
+            spec = load_pair_spec(path)
+        except InputError as exc:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "spec_rejected",
+                "PairSpec validation failed",
+                code=getattr(exc, "code", "INVALID_INPUT"),
+                error=str(exc),
+            )
+            report = _invalid_report(path, exc)
+            log_event(
+                LOGGER,
+                logging.INFO,
+                "verification_result",
+                "verification finished after input rejection",
+                pair_id=report.get("pair_id"),
+                status=report.get("status"),
+                reason=report.get("reason"),
+            )
+            return report
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "spec_loaded",
+            "PairSpec loaded",
+            pair_id=spec.pair_id,
+            lhs=str(spec.lhs_path),
+            rhs=str(spec.rhs_path),
+        )
         return verify_pair(spec)
-    except InputError as exc:
-        return _invalid_report(path, exc)
 
 
 def verify_internal_spec(path: Path) -> dict:
     """Verify a Semantic IR fixture without exposing it as a production frontend."""
 
     path = Path(path)
-    try:
-        spec = load_internal_pair_spec(path)
-        lhs_program = load_program(spec.lhs_path)
-        rhs_program = load_program(spec.rhs_path)
-        return verify_internal_pair(spec, lhs_program, rhs_program)
-    except InputError as exc:
-        return _invalid_report(path, exc)
+    current = context_values()
+    with log_context(
+        run_id=current.get("run_id") or new_run_id(),
+        spec=str(path.resolve()),
+        phase="schema",
+    ):
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "internal_verification_started",
+            "starting internal Semantic IR verification",
+            spec=str(path.resolve()),
+        )
+        try:
+            spec = load_internal_pair_spec(path)
+            lhs_program = load_program(spec.lhs_path)
+            rhs_program = load_program(spec.rhs_path)
+            return verify_internal_pair(spec, lhs_program, rhs_program)
+        except InputError as exc:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "spec_rejected",
+                "internal PairSpec validation failed",
+                code=getattr(exc, "code", "INVALID_INPUT"),
+                error=str(exc),
+            )
+            report = _invalid_report(path, exc)
+            log_event(
+                LOGGER,
+                logging.INFO,
+                "verification_result",
+                "verification finished after input rejection",
+                pair_id=report.get("pair_id"),
+                status=report.get("status"),
+                reason=report.get("reason"),
+            )
+            return report

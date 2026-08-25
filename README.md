@@ -163,6 +163,7 @@ etv/parametric.py             Parameterized SMT obligations and predicate-derive
 etv/rules.py                  Built-in rule library and predicate requirements
 etv/egraph.py                 egglog encoding, saturation, and application logs
 etv/partition.py              LLM paired-subgraph proposals and machine validation
+etv/observability.py          Structured runtime logging and run correlation
 etv/verify.py                 End-to-end proof orchestration
 tools/extract_add_pair.py     ntops/TorchInductor dual-TT-IR extraction
 examples/add/                 Program pair, PairSpec, sources, and provenance hashes
@@ -170,5 +171,6 @@ examples/add/                 Program pair, PairSpec, sources, and provenance ha
 
 Further reading: [Architecture](docs/architecture.md),
 [Complete Verification Process](docs/verification_process.md),
-[Implementation Status](docs/implementation_status.md), and
+[Implementation Status](docs/implementation_status.md),
+[Runtime Logging](docs/logging.md), and
 [Real Add Verification](docs/add_validation.md).

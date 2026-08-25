@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import logging
 import re
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Deque, Dict, Optional
 
 from ..model import InputError
+from ..observability import get_logger, log_event
 from .model import TTIRArgument, TTIRModule, TTIROperation, TTIRValue
 
 
 REQUIRED_TRITON_VERSION = "3.7.1"
+
+
+LOGGER = get_logger(__name__)
 
 _ATTRIBUTE_NAMES = (
     "axis",
@@ -102,6 +107,15 @@ class LibTritonParser:
 
     def parse(self, path: Path, function: Optional[str] = None) -> TTIRModule:
         path = Path(path).resolve()
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "ttir_parse_started",
+            "starting raw TTIR parsing",
+            path=str(path),
+            function=function,
+            required_version=self.required_version,
+        )
         if path.suffix not in {".ttir", ".mlir"}:
             raise InputError(f"raw TTIR input must end in .ttir or .mlir: {path}")
         if not path.is_file():
@@ -117,6 +131,15 @@ class LibTritonParser:
         module.context = context
         if not module.verify():
             raise InputError(f"libtriton verification failed for {path}", "TTIR_VERIFY_ERROR")
+
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "ttir_module_verified",
+            "libtriton parsed and verified the module",
+            path=str(path),
+            triton_version=version,
+        )
 
         canonical = module.str()
         assembly = _assembly_lines(canonical)
@@ -187,7 +210,7 @@ class LibTritonParser:
             TTIRArgument(index=index, value=snapshot_value(func.args(index)))
             for index in range(func.get_num_args())
         )
-        return TTIRModule(
+        result = TTIRModule(
             source=path,
             source_sha256=_sha256(path),
             parser="triton._C.libtriton.ir",
@@ -197,6 +220,17 @@ class LibTritonParser:
             operations=tuple(operations),
             canonical_assembly=canonical,
         )
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "ttir_parse_finished",
+            "raw TTIR snapshot completed",
+            path=str(path),
+            function=result.function,
+            operations=len(result.operations),
+            arguments=len(result.arguments),
+        )
+        return result
 
 
 def parse_ttir(path: Path, function: Optional[str] = None) -> TTIRModule:

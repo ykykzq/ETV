@@ -140,6 +140,10 @@ SMT 证明的是规则条件，不直接宣布最终程序等价。规则必须�
 报告分别记录规则准入、逐规则 match 数、是否实际使用、每阶段 e-node/e-class 数与
 未验证规则警告。e-graph 负责等价类和同余闭包；它不替代内部 IR、SMT 或内存模型。
 
+运行过程由 `etv/observability.py` 提供结构化日志。日志使用独立的 `run_id`、PairSpec
+`pair_id` 和阶段字段关联 schema、前端、规则、Z3、egglog 与可选 LLM 事件；它只记录
+执行过程，不构成证明证据，正式结论仍以报告为准。
+
 ## 子图划分
 
 当 `llm.enabled=true` 且 `partition.enabled=true` 时，划分器把两侧完整内部 Program、
