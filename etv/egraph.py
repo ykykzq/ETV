@@ -94,7 +94,9 @@ def _pattern_term(pattern: Pattern, variables: Mapping[str, Term]) -> Term:
 def _egglog_rule(declaration: Rule):
     variables = {
         name: var(name, Term)
-        for name in sorted(pattern_variables(declaration.lhs) | pattern_variables(declaration.rhs))
+        for name in sorted(
+            pattern_variables(declaration.lhs) | pattern_variables(declaration.rhs)
+        )
     }
     root = var("__etv_root", Term)
     lhs = _pattern_term(declaration.lhs, variables)
@@ -108,6 +110,7 @@ class EGraph:
     def __init__(self) -> None:
         self._graph = EgglogGraph()
         self._next_root = 0
+        self._next_ruleset = 0
         self.merge_log: list[dict] = []
 
     @property
@@ -123,7 +126,9 @@ class EGraph:
         # egglog rebuilds after each ruleset iteration and after registration.
         return 0
 
-    def union(self, lhs: Term, rhs: Term, reason: Mapping[str, object]) -> tuple[Term, bool]:
+    def union(
+        self, lhs: Term, rhs: Term, reason: Mapping[str, object]
+    ) -> tuple[Term, bool]:
         already_equivalent = self.equivalent(lhs, rhs)
         self._graph.register(union(lhs).with_(rhs))
         if not already_equivalent:
@@ -170,9 +175,12 @@ class EGraph:
         if enodes > limits.max_enodes:
             return self._stats(iterations, enodes, eclasses, counts, "ENODE_LIMIT")
         if not admitted:
-            return self._stats(iterations, enodes, eclasses, counts, "NO_ADMITTED_RULES")
+            return self._stats(
+                iterations, enodes, eclasses, counts, "NO_ADMITTED_RULES"
+            )
 
-        unified = ruleset(name="etv_unified")
+        unified = ruleset(name=f"etv_unified_{self._next_ruleset}")
+        self._next_ruleset += 1
         for declaration in admitted:
             unified.register(_egglog_rule(declaration))
 
@@ -216,7 +224,9 @@ class EGraph:
         counts: Mapping[str, int],
         stop_reason: str,
     ) -> dict:
-        ordered_counts = {rule_id: counts[rule_id] for rule_id in sorted(counts) if counts[rule_id]}
+        ordered_counts = {
+            rule_id: counts[rule_id] for rule_id in sorted(counts) if counts[rule_id]
+        }
         return {
             "backend": self.backend,
             "iterations": iterations,

@@ -6,7 +6,6 @@ import pytest
 from etv.model import InputError
 from etv.schema import load_pair_spec, load_program
 
-
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"
 
@@ -49,7 +48,9 @@ def test_unknown_schema_key_is_rejected(tmp_path):
 
 
 def test_unmapped_contract_role_is_rejected(tmp_path):
-    source = json.loads((FIXTURES / "specs/add_proved.json").read_text(encoding="utf-8"))
+    source = json.loads(
+        (FIXTURES / "specs/add_proved.json").read_text(encoding="utf-8")
+    )
     source["contract"]["output_role"] = "Missing"
     path = tmp_path / "bad-spec.json"
     path.write_text(json.dumps(source), encoding="utf-8")
@@ -59,8 +60,12 @@ def test_unmapped_contract_role_is_rejected(tmp_path):
 
 
 def test_loads_fact_gated_rewrite_with_llm_provenance(tmp_path):
-    source = json.loads((FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8"))
-    source["facts"]["assumptions"].append("subtraction is equivalent to addition for this specialization")
+    source = json.loads(
+        (FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8")
+    )
+    source["facts"]["assumptions"].append(
+        "subtraction is equivalent to addition for this specialization"
+    )
     source["rewrite_rules"] = [
         {
             "id": "specialized_sub_is_add",
@@ -92,7 +97,9 @@ def test_loads_fact_gated_rewrite_with_llm_provenance(tmp_path):
 
 
 def test_trusted_rewrite_without_fact_gate_is_rejected(tmp_path):
-    source = json.loads((FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8"))
+    source = json.loads(
+        (FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8")
+    )
     source["rewrite_rules"] = [
         {
             "id": "unconditional_trusted_rule",
@@ -106,3 +113,30 @@ def test_trusted_rewrite_without_fact_gate_is_rejected(tmp_path):
 
     with pytest.raises(InputError, match="require at least one fact gate"):
         load_pair_spec(path)
+
+
+def test_loads_symbolic_parameter_domain_and_constraint():
+    spec = load_pair_spec(FIXTURES / "specs/add_parametric_shapes.json")
+
+    assert spec.facts.parameters["a"].minimum == 1
+    assert spec.facts.parameters["c"].maximum == 2**31 - 1
+    assert spec.facts.constraints[0].sort.value == "bool"
+    assert spec.contract.output_numel.data == "c"
+
+
+def test_shared_binding_can_reference_symbolic_parameters(tmp_path):
+    source = json.loads(
+        (FIXTURES / "specs/add_parametric_shapes.json").read_text(encoding="utf-8")
+    )
+    source["lhs"] = str(FIXTURES / "programs/add_symbolic_2d.json")
+    source["rhs"] = str(FIXTURES / "programs/add_symbolic_1d.json")
+    source["facts"]["bindings"]["numel"] = {
+        "op": "imul",
+        "args": [{"var": "a"}, {"var": "b"}],
+    }
+    path = tmp_path / "symbolic-binding.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    spec = load_pair_spec(path)
+
+    assert spec.facts.bindings["numel"].render() == "imul(var(a), var(b))"

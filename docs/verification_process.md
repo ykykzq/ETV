@@ -14,7 +14,7 @@
   并且最终可观察的 Output 内存相等。
 ```
 
-这是针对固定程序对和固定 specialization 的有界翻译验证。启动维度、形状、步长和向量宽度由 PairSpec 固定；地址与掩码在整个有限启动域中穷举，但逻辑内存读取仍保留为符号值，因此计算等价结论覆盖任意输入值，而不是一次数值测试。
+这是针对固定程序对的翻译验证。ETV 有两条执行路径：固定实例模式把启动维度、形状、步长和向量宽度具体化，并穷举整个有限启动域；固定秩参数化模式保留维度参数，在 PairSpec 声明的有界整数参数域及机器可读约束下，用 SMT 证明任意逻辑输出位置的义务。两种模式都把逻辑内存读取保留为符号值，因此计算等价结论覆盖任意输入值，而不是一次数值测试。
 
 完整流水线为：
 
@@ -28,7 +28,7 @@ PairSpec + raw TTIR 或 Semantic TTIR A/B
 libtriton 解析/验证 + 白名单语义提升（raw TTIR）
           |
           v
-固定启动域符号求值
+固定启动域符号求值或固定秩参数化 SMT
           |
           +--> 掩码、覆盖性、地址对应与无写入竞争
           +--> load/标量逻辑角色归一化
@@ -36,8 +36,8 @@ libtriton 解析/验证 + 白名单语义提升（raw TTIR）
           |
           v
 egglog 联合 e-graph 等式饱和
-          +--> Z3 准入的代数规则
-          +--> PairSpec facts 启用的可信规则
+          +--> 按策略证明或显式信任的条件重写规则
+          +--> 可选 DeepSeek 节点选择与规则生成，再次饱和
           |
           v
 最终可观察内存比较
@@ -107,7 +107,7 @@ python -m etv check examples/add/pair.json
 | 内存 | 标量/张量 `tt.addptr`、`tt.load`、单个 `tt.store` |
 | 选择 | `arith.select` |
 
-静态 tensor shape 会被标量化为 `lane` 的多维索引，并支持 singleton 维广播。非 splat dense 常量、无符号比较、动态 shape、多结果操作、region/循环、归约、原子操作、共享内存和 block pointer 语义当前返回 `UNKNOWN`。
+静态 tensor shape 会被标量化为 `lane` 的多维索引，并支持 singleton 维广播。非 splat dense 常量、无符号比较、raw TTIR 的动态 tensor type、多结果操作、region/循环、归约、原子操作、共享内存和 block pointer 语义当前返回 `UNKNOWN`。
 
 对没有 `other` 的 masked load，只有在它使用与最终 store 完全相同的 SSA mask 时才提升；否则被屏蔽 lane 的未定义值可能被观察，ETV 返回 `TTIR_UNDEFINED_LOAD_LANE`。
 
@@ -145,7 +145,7 @@ Semantic TTIR 使用严格 JSON 格式 `etv-semantic-program-v1`。未知键会�
 }
 ```
 
-`pid` 和 `lane` 由求值器提供，其他整数变量必须在 PairSpec 中绑定。
+`pid` 和 `lane` 由求值器提供，其他整数变量必须在 PairSpec 中具体绑定或声明为参数。
 
 表达式语言：
 
@@ -167,13 +167,17 @@ PairSpec 使用严格 JSON 格式 `etv-pair-v1`，主要字段如下：
 - `frontends`：可选的每侧前端配置，raw TTIR 必须提供 launch program 数；
 - `semantic_mode`：当前仅支持 `abstract_float`；
 - `roles`：两个物理 ABI 的逻辑角色对应关系；
-- `facts.bindings`：固定的整数形状、步长和启动配置；
-- `facts.side_bindings.lhs/rhs`：只对单侧生效的整数 ABI 绑定；
+- `facts.bindings`：共享整数常量，或由参数组成的整数表达式；
+- `facts.parameters`：固定秩 shape 中各符号维度的有界 i32 参数域；
+- `facts.constraints`：参数间的机器可读布尔前置条件，例如 `a*b=c`；
+- `facts.side_bindings.lhs/rhs`：只对单侧生效的整数常量或参数表达式；
 - `facts.assumptions`：报告中的可信前提，也可供 `trusted_fact` gate 精确匹配；
 - `facts.disjoint`：成对不相交的逻辑 block 分组；
 - `contract`：可观察输出、大小、覆盖性和所需 no-alias 角色；
 - `limits`：正数形式的 e-graph 迭代、节点和超时预算；
-- `rewrite_rules`：可选的局部代数规则或 fact-gated 可信规则。
+- `rewrite_rules`：可选的局部代数规则或 fact-gated 可信规则；
+- `rule_policy`：控制自定义规则必须证明、尽力证明或显式信任；
+- `llm`：可选 DeepSeek 节点选择和条件规则生成配置。
 
 角色端点包括 `block`、`scalar` 和 `scalar_block`。把 lhs 的 `scalar` 和 rhs 的 `scalar_block` 映射到同一逻辑角色，可以归一化 kernel 标量参数与 0-D 内存参数之间的 ABI 差异。
 
@@ -198,11 +202,27 @@ PairSpec 使用严格 JSON 格式 `etv-pair-v1`，主要字段如下：
 
 raw TTIR 参数按稳定位置命名为 `arg0`、`arg1` 等。PairSpec 的角色映射与绑定使用这些名称，而不依赖原始 SSA 拼写。当前逐点提升以 store tensor 的静态元素数作为 `lanes`，逻辑输出索引为 `pid * lanes + lane`；非线性域尚需显式 frontier 支持。
 
-共享 `facts.bindings` 会同时进入两侧求值环境；`facts.side_bindings.lhs` 和
+共享 `facts.bindings` 会同时进入两侧求值环境；绑定值可以引用 `facts.parameters`
+中的符号。`facts.side_bindings.lhs` 和
 `facts.side_bindings.rhs` 分别只进入对应一侧，适合两个 ABI 在相同参数位置承载
 不同整数含义的情况。同一个名称不能同时出现在共享绑定和单侧绑定中。当前
 `trusted_fact` 的 `binding_equals` gate 只读取共享绑定，避免把单侧事实误当成关系
 事实。
+
+例如，[参数化 Add PairSpec](../tests/fixtures/semantic/specs/add_parametric_shapes.json)
+声明固定 rank 的 `[a,b]` 与 `[c]`，参数覆盖全部正 signed-i32 值，并以如下事实限定
+证明域：
+
+```json
+"constraints": [{
+  "op": "eq",
+  "args": [{"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}, {"var": "c"}]
+}]
+```
+
+因此结论是“对所有满足 `a*b=c` 且乘积仍可表示为 signed-i32 的正整数
+`a,b,c` 成立”，而不是只测试几个 shape。参数域始终受实际 i32 类型约束；动态
+rank 仍不支持。
 
 ## 语义模型
 
@@ -211,9 +231,12 @@ raw TTIR 参数按稳定位置命名为 `arg0`、`arg1` 等。PairSpec 的角色
 - 整数变量和中间值使用有符号 i32；
 - `idiv` 和 `irem` 向零截断，与 MLIR 有符号除法一致；
 - 具体中间值超出 i32 范围时返回 `UNKNOWN(INTEGER_OVERFLOW)`；
-- 每个枚举 lane 的掩码和地址都会完全求值。
+- 固定实例模式会完全求值每个枚举 lane 的掩码和地址；
+- 参数化模式使用 Z3 Int 表达参数、任意逻辑位置 `k`、`pid` 和 `lane`，并为所有
+  i32 运算补充定义域约束。
 
-因此当前证明是固定维度上的有限证明，不是关于任意维度的参数化定理。
+参数化结论覆盖 PairSpec 声明的全部参数域，而不是无界数学整数；当前 Z3 Int 路径
+也还不是对 TTIR 位向量溢出行为的完整逐位模型。
 
 ### `ABSTRACT_FLOAT`
 
@@ -226,7 +249,7 @@ raw TTIR 参数按稳定位置命名为 `arg0`、`arg1` 等。PairSpec 的角色
 PairSpec 将物理参数映射到 `Input`、`Other`、`Alpha`、`Output` 等逻辑角色。Load 被归一化为：
 
 ```text
-read(logical_block, concrete_element_offset)
+read(logical_block, normalized_element_offset)
 ```
 
 Store 被建模为内存 token 转换：
@@ -243,7 +266,8 @@ store(M0, Output, offset, symbolic_value, mask) -> M1
 
 1. 校验输入 schema、语义模式和资源限制；
 2. 对齐两侧 ABI 参数的逻辑角色，并检查绑定与 no-alias 前提；
-3. 枚举固定启动域中的每一个 `(program_id, lane)`；
+3. 固定实例模式枚举每一个 `(program_id, lane)`；参数化模式则为参数域和任意逻辑
+   输出 `k` 建立 SMT 查询；
 4. 证明两侧逻辑掩码域相等且完整覆盖契约输出；
 5. 证明每侧有效输出地址单射，排除写入竞争；
 6. 证明相同逻辑输出对应相同物理 Output 地址；
@@ -252,19 +276,22 @@ store(M0, Output, offset, symbolic_value, mask) -> M1
 9. 将两侧计算根放入同一个 egglog e-graph，证明值等价；
 10. 由值、地址、掩码、覆盖性和框架条件推出最终可观察内存相等。
 
-地址或掩码差异会产生有限域见证。计算根未合并时，ETV 继续搜索确定性的精确有理数反例；找到反例返回 `DISPROVED`，否则保持 `UNKNOWN`。
+固定实例中的地址或掩码差异会产生有限域见证；参数化查询可返回满足前置条件的
+参数模型。计算根未合并时，ETV 继续搜索确定性的精确有理数反例；找到反例返回
+`DISPROVED`，否则保持 `UNKNOWN`。
 
 ## egglog 等式饱和
 
-ETV 0.3.0 使用 `egglog==13.2.0` 作为唯一等式饱和后端。`etv/egraph.py` 将类型化表达式编码为包含操作、子节点、附加数据和 sort 的 egglog term，并读取逐轮 `RunReport`。hash-consing、e-matching、union-find 和同余重建均由 egglog 提供。
+ETV 0.4.0 使用 `egglog==13.2.0` 作为唯一等式饱和后端。`etv/egraph.py` 将类型化表达式编码为包含操作、子节点、附加数据和 sort 的 egglog term，并读取逐轮 `RunReport`。hash-consing、e-matching、union-find 和同余重建均由 egglog 提供。
 
 所有逻辑输出位置的 lhs/rhs 计算根进入同一个 e-graph。当前不按操作族筛选规则、不划分子图，也不提取最低成本表达式。统一饱和过程为：
 
-1. 用 Z3 准入所有内建及 PairSpec 声明的 `algebraic` 规则；
-2. 用 PairSpec facts 检查所有 `trusted_fact` 规则的 gate；
-3. 将全部已准入规则放入同一个 `etv_unified` ruleset；
-4. 对所有尚未等价的输出根统一运行饱和；
-5. 用 egglog e-class 等同性判定对应计算根是否等价。
+1. 严格用 Z3 证明所有内建代数规则；
+2. 先检查自定义规则的 fact gate，再按 `rule_policy` 证明或显式信任规则；
+3. 将全部已准入规则放入一个统一 ruleset，对所有输出根运行第一次饱和；
+4. 若仍有未合并根且启用了 `llm`，让 DeepSeek 选择候选节点并生成带现有 fact gate
+   的规则；这些规则仍经过相同 schema、gate 和准入策略；
+5. 将新规则加入第二个统一 ruleset再次饱和，并用 egglog e-class 等同性判定结果。
 
 结构相等、同余闭包、代数重写与启用的事实规则由此在同一个 e-graph 中共同生效。
 
@@ -272,7 +299,8 @@ ETV 0.3.0 使用 `egglog==13.2.0` 作为唯一等式饱和后端。`etv/egraph.p
 
 | 类别 | 准入方式 | 证据 | 信任影响 |
 | --- | --- | --- | --- |
-| `algebraic` | Z3 检查 `lhs != rhs` 为 UNSAT | `ALGEBRAIC` | Z3 与编码属于可信计算基 |
+| `algebraic`，`required` | Z3 检查 `lhs != rhs` 为 UNSAT | `ALGEBRAIC` | Z3 与编码属于可信计算基 |
+| `algebraic`，`best_effort`/`trusted` | gate 满足后允许未证明规则 | `TRUSTED_AXIOM` | 等式本身未经验证，可能破坏健全性 |
 | `trusted_fact` | 检查 PairSpec fact gate | `TRUSTED_AXIOM` | 等式本身未经验证，可能破坏健全性 |
 
 内建代数规则包括交换律、结合律、零元、单位元、减法定义、双重取负、加法逆元、乘法分配律，以及 `fma(a,b,c) = a*b+c`。它们只对 `ABSTRACT_FLOAT` 的实数语义成立，不是 IEEE-754 位级规则。
@@ -294,12 +322,17 @@ PairSpec 也可以声明规则：
 }]
 ```
 
-`algebraic` 规则不能包含 fact gate，且必须能够被 Z3 Real 编码并证明。`trusted_fact` 至少包含一个 gate：
+自定义 `algebraic` 规则可以包含 fact gate。默认 `required` 策略要求它能被 Z3 Real
+编码并证明；`best_effort` 在证明失败时仍可显式信任，`trusted` 则跳过证明。两种
+弱化策略都会在报告中标记 `admitted_unverified`。`trusted_fact` 至少包含一个 gate：
 
 ```json
 {"kind": "binding_equals", "name": "N", "value": 16}
 {"kind": "assumption", "text": "lhs and rhs layouts denote the same logical tensor"}
 {"kind": "disjoint", "roles": ["Input", "Other", "Output"]}
+{"kind": "constraint", "expression": {"op": "eq", "args": [
+  {"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}, {"var": "c"}
+]}}
 ```
 
 gate 只检查事实是否在 PairSpec 中声明，**不证明该事实逻辑上蕴含规则等式**。这是当前明确保留的健全性缺口。错误的 `trusted_fact` 规则可能把不等价程序合并并产生不健全的 `PROVED`；报告会将其标为 `admitted_unverified` 和 `TRUSTED_AXIOM`，但警告本身不能消除风险。
@@ -316,7 +349,29 @@ lhs 不允许是裸 metavariable，规则 id 必须唯一且不能覆盖内建�
 
 ### LLM 辅助边界
 
-LLM 可以提出重写规则或未来的子图划分方案，但其输出不构成证明。规则可记录：
+PairSpec 显式设置 `llm.enabled=true` 时，ETV 可调用 DeepSeek。调用只发生在普通规则
+未能合并全部输出根之后，分为“选择候选表达式节点”和“生成条件规则”两步。模型
+输出不构成证明，也不能直接 union e-class、删掉输出义务或改变参数约束。规则记录：
+
+```json
+"rule_policy": {
+  "algebraic_validation": "best_effort",
+  "non_algebraic_validation": "trusted"
+},
+"llm": {
+  "enabled": true,
+  "provider": "deepseek",
+  "model": "deepseek-v4-pro",
+  "select_nodes": true,
+  "generate_rules": true,
+  "max_candidates": 8
+}
+```
+
+`required` 是代数规则的默认且最严格策略。上例的 `best_effort` 会先尝试 Z3；仅在
+证明失败时才把规则降为显式的未验证公理。
+
+规则 provenance 记录：
 
 ```json
 "provenance": {
@@ -326,7 +381,13 @@ LLM 可以提出重写规则或未来的子图划分方案，但其输出不构�
 }
 ```
 
-LLM 生成的 `algebraic` 候选仍必须通过 Z3；非代数候选必须显式声明为 `trusted_fact` 并暴露未验证警告。当前 CLI 不联网调用模型，也不会自动写入规则或进行 LLM 子图划分。
+模型只能引用 PairSpec 中已经存在的 `binding_equals`、`assumption`、`disjoint` 或
+`constraint` gate；生成结果经过严格 schema 解析和与人工规则相同的准入策略。
+默认 `required` 仍要求代数候选通过 Z3；选择弱化策略时，未证明候选会以
+`TRUSTED_AXIOM` 使用并在最终报告中列明。请求通过 `DEEPSEEK_API_KEY` 环境变量
+鉴权，密钥和原始 prompt 不写入报告；报告只保留模型名、prompt/response 哈希及
+token usage。当前仍使用单一联合 e-graph，不进行 LLM 子图划分，也不处理循环或
+多 kernel/多阶段程序编排；单 kernel 的多个 program instance 已由启动域建模。
 
 egglog 按 `max_iterations`、`max_enodes` 和 `timeout_ms` 逐轮运行。报告记录准入状态、SMT 或 fact gate 结果、provenance、egglog 匹配次数和是否实际使用。匹配次数是聚合统计，不是可独立检查的最小证明。
 
@@ -343,6 +404,7 @@ egglog 按 `max_iterations`、`max_enodes` 和 `timeout_ms` 逐轮运行。报�
 | 证据等级 | 用途 |
 | --- | --- |
 | `BOUNDED_EXHAUSTIVE` | 对固定启动域完整枚举 |
+| `PARAMETRIC_SMT` | 对声明参数域和约束的 SMT 全称证明 |
 | `STRUCTURAL` | 通过语法导向方法完成定义性义务 |
 | `CONGRUENCE` | 相同操作与相等子 e-class 推导父节点相等 |
 | `ALGEBRAIC` | Z3 UNSAT 准入的抽象实数重写 |
@@ -368,15 +430,17 @@ egglog 按 `max_iterations`、`max_enodes` 和 `timeout_ms` 逐轮运行。报�
 
 1. libtriton 3.7.1 parser、verifier 与规范打印；
 2. ETV 的 TTIR 到 Semantic TTIR 提升器，或用户直接提供的 Semantic TTIR；
-3. PairSpec 的角色对应、固定绑定、assumption 与 no-alias 声明；
+3. PairSpec 的角色对应、参数域、关系约束、绑定、assumption 与 no-alias 声明；
 4. 求值器与内存 token 实现；
 5. Z3 实数算术结果、egglog 13.2.0 及 ETV term 编码；
-6. 所有实际匹配的 `trusted_fact` 规则本身确实正确；
+6. 所有实际匹配且报告为 `admitted_unverified` 的规则本身确实正确；
 7. 用户接受 `ABSTRACT_FLOAT` 解释。
 
 当前没有导出可由独立内核逐步检查的 egglog proof certificate。解析完整性与语义提升范围也是独立概念：`PROVED` 不表示 libtriton 能接受的任意程序均已被 ETV 建模。
 
-ETV 当前不保证：IEEE-754 或 GPU 位级等价、容差等价、buffer 边界安全、动态 shape、循环/归约、原子或共享内存语义、多 kernel 行为，以及超出固定 specialization 的参数化正确性。每份报告都会列出适用假设和相应限制。
+ETV 当前不保证：IEEE-754 或 GPU 位级等价、容差等价、buffer 边界安全、动态
+rank、循环/归约、原子或共享内存语义、多 kernel 编排、无界整数参数，以及超出
+PairSpec 声明参数域和约束的正确性。每份报告都会列出适用假设和相应限制。
 
 面向用户的完整 raw TTIR 示例见 `examples/add/pair.json`，其真实来源、生成步骤和
 逐项证明结果见[真实 Add 验证](add_validation.md)。旧的 Semantic JSON 和故障

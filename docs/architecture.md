@@ -15,7 +15,7 @@ libtriton 3.7.1 解析/验证（raw TTIR）
 严格的 schema 与角色/事实校验
           |
           v
-有限启动域上的符号求值
+有限启动域枚举或固定秩参数化 SMT 证明
           |
           +--> 索引 / 掩码 / 覆盖性 / 竞争 / 地址证明义务
           |
@@ -25,8 +25,8 @@ libtriton 3.7.1 解析/验证（raw TTIR）
           v
 egglog 统一 e-graph 等式饱和
           |
-          +--> 经 Z3 准入的代数规则
-          +--> 由 PairSpec facts 启用的可信规则
+          +--> 经 Z3 证明或策略显式信任的条件规则
+          +--> 可选 DeepSeek 节点选择与规则生成
           +--> egglog 同余闭包与具名规则日志
           |
           v
@@ -67,9 +67,12 @@ kernel；TorchInductor launch decorator 的离线适配和 debug location 规范
 
 解析器接受完整的 Triton 3.7.1 TTIR；提升器只接受具有明确语义规则的子集。合法但未建模的操作会产生 `UNKNOWN`，不会退化为文本猜测。详见 [完整验证过程](verification_process.md)。
 
-### `etv/evaluator.py`
+### `etv/evaluator.py` 与 `etv/parametric.py`
 
-枚举固定启动配置中的每一个 `(program_id, lane)`，并具体求值整数和布尔表达式。有效 load 会转换为 `read(Input, 17)` 这样的符号逻辑叶节点；标量参数和映射后的 0-D 标量 load 都会转换为 `input(Alpha)`。浮点计算则保持符号形式。
+固定实例模式枚举每一个 `(program_id, lane)`，并具体求值整数和布尔表达式。
+参数化模式保留固定秩 shape 参数、`pid`、`lane` 和任意逻辑输出 `k`，使用 Z3
+证明参数域非空、覆盖、唯一写入、地址单射和两侧地址相等。只有被 SMT 证明相等的
+读取地址才归一化成同一个逻辑叶节点。两种模式中的浮点计算都保持符号形式。
 
 有符号除法和取余遵循 MLIR `divsi/remsi` 的向零截断语义。MVP 要求所有具体整数中间值都位于有符号 i32 范围内；溢出、除零或过大的有限域会产生 `UNKNOWN`。
 
@@ -81,9 +84,20 @@ kernel；TorchInductor launch decorator 的离线适配和 debug location 规范
 
 ### `etv/rules.py` 与 `etv/z3_validator.py`
 
-`rules.py` 包含有限且经过审计的抽象代数规则模式，以及 PairSpec fact gate 的数据模型。代数规则参与等式饱和前，`z3_validator.py` 会将其转换为 Z3 实数算术，并证明 `lhs != rhs` 不可满足。SAT、UNKNOWN 或不受支持的操作都会导致规则被拒绝。
+`rules.py` 包含有限且经过审计的抽象代数规则模式，以及 PairSpec fact gate 的数据模型。内建代数规则参与等式饱和前，`z3_validator.py` 会将其转换为 Z3 实数算术，并证明 `lhs != rhs` 不可满足。自定义规则默认采用同样的严格策略；SAT、UNKNOWN 或不受支持的操作都会导致规则被拒绝。
 
-`trusted_fact` 规则只检查 `binding_equals`、`assumption` 或 `disjoint` gate；规则等式本身暂不验证。满足 gate 后会以 `TRUSTED_AXIOM` 进入 egglog，并在 JSON/Markdown 报告中写入未验证警告。完整约定见 [完整验证过程](verification_process.md)。
+PairSpec 规则的“验证”和“应用”分别记录。默认策略仍要求 `algebraic` 规则通过
+Z3；`best_effort` 会尝试证明但允许失败后以 `TRUSTED_AXIOM` 使用，`trusted` 则
+直接跳过证明。`trusted_fact` 以及所有未经证明而实际匹配的规则都会在报告中列出
+健全性警告。fact gate 还可精确引用机器可读的 shape constraint。
+
+### `etv/llm.py`
+
+可选 DeepSeek 辅助只在普通规则未能连接输出根后运行。第一步从未匹配表达式树中
+选择候选节点，第二步生成必须引用现有 fact gate 的条件规则。所有响应经过严格
+schema 解析，再按相同规则策略准入；模型不能删除最终输出根，也不能直接产生证明。
+当前仍使用联合 e-graph，不划分子图。LLM 新规则会触发第二次统一饱和，但不会把
+根节点拆到互不通信的分区。
 
 ### `etv/verify.py`
 
@@ -91,7 +105,7 @@ kernel；TorchInductor launch decorator 的离线适配和 debug location 规范
 
 1. 语义模式与 no-alias 前置条件；
 2. 角色对齐；
-3. 有限启动域枚举；
+3. 有限启动域枚举，或固定秩参数域上的 SMT 证明；
 4. 逻辑掩码域相等与完整覆盖；
 5. 输出地址单射性，即无写入竞争；
 6. 对应 Output 地址相等；
@@ -100,7 +114,7 @@ kernel；TorchInductor launch decorator 的离线适配和 debug location 规范
 9. e-graph 计算根节点等价；
 10. 最终内存 token 相等。
 
-地址或掩码差异会产生直接的有限域见证。如果计算根节点没有合并，确定性的精确有理数模型搜索会尝试构造可重放的值反例。无法证明且找不到反例时，结果保持为 `UNKNOWN`，绝不会错误地返回 `DISPROVED`。
+地址或掩码差异会产生直接的有限域见证或参数模型。如果计算根节点没有合并，确定性的精确有理数模型搜索会尝试构造可重放的值反例。无法证明且找不到反例时，结果保持为 `UNKNOWN`，绝不会错误地返回 `DISPROVED`。
 
 ### `etv/reporting.py` 与 `etv/cli.py`
 
@@ -112,7 +126,7 @@ CLI 还提供 `parse` 命令生成完整 TTIR 快照，并让 `inspect` 同时�
 
 工程已经从本地 e-graph 迁移到 egglog。选择 Python egglog 而不是 Rust egg，是为了直接复用现有 Python 类型化前端，同时获得成熟的 e-matching、同余闭包、统一 ruleset 和逐轮运行统计。版本精确锁定为 13.2.0，避免 Python DSL 和底层绑定变化造成行为漂移。
 
-当前没有声称获得独立 proof certificate：规则准入和匹配日志可审计，但 egglog 的等价维护仍属于可信计算基。若未来使用 LLM 生成规则或划分子图，生成结果必须经过相同准入流程，且分区不能阻断本应共享的等式。
+当前没有声称获得独立 proof certificate：规则准入和匹配日志可审计，但 egglog 的等价维护仍属于可信计算基。LLM 生成结果经过相同准入流程；当前没有子图划分，未来如引入分区也不能阻断本应共享的等式。
 
 ## 研究基础与设计决策
 
@@ -150,5 +164,5 @@ e-graph 只负责维护等价关系，不能让错误规则变正确。可信合
 1. 浮点语义采用较晚系统设计中的 `ABSTRACT_FLOAT`，不沿用早期材料中的整数或位向量近似；
 2. raw TTIR 由 Triton 3.7.1 的已注册方言 parser/verifier 接受，正则表达式不承担语法和合法性判断；
 3. 工程从本地 e-graph 迁移到 `egglog==13.2.0`，换取成熟的 e-matching、同余闭包与统一 ruleset，但 egglog 和 term 编码进入可信计算基；
-4. 代数候选必须由 Z3 证明，未经验证的非代数规则只能以 `trusted_fact` 进入，并公开其健全性风险；
+4. 默认要求代数候选由 Z3 证明；显式弱化策略允许将未证明规则作为可信公理应用，但必须公开其健全性风险；
 5. `theta` 节点本身不能证明循环。覆盖性、唯一性、单位元、地址和归纳/归约顺序义务完成前，循环与归约保持 `UNKNOWN`。

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Any, Optional, Tuple
 
-from .model import FactContext, ProofLevel, Sort
+from .model import Expr, FactContext, ProofLevel, Sort
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,9 @@ class Rule:
             "kind": self.kind,
             "source": self.source,
             "requires": list(self.requires),
-            "fact_requirements": [requirement.to_json() for requirement in self.fact_requirements],
+            "fact_requirements": [
+                requirement.to_json() for requirement in self.fact_requirements
+            ],
             "provenance": {"generated_by": self.generated_by},
             "status": "declared",
         }
@@ -83,14 +85,21 @@ class FactRequirement:
     name: Optional[str] = None
     value: Any = None
     roles: Tuple[str, ...] = ()
+    expression: Optional[Expr] = None
 
     def evaluate(self, facts: FactContext) -> bool:
         if self.kind == "binding_equals":
-            return self.name in facts.bindings and facts.bindings[self.name] == self.value
+            return (
+                self.name in facts.bindings and facts.bindings[self.name] == self.value
+            )
         if self.kind == "assumption":
             return self.value in facts.assumptions
         if self.kind == "disjoint":
-            return all(facts.disjoint(lhs, rhs) for lhs, rhs in combinations(self.roles, 2))
+            return all(
+                facts.disjoint(lhs, rhs) for lhs, rhs in combinations(self.roles, 2)
+            )
+        if self.kind == "constraint":
+            return self.expression in facts.constraints
         return False
 
     def to_json(self) -> dict:
@@ -103,6 +112,8 @@ class FactRequirement:
             value["value"] = self.value
         if self.roles:
             value["roles"] = list(self.roles)
+        if self.expression is not None:
+            value["expression"] = self.expression.to_json()
         return value
 
 
@@ -131,7 +142,14 @@ def builtin_rules() -> Tuple[Rule, ...]:
     a, b, c = var("a"), var("b"), var("c")
     schema = "z3_real_unsat"
     return (
-        Rule("fadd_comm", node("fadd", a, b), node("fadd", b, a), ProofLevel.ALGEBRAIC, schema, "a + b == b + a"),
+        Rule(
+            "fadd_comm",
+            node("fadd", a, b),
+            node("fadd", b, a),
+            ProofLevel.ALGEBRAIC,
+            schema,
+            "a + b == b + a",
+        ),
         Rule(
             "fadd_assoc",
             node("fadd", node("fadd", a, b), c),
@@ -140,7 +158,14 @@ def builtin_rules() -> Tuple[Rule, ...]:
             schema,
             "(a + b) + c == a + (b + c)",
         ),
-        Rule("fmul_comm", node("fmul", a, b), node("fmul", b, a), ProofLevel.ALGEBRAIC, schema, "a * b == b * a"),
+        Rule(
+            "fmul_comm",
+            node("fmul", a, b),
+            node("fmul", b, a),
+            ProofLevel.ALGEBRAIC,
+            schema,
+            "a * b == b * a",
+        ),
         Rule(
             "fmul_assoc",
             node("fmul", node("fmul", a, b), c),
@@ -149,10 +174,38 @@ def builtin_rules() -> Tuple[Rule, ...]:
             schema,
             "(a * b) * c == a * (b * c)",
         ),
-        Rule("fadd_zero", node("fadd", a, number(0)), a, ProofLevel.ALGEBRAIC, schema, "a + 0 == a"),
-        Rule("fmul_one", node("fmul", a, number(1)), a, ProofLevel.ALGEBRAIC, schema, "a * 1 == a"),
-        Rule("fmul_zero", node("fmul", a, number(0)), number(0), ProofLevel.ALGEBRAIC, schema, "a * 0 == 0"),
-        Rule("fdiv_one", node("fdiv", a, number(1)), a, ProofLevel.ALGEBRAIC, schema, "a / 1 == a"),
+        Rule(
+            "fadd_zero",
+            node("fadd", a, number(0)),
+            a,
+            ProofLevel.ALGEBRAIC,
+            schema,
+            "a + 0 == a",
+        ),
+        Rule(
+            "fmul_one",
+            node("fmul", a, number(1)),
+            a,
+            ProofLevel.ALGEBRAIC,
+            schema,
+            "a * 1 == a",
+        ),
+        Rule(
+            "fmul_zero",
+            node("fmul", a, number(0)),
+            number(0),
+            ProofLevel.ALGEBRAIC,
+            schema,
+            "a * 0 == 0",
+        ),
+        Rule(
+            "fdiv_one",
+            node("fdiv", a, number(1)),
+            a,
+            ProofLevel.ALGEBRAIC,
+            schema,
+            "a / 1 == a",
+        ),
         Rule(
             "fsub_def",
             node("fsub", a, b),
@@ -169,7 +222,14 @@ def builtin_rules() -> Tuple[Rule, ...]:
             schema,
             "-(-a) == a",
         ),
-        Rule("fsub_zero", node("fsub", a, number(0)), a, ProofLevel.ALGEBRAIC, schema, "a - 0 == a"),
+        Rule(
+            "fsub_zero",
+            node("fsub", a, number(0)),
+            a,
+            ProofLevel.ALGEBRAIC,
+            schema,
+            "a - 0 == a",
+        ),
         Rule(
             "fsub_self",
             node("fsub", a, a),

@@ -6,7 +6,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 if TYPE_CHECKING:
     from .rules import Rule
@@ -20,6 +29,7 @@ class Status(str, Enum):
 
 class ProofLevel(str, Enum):
     BOUNDED_EXHAUSTIVE = "BOUNDED_EXHAUSTIVE"
+    PARAMETRIC_SMT = "PARAMETRIC_SMT"
     STRUCTURAL = "STRUCTURAL"
     ALGEBRAIC = "ALGEBRAIC"
     CONGRUENCE = "CONGRUENCE"
@@ -165,11 +175,21 @@ class RolePair:
 
 
 @dataclass(frozen=True)
+class Parameter:
+    """A universally quantified signed-i32 parameter and its declared domain."""
+
+    minimum: int = -(2**31)
+    maximum: int = 2**31 - 1
+
+
+@dataclass(frozen=True)
 class FactContext:
-    bindings: Mapping[str, int]
+    bindings: Mapping[str, int | Expr]
     assumptions: Tuple[str, ...]
     disjoint_groups: Tuple[frozenset, ...]
-    side_bindings: Mapping[str, Mapping[str, int]] = field(default_factory=dict)
+    side_bindings: Mapping[str, Mapping[str, int | Expr]] = field(default_factory=dict)
+    parameters: Mapping[str, Parameter] = field(default_factory=dict)
+    constraints: Tuple[Expr, ...] = ()
 
     def disjoint(self, lhs: str, rhs: str) -> bool:
         if lhs == rhs:
@@ -185,6 +205,8 @@ class FactContext:
             bindings=merged,
             assumptions=self.assumptions,
             disjoint_groups=self.disjoint_groups,
+            parameters=self.parameters,
+            constraints=self.constraints,
         )
 
 
@@ -193,6 +215,28 @@ class Limits:
     max_iterations: int = 8
     max_enodes: int = 20_000
     timeout_ms: int = 5_000
+
+
+@dataclass(frozen=True)
+class RulePolicy:
+    """Controls proof admission independently from later rule application."""
+
+    algebraic_validation: str = "required"
+    non_algebraic_validation: str = "trusted"
+
+
+@dataclass(frozen=True)
+class LLMConfig:
+    """Optional, auditable rule assistance. Credentials are read from the environment."""
+
+    enabled: bool = False
+    provider: str = "deepseek"
+    model: str = "deepseek-v4-pro"
+    base_url: str = "https://api.deepseek.com"
+    select_nodes: bool = True
+    generate_rules: bool = True
+    max_candidates: int = 8
+    timeout_ms: int = 30_000
 
 
 @dataclass(frozen=True)
@@ -217,6 +261,8 @@ class PairSpec:
     lhs_frontend: FrontendSpec = FrontendSpec()
     rhs_frontend: FrontendSpec = FrontendSpec()
     rewrite_rules: Tuple["Rule", ...] = ()
+    rule_policy: RulePolicy = RulePolicy()
+    llm: LLMConfig = LLMConfig()
 
     def role(self, logical: str) -> RolePair:
         for role in self.roles:

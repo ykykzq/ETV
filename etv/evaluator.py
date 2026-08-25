@@ -22,7 +22,6 @@ from .model import (
     int_const,
 )
 
-
 Concrete = Union[int, bool, Expr]
 I32_MIN = -(2**31)
 I32_MAX = 2**31 - 1
@@ -75,9 +74,13 @@ def _i32(value: int, where: str) -> int:
 
 def _trunc_div(lhs: int, rhs: int, where: str) -> int:
     if rhs == 0:
-        raise UnsupportedSemantics(f"integer division by zero in {where}", "UNDEFINED_DIVISION")
+        raise UnsupportedSemantics(
+            f"integer division by zero in {where}", "UNDEFINED_DIVISION"
+        )
     if lhs == I32_MIN and rhs == -1:
-        raise UnsupportedSemantics(f"i32 division overflow in {where}", "INTEGER_OVERFLOW")
+        raise UnsupportedSemantics(
+            f"i32 division overflow in {where}", "INTEGER_OVERFLOW"
+        )
     quotient = abs(lhs) // abs(rhs)
     return -quotient if (lhs < 0) != (rhs < 0) else quotient
 
@@ -99,7 +102,10 @@ def eval_expr(
         if expr.data in env:
             return _i32(int(env[expr.data]), f"variable {expr.data}")
         if expr.data in facts.bindings:
-            return _i32(int(facts.bindings[expr.data]), f"fact {expr.data}")
+            binding = facts.bindings[expr.data]
+            if isinstance(binding, Expr):
+                return eval_expr(binding, env, facts, roles)
+            return _i32(int(binding), f"fact {expr.data}")
         raise InputError(f"unbound integer variable {expr.data!r}", "UNBOUND_VARIABLE")
     if op == "scalar":
         logical = roles.scalars.get(expr.data)
@@ -179,7 +185,9 @@ def eval_expr(
         return _i32(result, op)
 
     if op in {"fadd", "fsub", "fmul", "fdiv", "fneg", "fsqrt", "frsqrt", "fma"}:
-        args = tuple(_as_float(eval_expr(arg, env, facts, roles), op) for arg in expr.args)
+        args = tuple(
+            _as_float(eval_expr(arg, env, facts, roles), op) for arg in expr.args
+        )
         return Expr(op, args=args, sort=Sort.FLOAT)
 
     raise UnsupportedSemantics(f"cannot evaluate operation {op!r}")
@@ -221,8 +229,12 @@ def evaluate_program(program: Program, spec: PairSpec, side: str) -> Evaluation:
             )
             active = _as_bool(eval_expr(store.mask, env, facts, roles), "store.mask")
             if active:
-                offset = _as_int(eval_expr(store.offset, env, facts, roles), "store.offset")
-                value = _as_float(eval_expr(store.value, env, facts, roles), "store.value")
+                offset = _as_int(
+                    eval_expr(store.offset, env, facts, roles), "store.offset"
+                )
+                value = _as_float(
+                    eval_expr(store.value, env, facts, roles), "store.value"
+                )
             else:
                 offset = None
                 value = None
@@ -237,4 +249,6 @@ def evaluate_program(program: Program, spec: PairSpec, side: str) -> Evaluation:
                     value=value,
                 )
             )
-    return Evaluation(program=program, program_count=program_count, records=tuple(records))
+    return Evaluation(
+        program=program, program_count=program_count, records=tuple(records)
+    )

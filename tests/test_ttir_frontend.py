@@ -12,7 +12,6 @@ from etv.ttir import LibTritonParser, REQUIRED_TRITON_VERSION, parse_ttir
 from etv.ttir.lift import lift_ttir
 from etv.verify import verify_spec
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -36,8 +35,12 @@ def test_real_add_artifacts_match_provenance():
     )
     for relative, expected in provenance["artifacts"].items():
         assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == expected
-    assert "/private/tmp" not in (root / "ttir/ntops_add.ttir").read_text(encoding="utf-8")
-    assert "/private/tmp" not in (root / "ttir/torch_inductor_add.ttir").read_text(encoding="utf-8")
+    assert "/private/tmp" not in (root / "ttir/ntops_add.ttir").read_text(
+        encoding="utf-8"
+    )
+    assert "/private/tmp" not in (root / "ttir/torch_inductor_add.ttir").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_pair_spec_accepts_explicit_ttir_frontends():
@@ -46,6 +49,17 @@ def test_pair_spec_accepts_explicit_ttir_frontends():
     assert spec.lhs_frontend.kind == "ttir"
     assert spec.lhs_frontend.function == "ntops_add_kernel"
     assert spec.lhs_frontend.programs.data == 1
+
+
+def test_parametric_add_pair_declares_symbolic_raw_ttir_launches():
+    spec = load_pair_spec(ROOT / "examples/add/pair_parametric.json")
+
+    assert spec.lhs_frontend.kind == "ttir"
+    assert spec.lhs_frontend.programs.render() == "ceildiv(var(c), 256)"
+    assert spec.rhs_frontend.programs.render() == "ceildiv(var(c), 128)"
+    assert spec.facts.parameters["a"].minimum == 1
+    assert spec.facts.parameters["c"].maximum == 2**31 - 1
+    assert spec.facts.constraints[0].render() == "eq(imul(var(a), var(b)), var(c))"
 
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
@@ -121,6 +135,28 @@ def test_raw_ttir_pair_is_lifted_and_proved():
         "version": REQUIRED_TRITON_VERSION,
     }
     assert any(block["kind"] == "FRONTEND" for block in report["blocks"])
+
+
+@pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
+def test_parametric_raw_ttir_pair_is_lifted_and_proved():
+    report = verify_spec(ROOT / "examples/add/pair_parametric.json")
+
+    assert report["status"] == Status.PROVED.value
+    assert report["reason"] == "OBSERVABLE_MEMORY_EQUIVALENT"
+    assert report["scope"] == (
+        "fixed-rank symbolic-shape single-store parametric translation validation"
+    )
+    assert report["inputs"]["frontends"]["lhs"] == {
+        "name": "libtriton",
+        "version": REQUIRED_TRITON_VERSION,
+    }
+    assert report["proof"]["parametric_domain"]["complete_for_parameter_domain"] is True
+    assert report["proof"]["egraph"]["root_pairs"] == 1
+    assert "PARAMETRIC_SMT" in next(
+        block["proof_levels"]
+        for block in report["blocks"]
+        if block["kind"] == "ADDRESS"
+    )
 
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")

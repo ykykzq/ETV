@@ -7,11 +7,13 @@
 | Python | `>=3.11` | `3.12.13` | 实现、egglog 与 CLI |
 | pip | 可编辑安装要求 `>=21.3` | `26.0.1` | PEP 660 可编辑安装 |
 | setuptools | `>=61` | venv 中为 `58.0.4`；隔离构建会获取兼容版本 | PEP 517 构建后端 |
-| `z3-solver` | `==4.16.0.0` | `4.16.0.0`（`z3 4.16.0`） | 规则准入的 UNSAT 检查 |
+| `z3-solver` | `==4.16.0.0` | `4.16.0.0`（`z3 4.16.0`） | 规则准入与参数化证明的 SMT 检查 |
 | `egglog` | `==13.2.0` | `13.2.0` | 唯一的 e-graph 与等式饱和后端 |
 | Triton/libtriton | `==3.7.1`（`ttir` extra） | `3.7.1` | 原始 TTIR/MLIR 方言注册、解析和 IR 验证 |
 
-完成安装后，验证器运行时不依赖网络。Z3、egglog 与 libtriton 均通过 Python API 导入，不解析 CLI 输出。
+完成安装后，默认验证路径不依赖网络。只有 PairSpec 显式启用 `llm` 时才会通过
+DeepSeek HTTPS API 发送候选表达式和可用 fact gate；客户端使用 Python 标准库，
+不增加运行时包依赖。Z3、egglog 与 libtriton 均通过 Python API 导入，不解析 CLI 输出。
 
 egglog 13.2.0 要求 Python 3.11 以上，因此 ETV 不再支持原来的 Python 3.9 基础路径。其 wheel 同时包含 Rust egglog 绑定；上游包还声明了 `typing-extensions`、`black`、`graphviz`、`anywidget`、`cloudpickle>=3` 和 `opentelemetry-api` 等传递依赖。本工程不直接调用其中的 notebook/可视化功能，但保留上游完整依赖集合以避免维护非官方裁剪包。
 
@@ -116,9 +118,10 @@ TRITON_BUILD_PROTON=OFF MAX_JOBS=4 \
   程序对得到 `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`；
 - 包含 `scf.for`/`scf.yield` 的测试模块通过完整解析，并正确保持在语义提升边界之外。
 
-SymPy 由 PyTorch 提取环境传递安装，但 ETV 不使用它进行规则准入。当前所有
-代数规则仍由 Z3 直接证明，避免出现两个准入语义不一致的简化器。
+SymPy 由 PyTorch 提取环境传递安装，但 ETV 不使用它进行规则准入。内建代数规则
+仍由 Z3 直接证明；自定义规则默认也如此，但 PairSpec 可显式选择弱化策略并承担
+报告中列出的信任风险。
 
 ## 依赖信任
 
-libtriton 的 parser/verifier、Z3、egglog 13.2.0、ETV 的 egglog term 编码和语义提升器属于当前可信计算基。Pytest 和 Hypothesis 只影响开发证据。PairSpec `trusted_fact` 规则未经等式验证，也属于输入信任边界；报告只会暴露该风险，无法弥补错误规则造成的不健全性。
+libtriton 的 parser/verifier、Z3、egglog 13.2.0、ETV 的 egglog term 编码和语义提升器属于当前可信计算基。Pytest 和 Hypothesis 只影响开发证据。任何实际应用且标记为 `admitted_unverified` 的规则都属于输入信任边界；报告只会暴露该风险，无法弥补错误规则造成的不健全性。

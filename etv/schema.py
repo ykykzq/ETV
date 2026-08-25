@@ -14,10 +14,13 @@ from .model import (
     FactContext,
     FrontendSpec,
     InputError,
+    LLMConfig,
     Limits,
+    Parameter,
     PairSpec,
     Program,
     ProofLevel,
+    RulePolicy,
     RoleEndpoint,
     RolePair,
     Sort,
@@ -26,8 +29,17 @@ from .model import (
     float_const,
     int_const,
 )
-from .rules import FactRequirement, Pattern, Rule, builtin_rules, node, number, pattern_variables, render_pattern, var
-
+from .rules import (
+    FactRequirement,
+    Pattern,
+    Rule,
+    builtin_rules,
+    node,
+    number,
+    pattern_variables,
+    render_pattern,
+    var,
+)
 
 FORMAT_PROGRAM = "etv-semantic-program-v1"
 FORMAT_PAIR = "etv-pair-v1"
@@ -61,8 +73,14 @@ _ARITY = {
 
 _SORT = {
     **{name: Sort.INT for name in ("iadd", "isub", "imul", "idiv", "irem", "ceildiv")},
-    **{name: Sort.BOOL for name in ("lt", "le", "gt", "ge", "eq", "ne", "and", "or", "not")},
-    **{name: Sort.FLOAT for name in ("fadd", "fsub", "fmul", "fdiv", "fneg", "fsqrt", "frsqrt", "fma")},
+    **{
+        name: Sort.BOOL
+        for name in ("lt", "le", "gt", "ge", "eq", "ne", "and", "or", "not")
+    },
+    **{
+        name: Sort.FLOAT
+        for name in ("fadd", "fsub", "fmul", "fdiv", "fneg", "fsqrt", "frsqrt", "fma")
+    },
 }
 
 _RULE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
@@ -140,7 +158,9 @@ def parse_expr(value: Any, where: str = "expression") -> Expr:
     args = value.get("args")
     if not isinstance(args, list) or len(args) != _ARITY[op]:
         raise InputError(f"{where}.{op} expects {_ARITY[op]} argument(s)")
-    parsed_args = tuple(parse_expr(arg, f"{where}.{op}[{index}]") for index, arg in enumerate(args))
+    parsed_args = tuple(
+        parse_expr(arg, f"{where}.{op}[{index}]") for index, arg in enumerate(args)
+    )
     if op == "select":
         result_sort = parsed_args[1].sort
         if parsed_args[2].sort != result_sort:
@@ -178,7 +198,11 @@ def load_program(path: Path) -> Program:
         if not isinstance(item, dict):
             raise InputError(f"{where} must be an object")
         _only_keys(item, {"block", "logical_index", "offset", "mask", "value"}, where)
-        missing = [key for key in ("block", "logical_index", "offset", "mask", "value") if key not in item]
+        missing = [
+            key
+            for key in ("block", "logical_index", "offset", "mask", "value")
+            if key not in item
+        ]
         if missing:
             raise InputError(f"missing key(s) in {where}: {', '.join(missing)}")
         block = item["block"]
@@ -187,7 +211,9 @@ def load_program(path: Path) -> Program:
         stores.append(
             StoreTemplate(
                 block=block,
-                logical_index=parse_expr(item["logical_index"], f"{where}.logical_index"),
+                logical_index=parse_expr(
+                    item["logical_index"], f"{where}.logical_index"
+                ),
                 offset=parse_expr(item["offset"], f"{where}.offset"),
                 mask=parse_expr(item["mask"], f"{where}.mask"),
                 value=parse_expr(item["value"], f"{where}.value"),
@@ -221,7 +247,9 @@ def _endpoint(value: Any, where: str) -> RoleEndpoint:
 
 
 def _strings(value: Any, where: str) -> Tuple[str, ...]:
-    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item for item in value
+    ):
         raise InputError(f"{where} must be a list of non-empty strings")
     return tuple(value)
 
@@ -282,10 +310,15 @@ def _rewrite_pattern(value: Any, where: str) -> Pattern:
         try:
             sort = Sort(sort_raw)
         except ValueError as exc:
-            raise InputError(f"{where}.sort must be int, bool, or abstract_float") from exc
+            raise InputError(
+                f"{where}.sort must be int, bool, or abstract_float"
+            ) from exc
     return node(
         op,
-        *(_rewrite_pattern(arg, f"{where}.{op}[{index}]") for index, arg in enumerate(args)),
+        *(
+            _rewrite_pattern(arg, f"{where}.{op}[{index}]")
+            for index, arg in enumerate(args)
+        ),
         data=value.get("data"),
         match_data="data" in value,
         sort=sort,
@@ -317,13 +350,27 @@ def _rule_requirement(value: Any, where: str) -> FactRequirement:
         if len(roles) < 2:
             raise InputError(f"{where}.roles needs at least two roles")
         return FactRequirement(kind=kind, roles=roles)
-    raise InputError(f"{where}.kind must be binding_equals, assumption, or disjoint")
+    if kind == "constraint":
+        _only_keys(value, {"kind", "expression"}, where)
+        if "expression" not in value:
+            raise InputError(f"{where}.expression is required")
+        expression = parse_expr(value["expression"], f"{where}.expression")
+        if expression.sort != Sort.BOOL:
+            raise InputError(f"{where}.expression must be boolean")
+        return FactRequirement(kind=kind, expression=expression)
+    raise InputError(
+        f"{where}.kind must be binding_equals, assumption, disjoint, or constraint"
+    )
 
 
 def _rewrite_rule(value: Any, where: str) -> Rule:
     if not isinstance(value, dict):
         raise InputError(f"{where} must be an object")
-    _only_keys(value, {"id", "kind", "lhs", "rhs", "statement", "requires", "provenance"}, where)
+    _only_keys(
+        value,
+        {"id", "kind", "lhs", "rhs", "statement", "requires", "provenance"},
+        where,
+    )
     rule_id = value.get("id")
     if not isinstance(rule_id, str) or not _RULE_ID.fullmatch(rule_id):
         raise InputError(f"{where}.id must be a stable rule identifier")
@@ -338,7 +385,9 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
         raise InputError(f"{where}.lhs cannot be a bare match variable")
     unbound = sorted(pattern_variables(rhs) - pattern_variables(lhs))
     if unbound:
-        raise InputError(f"{where}.rhs has unbound match variable(s): {', '.join(unbound)}")
+        raise InputError(
+            f"{where}.rhs has unbound match variable(s): {', '.join(unbound)}"
+        )
 
     requirements_raw = value.get("requires", [])
     if not isinstance(requirements_raw, list):
@@ -349,13 +398,14 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
     )
     if kind == "trusted_fact" and not requirements:
         raise InputError(f"{where} trusted_fact rules require at least one fact gate")
-    if kind == "algebraic" and requirements:
-        raise InputError(f"{where} algebraic rules cannot use PairSpec fact gates")
-
     provenance_raw = value.get("provenance", {"generated_by": "human"})
     if not isinstance(provenance_raw, dict):
         raise InputError(f"{where}.provenance must be an object")
-    _only_keys(provenance_raw, {"generated_by", "generator", "prompt_sha256"}, f"{where}.provenance")
+    _only_keys(
+        provenance_raw,
+        {"generated_by", "generator", "prompt_sha256"},
+        f"{where}.provenance",
+    )
     generated_by = provenance_raw.get("generated_by", "human")
     if generated_by not in {"human", "llm"}:
         raise InputError(f"{where}.provenance.generated_by must be human or llm")
@@ -364,19 +414,29 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
     if generated_by == "llm":
         if not isinstance(generator, str) or not generator:
             raise InputError(f"{where}.provenance.generator is required for LLM rules")
-        if not isinstance(prompt_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", prompt_sha256):
-            raise InputError(f"{where}.provenance.prompt_sha256 must be a lowercase SHA-256")
+        if not isinstance(prompt_sha256, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", prompt_sha256
+        ):
+            raise InputError(
+                f"{where}.provenance.prompt_sha256 must be a lowercase SHA-256"
+            )
     elif generator is not None or prompt_sha256 is not None:
-        raise InputError(f"{where}.provenance generator metadata is only valid for LLM rules")
+        raise InputError(
+            f"{where}.provenance generator metadata is only valid for LLM rules"
+        )
 
-    statement = value.get("statement", f"{render_pattern(lhs)} == {render_pattern(rhs)}")
+    statement = value.get(
+        "statement", f"{render_pattern(lhs)} == {render_pattern(rhs)}"
+    )
     if not isinstance(statement, str) or not statement:
         raise InputError(f"{where}.statement must be a non-empty string")
     return Rule(
         rule_id=rule_id,
         lhs=lhs,
         rhs=rhs,
-        evidence=ProofLevel.ALGEBRAIC if kind == "algebraic" else ProofLevel.TRUSTED_AXIOM,
+        evidence=(
+            ProofLevel.ALGEBRAIC if kind == "algebraic" else ProofLevel.TRUSTED_AXIOM
+        ),
         validator="z3_real_unsat" if kind == "algebraic" else "trusted_pair_fact",
         statement=statement,
         requires=("semantic_mode == abstract_float",),
@@ -387,6 +447,12 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
         generator=generator,
         prompt_sha256=prompt_sha256,
     )
+
+
+def parse_rewrite_rule(value: Any, where: str = "rewrite_rule") -> Rule:
+    """Parse one rule declaration, including declarations returned by an LLM."""
+
+    return _rewrite_rule(value, where)
 
 
 def load_pair_spec(path: Path) -> PairSpec:
@@ -406,6 +472,8 @@ def load_pair_spec(path: Path) -> PairSpec:
             "contract",
             "limits",
             "rewrite_rules",
+            "rule_policy",
+            "llm",
         },
         str(path),
     )
@@ -441,7 +509,9 @@ def load_pair_spec(path: Path) -> PairSpec:
         lhs_key = (lhs_endpoint.kind, lhs_endpoint.name)
         rhs_key = (rhs_endpoint.kind, rhs_endpoint.name)
         if lhs_key in seen_lhs or rhs_key in seen_rhs:
-            raise InputError(f"physical role endpoint is mapped more than once in {where}")
+            raise InputError(
+                f"physical role endpoint is mapped more than once in {where}"
+            )
         seen_lhs.add(lhs_key)
         seen_rhs.add(rhs_key)
         roles.append(RolePair(logical=logical, lhs=lhs_endpoint, rhs=rhs_endpoint))
@@ -451,39 +521,90 @@ def load_pair_spec(path: Path) -> PairSpec:
         raise InputError(f"{path}.facts must be an object")
     _only_keys(
         facts_raw,
-        {"bindings", "side_bindings", "assumptions", "disjoint"},
+        {
+            "bindings",
+            "side_bindings",
+            "parameters",
+            "constraints",
+            "assumptions",
+            "disjoint",
+        },
         f"{path}.facts",
     )
     bindings_raw = facts_raw.get("bindings", {})
     if not isinstance(bindings_raw, dict):
         raise InputError(f"{path}.facts.bindings must be an object")
-    bindings: Dict[str, int] = {}
+    bindings: Dict[str, int | Expr] = {}
     for key, value in bindings_raw.items():
         if not isinstance(key, str) or not key:
             raise InputError(f"fact binding names must be non-empty strings")
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise InputError(f"fact binding {key!r} must be an integer")
-        bindings[key] = value
+        if isinstance(value, int) and not isinstance(value, bool):
+            bindings[key] = value
+        else:
+            expression = parse_expr(value, f"{path}.facts.bindings.{key}")
+            if expression.sort != Sort.INT:
+                raise InputError(f"fact binding {key!r} must be an integer expression")
+            bindings[key] = expression
+
+    parameters_raw = facts_raw.get("parameters", {})
+    if not isinstance(parameters_raw, dict):
+        raise InputError(f"{path}.facts.parameters must be an object")
+    parameters: Dict[str, Parameter] = {}
+    for key, value in parameters_raw.items():
+        where = f"{path}.facts.parameters.{key}"
+        if not isinstance(key, str) or not key:
+            raise InputError(f"parameter names must be non-empty strings")
+        if key in bindings:
+            raise InputError(f"{where} duplicates a concrete fact binding")
+        if not isinstance(value, dict):
+            raise InputError(f"{where} must be an object")
+        _only_keys(value, {"min", "max"}, where)
+        minimum = value.get("min", -(2**31))
+        maximum = value.get("max", 2**31 - 1)
+        if any(
+            not isinstance(item, int) or isinstance(item, bool)
+            for item in (minimum, maximum)
+        ):
+            raise InputError(f"{where}.min and .max must be integers")
+        if minimum < -(2**31) or maximum > 2**31 - 1 or minimum > maximum:
+            raise InputError(f"{where} must describe a nonempty signed-i32 interval")
+        parameters[key] = Parameter(minimum=minimum, maximum=maximum)
+
+    constraints_raw = facts_raw.get("constraints", [])
+    if not isinstance(constraints_raw, list):
+        raise InputError(f"{path}.facts.constraints must be a list")
+    constraints = tuple(
+        parse_expr(item, f"{path}.facts.constraints[{index}]")
+        for index, item in enumerate(constraints_raw)
+    )
+    if any(expression.sort != Sort.BOOL for expression in constraints):
+        raise InputError(f"{path}.facts.constraints must contain boolean expressions")
     side_bindings_raw = facts_raw.get("side_bindings", {})
     if not isinstance(side_bindings_raw, dict):
         raise InputError(f"{path}.facts.side_bindings must be an object")
     _only_keys(side_bindings_raw, {"lhs", "rhs"}, f"{path}.facts.side_bindings")
-    side_bindings: Dict[str, Dict[str, int]] = {}
+    side_bindings: Dict[str, Dict[str, int | Expr]] = {}
     for side, values in side_bindings_raw.items():
         where = f"{path}.facts.side_bindings.{side}"
         if not isinstance(values, dict):
             raise InputError(f"{where} must be an object")
-        parsed: Dict[str, int] = {}
+        parsed: Dict[str, int | Expr] = {}
         for key, value in values.items():
             if not isinstance(key, str) or not key:
                 raise InputError(f"{where} binding names must be non-empty strings")
             if key in bindings:
                 raise InputError(f"{where}.{key} duplicates a shared fact binding")
-            if not isinstance(value, int) or isinstance(value, bool):
-                raise InputError(f"{where}.{key} must be an integer")
-            parsed[key] = value
+            if isinstance(value, int) and not isinstance(value, bool):
+                parsed[key] = value
+            else:
+                expression = parse_expr(value, f"{where}.{key}")
+                if expression.sort != Sort.INT:
+                    raise InputError(f"{where}.{key} must be an integer expression")
+                parsed[key] = expression
         side_bindings[side] = parsed
-    assumptions = _strings(facts_raw.get("assumptions", []), f"{path}.facts.assumptions")
+    assumptions = _strings(
+        facts_raw.get("assumptions", []), f"{path}.facts.assumptions"
+    )
     disjoint_raw = facts_raw.get("disjoint", [])
     if not isinstance(disjoint_raw, list):
         raise InputError(f"{path}.facts.disjoint must be a list of role lists")
@@ -514,14 +635,18 @@ def load_pair_spec(path: Path) -> PairSpec:
     )
     unknown_roles = sorted(set(require_disjoint) - set(roles_raw))
     if unknown_roles:
-        raise InputError(f"unknown role(s) in require_disjoint: {', '.join(unknown_roles)}")
+        raise InputError(
+            f"unknown role(s) in require_disjoint: {', '.join(unknown_roles)}"
+        )
     if "output_numel" not in contract_raw:
         raise InputError(f"{path}.contract.output_numel is required")
 
     limits_raw = raw.get("limits", {})
     if not isinstance(limits_raw, dict):
         raise InputError(f"{path}.limits must be an object")
-    _only_keys(limits_raw, {"max_iterations", "max_enodes", "timeout_ms"}, f"{path}.limits")
+    _only_keys(
+        limits_raw, {"max_iterations", "max_enodes", "timeout_ms"}, f"{path}.limits"
+    )
     defaults = Limits()
     limit_values = {}
     for key in ("max_iterations", "max_enodes", "timeout_ms"):
@@ -529,6 +654,81 @@ def load_pair_spec(path: Path) -> PairSpec:
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise InputError(f"{path}.limits.{key} must be a positive integer")
         limit_values[key] = value
+
+    rule_policy_raw = raw.get("rule_policy", {})
+    if not isinstance(rule_policy_raw, dict):
+        raise InputError(f"{path}.rule_policy must be an object")
+    _only_keys(
+        rule_policy_raw,
+        {"algebraic_validation", "non_algebraic_validation"},
+        f"{path}.rule_policy",
+    )
+    algebraic_validation = rule_policy_raw.get("algebraic_validation", "required")
+    if algebraic_validation not in {"required", "best_effort", "trusted"}:
+        raise InputError(
+            f"{path}.rule_policy.algebraic_validation must be required, best_effort, or trusted"
+        )
+    non_algebraic_validation = rule_policy_raw.get(
+        "non_algebraic_validation", "trusted"
+    )
+    if non_algebraic_validation != "trusted":
+        raise InputError(
+            f"{path}.rule_policy.non_algebraic_validation currently supports only trusted"
+        )
+
+    llm_raw = raw.get("llm", {})
+    if not isinstance(llm_raw, dict):
+        raise InputError(f"{path}.llm must be an object")
+    _only_keys(
+        llm_raw,
+        {
+            "enabled",
+            "provider",
+            "model",
+            "base_url",
+            "select_nodes",
+            "generate_rules",
+            "max_candidates",
+            "timeout_ms",
+        },
+        f"{path}.llm",
+    )
+    llm_defaults = LLMConfig()
+    llm_values = {
+        key: llm_raw.get(key, getattr(llm_defaults, key))
+        for key in (
+            "enabled",
+            "provider",
+            "model",
+            "base_url",
+            "select_nodes",
+            "generate_rules",
+            "max_candidates",
+            "timeout_ms",
+        )
+    }
+    for key in ("enabled", "select_nodes", "generate_rules"):
+        if not isinstance(llm_values[key], bool):
+            raise InputError(f"{path}.llm.{key} must be boolean")
+    for key in ("provider", "model", "base_url"):
+        if not isinstance(llm_values[key], str) or not llm_values[key]:
+            raise InputError(f"{path}.llm.{key} must be a non-empty string")
+    if llm_values["provider"] != "deepseek":
+        raise InputError(f"{path}.llm.provider currently supports only deepseek")
+    if llm_values["base_url"].rstrip("/") not in {
+        "https://api.deepseek.com",
+        "https://api.deepseek.com/v1",
+    }:
+        raise InputError(
+            f"{path}.llm.base_url must use the official DeepSeek API endpoint"
+        )
+    for key in ("max_candidates", "timeout_ms"):
+        if (
+            not isinstance(llm_values[key], int)
+            or isinstance(llm_values[key], bool)
+            or llm_values[key] <= 0
+        ):
+            raise InputError(f"{path}.llm.{key} must be a positive integer")
 
     base = path.parent
     frontends_raw = raw.get("frontends", {})
@@ -552,7 +752,9 @@ def load_pair_spec(path: Path) -> PairSpec:
         return FrontendSpec(
             kind=kind,
             function=function,
-            programs=None if programs is None else parse_expr(programs, f"{where}.programs"),
+            programs=(
+                None if programs is None else parse_expr(programs, f"{where}.programs")
+            ),
         )
 
     rewrite_rules_raw = raw.get("rewrite_rules", [])
@@ -563,13 +765,19 @@ def load_pair_spec(path: Path) -> PairSpec:
         for index, item in enumerate(rewrite_rules_raw)
     )
     rule_ids = [rule.rule_id for rule in rewrite_rules]
-    duplicate_rule_ids = sorted({rule_id for rule_id in rule_ids if rule_ids.count(rule_id) > 1})
+    duplicate_rule_ids = sorted(
+        {rule_id for rule_id in rule_ids if rule_ids.count(rule_id) > 1}
+    )
     builtin_rule_ids = {rule.rule_id for rule in builtin_rules()}
     conflicting_rule_ids = sorted(set(rule_ids) & builtin_rule_ids)
     if duplicate_rule_ids:
-        raise InputError(f"duplicate rewrite rule id(s): {', '.join(duplicate_rule_ids)}")
+        raise InputError(
+            f"duplicate rewrite rule id(s): {', '.join(duplicate_rule_ids)}"
+        )
     if conflicting_rule_ids:
-        raise InputError(f"rewrite rule id conflicts with builtin rule(s): {', '.join(conflicting_rule_ids)}")
+        raise InputError(
+            f"rewrite rule id conflicts with builtin rule(s): {', '.join(conflicting_rule_ids)}"
+        )
 
     return PairSpec(
         pair_id=pair_id,
@@ -583,10 +791,14 @@ def load_pair_spec(path: Path) -> PairSpec:
             assumptions=assumptions,
             disjoint_groups=tuple(disjoint_groups),
             side_bindings=side_bindings,
+            parameters=parameters,
+            constraints=constraints,
         ),
         contract=Contract(
             output_role=output_role,
-            output_numel=parse_expr(contract_raw["output_numel"], f"{path}.contract.output_numel"),
+            output_numel=parse_expr(
+                contract_raw["output_numel"], f"{path}.contract.output_numel"
+            ),
             require_full_coverage=require_full_coverage,
             require_disjoint=require_disjoint,
         ),
@@ -594,4 +806,9 @@ def load_pair_spec(path: Path) -> PairSpec:
         lhs_frontend=parse_frontend("lhs"),
         rhs_frontend=parse_frontend("rhs"),
         rewrite_rules=rewrite_rules,
+        rule_policy=RulePolicy(
+            algebraic_validation=algebraic_validation,
+            non_algebraic_validation=non_algebraic_validation,
+        ),
+        llm=LLMConfig(**llm_values),
     )

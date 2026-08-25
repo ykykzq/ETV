@@ -1,0 +1,47 @@
+{
+  "format": "etv-semantic-program-v1",
+  "name": "add_symbolic_2d",
+  "launch": {
+    "programs": {"op": "ceildiv", "args": [{"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}, 8]},
+    "lanes": 8
+  },
+  "stores": [
+    {
+      "block": "lhs_output",
+      "logical_index": {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]},
+      "offset": {
+        "op": "iadd",
+        "args": [
+          {"op": "imul", "args": [{"op": "idiv", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"var": "b"}]}, {"var": "b"}]},
+          {"op": "irem", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"var": "b"}]}
+        ]
+      },
+      "mask": {"op": "lt", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}]},
+      "value": {
+        "op": "fadd",
+        "args": [
+          {
+            "op": "load",
+            "block": "lhs_input",
+            "offset": {"op": "iadd", "args": [{"op": "imul", "args": [{"op": "idiv", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"var": "b"}]}, {"var": "b"}]}, {"op": "irem", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"var": "b"}]}]},
+            "mask": {"op": "lt", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}]},
+            "default": {"float": "0"}
+          },
+          {
+            "op": "fmul",
+            "args": [
+              {"scalar": "lhs_alpha"},
+              {
+                "op": "load",
+                "block": "lhs_other",
+                "offset": {"op": "iadd", "args": [{"op": "imul", "args": [{"op": "idiv", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"var": "b"}]}, {"var": "b"}]}, {"op": "irem", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"var": "b"}]}]},
+                "mask": {"op": "lt", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 8]}, {"var": "lane"}]}, {"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}]},
+                "default": {"float": "0"}
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

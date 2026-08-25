@@ -4,4 +4,4 @@ from .model import ProofLevel, Status
 from .verify import verify_spec
 
 __all__ = ["ProofLevel", "Status", "verify_spec"]
-__version__ = "0.3.0"
+__version__ = "0.4.0"

@@ -3,10 +3,11 @@ from pathlib import Path
 
 import pytest
 
+from etv.llm import LLMAssistance
 from etv.model import Expr, Sort, Status
 from etv.reporting import write_report
+from etv.schema import parse_rewrite_rule
 from etv.verify import _definedness_issue, verify_spec
-
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"
@@ -51,7 +52,9 @@ def test_all_admitted_rules_enter_the_unified_egglog_ruleset():
 
     assert egraph["stats"]["backend"] == {"name": "egglog", "version": "13.2.0"}
     assert set(egraph["admitted_rule_ids"]) == {
-        item["id"] for item in report["proof"]["rule_admission"] if item["status"] == "proved"
+        item["id"]
+        for item in report["proof"]["rule_admission"]
+        if item["status"] == "proved"
     }
     assert "fma_def" in egraph["stats"]["rule_matches"]
 
@@ -72,12 +75,24 @@ def test_partial_float_operations_require_proved_domains(tmp_path):
     one = Expr("const_float", data=(1, 1), sort=Sort.FLOAT)
 
     assert _definedness_issue(Expr("fdiv", args=(value, one), sort=Sort.FLOAT)) is None
-    assert _definedness_issue(Expr("fdiv", args=(one, value), sort=Sort.FLOAT))["operation"] == "fdiv"
-    assert _definedness_issue(Expr("fsqrt", args=(value,), sort=Sort.FLOAT))["operation"] == "fsqrt"
+    assert (
+        _definedness_issue(Expr("fdiv", args=(one, value), sort=Sort.FLOAT))[
+            "operation"
+        ]
+        == "fdiv"
+    )
+    assert (
+        _definedness_issue(Expr("fsqrt", args=(value,), sort=Sort.FLOAT))["operation"]
+        == "fsqrt"
+    )
 
     spec = json.loads((FIXTURES / "specs/add_proved.json").read_text(encoding="utf-8"))
-    lhs = json.loads((FIXTURES / "programs/add_ntops_2d.json").read_text(encoding="utf-8"))
-    rhs = json.loads((FIXTURES / "programs/add_inductor_linear.json").read_text(encoding="utf-8"))
+    lhs = json.loads(
+        (FIXTURES / "programs/add_ntops_2d.json").read_text(encoding="utf-8")
+    )
+    rhs = json.loads(
+        (FIXTURES / "programs/add_inductor_linear.json").read_text(encoding="utf-8")
+    )
     lhs["stores"][0]["value"] = {
         "op": "fdiv",
         "args": [lhs["stores"][0]["value"], {"scalar": "nt_alpha"}],
@@ -108,7 +123,9 @@ def test_partial_float_operations_require_proved_domains(tmp_path):
 
 
 def _write_trusted_rewrite_spec(tmp_path, include_fact):
-    source = json.loads((FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8"))
+    source = json.loads(
+        (FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8")
+    )
     source["lhs"] = str(FIXTURES / "programs/add_ntops_2d.json")
     source["rhs"] = str(FIXTURES / "programs/add_inductor_bad_compute.json")
     fact = "subtraction is equivalent to addition for this specialization"
@@ -138,7 +155,9 @@ def test_fact_gated_trusted_rewrite_is_used_and_audited(tmp_path):
     assert uses[0]["matches"] > 0
     assert "without SMT or formal validation" in uses[0]["validation"]["warning"]
     assert "TRUSTED_AXIOM" in next(
-        block["proof_levels"] for block in report["blocks"] if block["kind"] == "COMPUTE"
+        block["proof_levels"]
+        for block in report["blocks"]
+        if block["kind"] == "COMPUTE"
     )
 
 
@@ -147,7 +166,140 @@ def test_fact_gated_rewrite_is_skipped_when_requirement_is_missing(tmp_path):
 
     assert report["status"] == Status.DISPROVED.value
     admission = next(
-        item for item in report["proof"]["rule_admission"] if item["id"] == "specialized_sub_is_add"
+        item
+        for item in report["proof"]["rule_admission"]
+        if item["id"] == "specialized_sub_is_add"
     )
     assert admission["status"] == "skipped"
     assert admission["validation"]["fact_checks"][0]["satisfied"] is False
+
+
+def test_parametric_2d_to_1d_shape_relation_is_proved():
+    report = verify_spec(FIXTURES / "specs/add_parametric_shapes.json")
+
+    assert report["status"] == Status.PROVED.value
+    assert report["reason"] == "OBSERVABLE_MEMORY_EQUIVALENT"
+    assert report["proof"]["parametric_domain"]["complete_for_parameter_domain"] is True
+    assert report["proof"]["egraph"]["root_pairs"] == 1
+    assert all(
+        check["result"] in {"sat", "unsat"}
+        for check in report["proof"]["parametric_domain"]["checks"]
+    )
+    assert "PARAMETRIC_SMT" in next(
+        block["proof_levels"]
+        for block in report["blocks"]
+        if block["kind"] == "ADDRESS"
+    )
+
+
+def test_parametric_shape_relation_is_a_required_premise(tmp_path):
+    source = json.loads(
+        (FIXTURES / "specs/add_parametric_shapes.json").read_text(encoding="utf-8")
+    )
+    source["lhs"] = str(FIXTURES / "programs/add_symbolic_2d.json")
+    source["rhs"] = str(FIXTURES / "programs/add_symbolic_1d.json")
+    source["facts"]["constraints"] = []
+    path = tmp_path / "missing-relation.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    report = verify_spec(path)
+
+    assert report["status"] in {Status.DISPROVED.value, Status.UNKNOWN.value}
+    assert report["reason"] != "OBSERVABLE_MEMORY_EQUIVALENT"
+
+
+def test_unproved_algebraic_rule_can_be_applied_under_best_effort_policy(tmp_path):
+    source = json.loads(
+        (FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8")
+    )
+    source["lhs"] = str(FIXTURES / "programs/add_ntops_2d.json")
+    source["rhs"] = str(FIXTURES / "programs/add_inductor_bad_compute.json")
+    fact = "this specialization admits subtraction as addition"
+    source["facts"]["assumptions"].append(fact)
+    source["rule_policy"] = {"algebraic_validation": "best_effort"}
+    source["rewrite_rules"] = [
+        {
+            "id": "conditional_unproved_sub_is_add",
+            "kind": "algebraic",
+            "lhs": {"op": "fsub", "args": [{"match": "a"}, {"match": "b"}]},
+            "rhs": {"op": "fadd", "args": [{"match": "a"}, {"match": "b"}]},
+            "requires": [{"kind": "assumption", "text": fact}],
+        }
+    ]
+    path = tmp_path / "best-effort.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    report = verify_spec(path)
+
+    assert report["status"] == Status.PROVED.value
+    admission = next(
+        item
+        for item in report["proof"]["rule_admission"]
+        if item["id"] == "conditional_unproved_sub_is_add"
+    )
+    assert admission["status"] == "admitted_unverified"
+    assert admission["validation"]["result"] == "sat"
+    usage = next(
+        item
+        for item in report["proof"]["egraph"]["rule_application"]
+        if item["id"] == "conditional_unproved_sub_is_add"
+    )
+    assert usage["used"] is True
+    assert report["proof"]["egraph"]["unverified_rule_uses"]
+
+
+def test_llm_generated_conditional_rule_enters_second_saturation(tmp_path, monkeypatch):
+    source = json.loads(
+        (FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8")
+    )
+    source["lhs"] = str(FIXTURES / "programs/add_ntops_2d.json")
+    source["rhs"] = str(FIXTURES / "programs/add_inductor_bad_compute.json")
+    fact = "this specialization admits subtraction as addition"
+    source["facts"]["assumptions"].append(fact)
+    source["llm"] = {"enabled": True}
+    path = tmp_path / "llm-assisted.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    rule = parse_rewrite_rule(
+        {
+            "id": "llm_conditional_sub_is_add",
+            "kind": "trusted_fact",
+            "lhs": {"op": "fsub", "args": [{"match": "a"}, {"match": "b"}]},
+            "rhs": {"op": "fadd", "args": [{"match": "a"}, {"match": "b"}]},
+            "requires": [{"kind": "assumption", "text": fact}],
+            "provenance": {
+                "generated_by": "llm",
+                "generator": "fake-deepseek",
+                "prompt_sha256": "a" * 64,
+            },
+        },
+        "test.rule",
+    )
+
+    def fake_propose_rules(spec, candidates):
+        assert candidates
+        return LLMAssistance(
+            (rule,),
+            {
+                "enabled": True,
+                "provider": "deepseek",
+                "configured_model": "fake-deepseek",
+                "generated_rule_ids": [rule.rule_id],
+                "calls": [],
+            },
+        )
+
+    monkeypatch.setattr("etv.verify.propose_rules", fake_propose_rules)
+
+    report = verify_spec(path)
+
+    assert report["status"] == Status.PROVED.value
+    assert report["proof"]["llm_assistance"]["generated_rule_ids"] == [rule.rule_id]
+    assert len(report["proof"]["egraph"]["stats"]["phases"]) == 2
+    usage = next(
+        item
+        for item in report["proof"]["egraph"]["rule_application"]
+        if item["id"] == rule.rule_id
+    )
+    assert usage["used"] is True
+    assert usage["admission_status"] == "admitted_unverified"

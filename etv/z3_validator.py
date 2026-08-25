@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import hashlib
 from functools import lru_cache
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, Iterable, Mapping, Tuple
 
 import z3
 
 from .model import PairSpec
 from .rules import Pattern, Rule, builtin_rules
 
-
 TRUSTED_RULE_WARNING = (
     "This fact-gated rewrite is assumed equivalent without SMT or formal validation; "
     "an incorrect PairSpec fact or rewrite can make PROVED unsound."
+)
+UNVERIFIED_ALGEBRAIC_WARNING = (
+    "This algebraic rewrite was admitted by PairSpec policy without a successful proof; "
+    "an incorrect rewrite can make PROVED unsound."
 )
 
 
@@ -98,18 +101,25 @@ def validated_builtin_rules() -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
     return tuple(accepted), tuple(results)
 
 
-def admitted_rules(spec: PairSpec) -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
+def admitted_rules(
+    spec: PairSpec,
+    additional_rules: Iterable[Rule] = (),
+) -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
     builtin_accepted, builtin_results = validated_builtin_rules()
     accepted = list(builtin_accepted)
     results = list(builtin_results)
-    for declaration in spec.rewrite_rules:
-        if declaration.kind == "algebraic":
-            result = validate_rule(declaration)
-            if result["status"] == "proved":
-                accepted.append(declaration)
+    seen_ids = {rule.rule_id for rule in builtin_accepted}
+    for declaration in (*spec.rewrite_rules, *tuple(additional_rules)):
+        if declaration.rule_id in seen_ids:
+            result = declaration.to_json()
+            result["status"] = "rejected"
+            result["validation"] = {
+                "result": "duplicate_rule_id",
+                "detail": "rule id conflicts with an already admitted declaration",
+            }
             results.append(result)
             continue
-
+        seen_ids.add(declaration.rule_id)
         checks = [
             {
                 "requirement": requirement.to_json(),
@@ -117,11 +127,49 @@ def admitted_rules(spec: PairSpec) -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
             }
             for requirement in declaration.fact_requirements
         ]
+        if checks and not all(check["satisfied"] for check in checks):
+            result = declaration.to_json()
+            result["status"] = "skipped"
+            result["validation"] = {
+                "result": "fact_requirements_not_met",
+                "fact_checks": checks,
+            }
+            results.append(result)
+            continue
+
+        if declaration.kind == "algebraic":
+            policy = spec.rule_policy.algebraic_validation
+            if policy == "trusted":
+                result = declaration.to_json()
+                result["status"] = "admitted_unverified"
+                result["validation"] = {
+                    "result": "skipped_by_policy",
+                    "policy": policy,
+                    "fact_checks": checks,
+                    "warning": UNVERIFIED_ALGEBRAIC_WARNING,
+                }
+                accepted.append(declaration)
+                results.append(result)
+                continue
+
+            result = validate_rule(declaration)
+            result["validation"]["policy"] = policy
+            result["validation"]["fact_checks"] = checks
+            if result["status"] == "proved":
+                accepted.append(declaration)
+            elif policy == "best_effort":
+                result["status"] = "admitted_unverified"
+                result["validation"]["warning"] = UNVERIFIED_ALGEBRAIC_WARNING
+                accepted.append(declaration)
+            results.append(result)
+            continue
+
         result = declaration.to_json()
-        if all(check["satisfied"] for check in checks):
+        if checks and all(check["satisfied"] for check in checks):
             result["status"] = "admitted_unverified"
             result["validation"] = {
                 "result": "trusted",
+                "policy": spec.rule_policy.non_algebraic_validation,
                 "fact_checks": checks,
                 "warning": TRUSTED_RULE_WARNING,
             }

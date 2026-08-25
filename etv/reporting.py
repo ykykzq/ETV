@@ -41,7 +41,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     for block in report.get("blocks", []):
         evidence = ", ".join(block.get("proof_levels", [])) or "-"
         summary = str(block.get("summary", "")).replace("|", "\\|")
-        lines.append(f"| `{block.get('kind')}` | **{block.get('status')}** | {evidence} | {summary} |")
+        lines.append(
+            f"| `{block.get('kind')}` | **{block.get('status')}** | {evidence} | {summary} |"
+        )
 
     counterexample = report.get("counterexample")
     if counterexample:
@@ -51,7 +53,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 "## Counterexample",
                 "",
                 "```json",
-                json.dumps(counterexample, indent=2, sort_keys=True, ensure_ascii=False),
+                json.dumps(
+                    counterexample, indent=2, sort_keys=True, ensure_ascii=False
+                ),
                 "```",
             ]
         )
@@ -65,6 +69,15 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 f"Finite domain: {finite.get('active_output_elements')} active outputs, "
                 f"{finite.get('lhs_lanes')} lhs lanes, {finite.get('rhs_lanes')} rhs lanes."
             )
+        parametric = proof.get("parametric_domain")
+        if parametric:
+            parameter_names = ", ".join(sorted(parametric.get("parameters", {})))
+            checks = parametric.get("checks", [])
+            proved_checks = sum(item.get("result") == "unsat" for item in checks)
+            lines.append(
+                f"Parametric domain: `{parameter_names}`; {proved_checks} SMT obligations proved UNSAT, "
+                f"with one satisfiable domain check."
+            )
         egraph = proof.get("egraph")
         if egraph:
             stats = egraph.get("stats", {})
@@ -75,21 +88,49 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 f"{stats.get('iterations')} iterations, stop reason `{stats.get('stop_reason')}`."
             )
             rules = stats.get("rule_matches", {})
-            lines.append("Matched rules: " + (", ".join(f"`{key}` x{value}" for key, value in rules.items()) or "none"))
-            trusted = egraph.get("trusted_rule_uses", [])
-            if trusted:
-                lines.extend(["", "### Unverified trusted rewrites", ""])
+            lines.append(
+                "Matched rules: "
+                + (
+                    ", ".join(f"`{key}` x{value}" for key, value in rules.items())
+                    or "none"
+                )
+            )
+            unverified = egraph.get(
+                "unverified_rule_uses", egraph.get("trusted_rule_uses", [])
+            )
+            if unverified:
+                lines.extend(["", "### Applied Unverified Rewrites", ""])
                 lines.extend(
                     f"- `{item.get('id')}` matched {item.get('matches')} time(s): "
                     f"{item.get('validation', {}).get('warning')}"
-                    for item in trusted
+                    for item in unverified
                 )
+        llm = proof.get("llm_assistance")
+        if llm:
+            lines.extend(["", "### LLM Assistance", ""])
+            lines.append(
+                f"Provider/model: `{llm.get('provider')}/{llm.get('configured_model', llm.get('model'))}`; "
+                f"status: `{llm.get('status', 'completed')}`."
+            )
+            generated = llm.get("generated_rule_ids", [])
+            lines.append(
+                "Generated candidates: "
+                + (", ".join(f"`{item}`" for item in generated) or "none")
+            )
 
     lines.extend(["", "## Trust boundary", ""])
     lines.extend(f"- {item}" for item in report.get("trusted_axioms", []))
     guarantees = report.get("guarantees", {})
     if guarantees:
-        lines.extend(["", f"This result establishes: {guarantees.get('establishes', '')}", "", "It does not prove:", ""])
+        lines.extend(
+            [
+                "",
+                f"This result establishes: {guarantees.get('establishes', '')}",
+                "",
+                "It does not prove:",
+                "",
+            ]
+        )
         lines.extend(f"- {item}" for item in guarantees.get("does_not_prove", []))
     lines.append("")
     return "\n".join(lines)

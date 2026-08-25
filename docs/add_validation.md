@@ -141,6 +141,52 @@ compute 阶段的 egglog 统计是 641 e-node、641 e-class、0 次迭代，停�
 相同的 `input + alpha * other` 计算结构，本例不需要任何代数规则匹配，更没有
 使用 `trusted_fact` 重写。所有规则仍统一完成准入；只有尚未同余的根才触发饱和。
 
+## 参数化 raw TTIR 验证
+
+固定 pair 保留上游生成物及其 provenance，不直接改写。另一个
+`examples/add/pair_parametric.json` 基准从两份参数化 raw TTIR 开始：
+
+- `ttir/parametric_2d_add.ttir` 使用固定 rank 2 的 `a,b` 和行主序地址
+  `(k div b)*b + (k rem b)`，每个 program 有 256 lanes；
+- `ttir/parametric_1d_add.ttir` 使用固定 rank 1 的 `c` 和线性地址 `k`，每个
+  program 有 128 lanes；
+- launch program 数分别为 `ceildiv(c,256)` 和 `ceildiv(c,128)`；
+- PairSpec 声明全部参数为正 signed-i32，并以机器可读约束 `a*b=c` 限定证明域；
+- 左侧 alpha 是 scalar，右侧 alpha 是 `arg1[0]` scalar-block load。
+
+这两份 TTIR 是面向参数化证明的可审计基准，不属于 `provenance.json` 所声明的
+上游生成 artifact。验证命令为：
+
+```bash
+python -m etv check examples/add/pair_parametric.json \
+  --out build/add_parametric_raw
+```
+
+libtriton 仍先完成 parse/verify 和语义提升。随后不再枚举某几个 shape，而是进入
+`PARAMETRIC_SMT` 路径，对声明域中的任意 `a,b,c,k` 证明启动定义性、精确掩码、
+覆盖、唯一写入、地址单射、二维/一维地址相等以及 load offset 相等。浮点计算根
+最后进入同一个 egglog e-graph；该 PairSpec 没有声明局部规则，也没有启用 LLM。
+从两份 raw TTIR 到 39 次 SMT 检查、规则准入和 e-graph 状态的完整逐步轨迹见
+[参数化 Add 验证全过程](add_parametric_verification_details.md)。
+
+实际执行得到：
+
+```text
+PROVED parametric_2d_add_vs_1d_add: OBSERVABLE_MEMORY_EQUIVALENT
+```
+
+两侧均由 libtriton 3.7.1 完成 parse/verify。报告记录 39 次 SMT 检查：1 次确认
+参数域可满足，其余 38 个反例查询均为 `UNSAT`。`FRONTEND`、`ABI`、
+`PARAMETER_DOMAIN`、`INDEX`、`MASK`、`COVERAGE`、`RACE_FREEDOM`、
+`ADDRESS`、`LOAD`、`DEFINEDNESS`、`COMPUTE`、`STORE` 共 12 个 proof block
+全部为 `PROVED`，并明确标注每一项使用的是结构证据、PairSpec 信任事实、
+`PARAMETRIC_SMT` 或同余证据。
+
+计算部分只有一个待比较的根对。角色与读取地址归一化后，两根已经同余，egglog
+统计为 7 e-node、7 e-class、0 次迭代，停止原因为
+`ROOTS_ALREADY_CONGRUENT`。因此本例没有应用任何重写规则，也没有生成新规则；
+规则准入与规则应用在报告中仍是分开的，未使用规则不会冒充证明步骤。
+
 ## 可复现步骤
 
 在已经构建 Triton 3.7.1 的 Python 3.12 环境中：
@@ -165,12 +211,15 @@ python -m etv check examples/add/pair.json --out build/add_upstream
 
 ## 结论边界
 
-本次 `PROVED` 是固定 shape、布局、launch 和 `ABSTRACT_FLOAT` 下的可观察内存
-等价。它不证明：
+`pair.json` 的 `PROVED` 是固定 shape、布局、launch 和 `ABSTRACT_FLOAT` 下的
+可观察内存等价。`pair_parametric.json` 则覆盖固定 rank 2 对 rank 1、连续行主序、
+给定 launch 公式下，所有满足 `1 <= a,b,c <= 2^31-1` 且 signed-i32
+`a*b=c` 的参数取值。两项结论都不证明：
 
 - 两个 kernel 的 IEEE-754 或逐位结果相等；左侧 alpha 为 f64、右侧 load 为
   f32，cast 在当前抽象中被抹除，这尤其不能推广为位级结论；
-- 任意 shape、stride、dtype、target 或 launch 下均等价；
+- 动态 rank、任意 stride、dtype、target、launch，或不满足声明关系的 shape
+  仍然等价；
 - 实际 GPU 运行、性能、ptx/cubin 后端正确性或 buffer 边界安全；
 - ninetoothed、TorchInductor、Triton 和 ETV 编译/提升实现本身没有 bug。
 

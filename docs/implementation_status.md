@@ -5,6 +5,7 @@
 | 用例 | 预期 | 已实现结果 |
 | --- | --- | --- |
 | 上游 ntops 二维 Add 与实际 TorchInductor Add | 证明等价 | `PROVED`；真实生成 TTIR，左/右分别枚举 256/128 lane，128 个有效输出 |
+| 参数化 raw TTIR 的二维 `[a,b]` Add 与一维 `[c]` Add | 在 `a*b=c` 下证明任意正 i32 shape 等价 | `PROVED`；libtriton 提升后完成 38 个 UNSAT 参数化义务，未使用重写规则 |
 | `ABSTRACT_FLOAT` 下 mul+add 与 FMA（内部夹具） | 使用已准入的桥接规则证明 | `PROVED`，`fma_def` 已由 Z3 验证 |
 | `output_stride0 = N + 1` | 地址反例 | `DISPROVED(OUTPUT_ADDRESS_MISMATCH)` |
 | rhs 掩码为 `k < X - 1` | 掩码反例 | `DISPROVED(MASK_MISMATCH)` |
@@ -13,37 +14,41 @@
 | 合成 raw TTIR mul+add 与 FMA（内部夹具） | libtriton 解析后证明 | `PROVED`，用于前端与规则回归，不再作为用户示例 |
 | 含 `scf.for` 的 raw TTIR | 完整解析但不提升 | parser/verifier 通过；验证阶段为 `UNKNOWN(TTIR_REGION_SEMANTICS_UNSUPPORTED)` |
 
-当前测试套件共 38 项，在完整 Python 3.12 + libtriton + egglog 环境中全部通过。
+当前测试套件共 47 项；不含 libtriton 的 Python 3.12 + egglog 环境中为 41 项通过、
+6 项 raw TTIR 测试跳过。完整 Python 3.12 + libtriton + egglog 环境可运行全部测试。
 测试覆盖 schema 拒绝、有符号除法/取余、i32 溢出、基于性质的扁平化
 验证、egglog 统一饱和/同余/资源预算、Z3 规则准入/拒绝、fact gate 与可信规则
-审计、确定性报告、CLI 退出码、libtriton 快照稳定性、region 解析以及真实 Add
-raw TTIR 端到端证明，以及真实 artifact/provenance 哈希一致性。
+审计、全正 i32 参数域上的 `a*b=c` shape 定理、缺失关系前提的非证明回归、LLM
+条件规则生成与第二轮饱和、确定性报告、CLI 退出码、libtriton 快照稳定性、region
+解析、真实 Add raw TTIR 端到端证明、参数化 raw TTIR 的 `a*b=c` 证明，以及真实
+artifact/provenance 哈希一致性。
 
 ## 组件矩阵
 
 | 组件 | 状态 | 说明 |
 | --- | --- | --- |
-| 严格的 PairSpec/结果契约 | 已完成 | JSON v1，拒绝未知字段，支持共享及左右单侧整数绑定 |
+| 严格的 PairSpec/结果契约 | 已完成 | JSON v1，拒绝未知字段，支持共享及左右单侧整数/参数表达式绑定 |
 | 逻辑 ABI/角色对齐 | MVP 范围内已完成 | block、scalar、scalar-block |
-| 事实/no-alias 上下文 | MVP 范围内已完成 | 固定绑定与成对不相交分组 |
+| 事实/no-alias 上下文 | MVP 范围内已完成 | 固定/参数绑定、关系约束与成对不相交分组 |
 | Semantic TTIR 类型化表达式 | 逐点子集已完成 | 整数、掩码、load、抽象计算、store |
 | raw TTIR/MLIR 解析器 | 已完成 | Triton/libtriton 3.7.1，全方言注册、parse、verify、稳定快照 |
 | raw TTIR 语义提升 | 逐点子集已完成 | 静态 tensor 标量化、广播、地址、load、计算、单 store；未建模操作返回 `UNKNOWN` |
 | 有限启动域求值器 | 已完成 | 覆盖全部固定 program/lane，含 signed-i32 保护 |
-| 掩码/地址/覆盖性证明 | 固定 specialization 范围内已完成 | 有界穷举 |
+| 固定秩符号 shape | 已完成基础路径 | Z3 Int 参数域、关系约束、覆盖/唯一性/地址/竞争；无动态 rank |
+| 掩码/地址/覆盖性证明 | 固定实例及固定秩参数域已完成 | 有界穷举或参数化 SMT |
 | 无竞争证明 | 单 store 范围内已完成 | 地址单射性 |
 | 内存观察器 | 单 Output 范围内已完成 | 全映射 block；不支持原位更新、原子操作和边界安全证明 |
 | 等式饱和 | 计算 MVP 范围内已完成 | egglog 13.2.0、统一 ruleset、同余闭包、迭代/节点/时间预算 |
-| 代数规则准入 | 当前规则已完成 | Z3 实数 UNSAT 检查、查询哈希；SAT/UNKNOWN 拒绝 |
+| 代数规则准入与应用 | 当前规则已完成 | 内建规则严格 Z3；自定义规则支持 required/best_effort/trusted，准入与匹配分别审计 |
 | Fact 规则准入 | 已完成但属于信任缺口 | PairSpec gate 决定启用；等式未经验证，报告为 `admitted_unverified` |
-| 统一规则运行 | 已完成 | 不再按操作族筛选；全部已准入规则参与同一次饱和 |
+| 统一规则运行 | 已完成 | 不再按操作族筛选；初始规则与可选 LLM 新规则分别统一饱和 |
 | 具体反例搜索 | 有理数算术子集已完成 | 确定性、精确值 |
 | 浮点定义域 | 精确常量定义域已完成 | 符号定义域返回 `UNKNOWN` |
 | JSON/Markdown 报告 | 已完成 | 确定性、输入哈希与信任边界 |
 | `scf.for` / `tt.reduce` 摘要 | 未实现 | M3 |
 | IEEE/容差浮点证明 | 未实现 | 明确位于当前语义范围之外 |
 | 多 kernel/外部摘要 | 未实现 | 后续工作 |
-| LLM 规则 provenance | 输入与审计已完成 | 可记录 generator/prompt hash；自动生成和模型调用未实现 |
+| LLM 规则辅助 | 可选路径已完成 | DeepSeek 节点选择、条件规则生成、prompt/response hash 与严格 schema；不构成证明 |
 
 ## 与压缩包里程碑的关系
 
@@ -60,7 +65,10 @@ MVP 范围内已完成。PairSpec、结果 schema、Semantic TTIR JSON、锁定�
 
 ### M2：逐点算子扩展与候选生成
 
-部分完成。表达式语言和 egglog 支持核心逐点操作；所有已准入规则在统一图中运行，PairSpec 可声明 SMT 代数规则或 fact-gated 可信规则。运行时值采样器、共享前沿规则综合器以及更大的真实 TTIR 语料尚未实现。
+部分完成。表达式语言和 egglog 支持核心逐点操作；所有已准入规则在统一图中运行，
+PairSpec 可声明 SMT 代数规则或 fact-gated 可信规则。固定秩 shape 参数及
+`a*b=c` 一类机器可读关系已能进入参数化整数证明。运行时值采样器、共享前沿规则
+综合器以及更大的真实 TTIR 语料尚未实现。
 
 ### M3：循环与归一化
 
@@ -68,7 +76,10 @@ MVP 范围内已完成。PairSpec、结果 schema、Semantic TTIR JSON、锁定�
 
 ### M4：自动规则生成
 
-类型化规则 DSL、LLM provenance、SMT 准入和 fact gate 已存在，但没有自动模型调用或候选生成器。LLM 产生的 `algebraic` 规则不能绕过 Z3；非代数候选只能作为带明确警告的 `trusted_fact` 规则进入 PairSpec。尚缺隔离候选存储、边界条件综合和回归晋升策略。
+类型化规则 DSL、LLM provenance、SMT 准入、fact gate 和可选 DeepSeek 两阶段
+辅助已经存在。默认策略不允许代数规则绕过 Z3；PairSpec 可显式选择
+`best_effort` 或 `trusted`，但实际使用的未证明规则会以 `TRUSTED_AXIOM` 和警告
+进入报告。尚缺隔离候选存储、自动边界条件综合、回归晋升策略和独立证明证书。
 
 ## 后续工程步骤
 
@@ -76,8 +87,8 @@ MVP 范围内已完成。PairSpec、结果 schema、Semantic TTIR JSON、锁定�
    真实 launch 选择；该步骤不应替代形式验证，但可缩小提取链风险。
 2. 为非线性 launch/store 域增加显式逻辑 frontier 标注，移除当前
    `pid * lanes + lane` 的逐点约定。
-3. 使用并行的 Z3 位向量证明义务替代具体整数枚举，以支持参数化索引/掩码规则，
-   同时保留有界回归测试。
+3. 将当前 Z3 Int 参数化路径扩展为与 TTIR 溢出完全一致的位向量/混合整数证明，
+   同时保留固定实例的有界回归测试。
 4. 增加带机器可读谓词的条件规则，从 `sqrt/rsqrt/div` 的正值/非零定义域开始。
 5. 只有同时实现覆盖性、唯一性、单位元、地址和归约顺序证明义务后，才为
    `scf.for`、`tt.reduce` 引入 `Theta/Reduce/Tile` 摘要。
