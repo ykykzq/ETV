@@ -1,0 +1,29 @@
+{
+  "format": "etv-semantic-program-v1",
+  "name": "inductor_add_bad_mask",
+  "launch": {
+    "programs": {"op": "ceildiv", "args": [{"var": "X"}, 128]},
+    "lanes": 128
+  },
+  "stores": [
+    {
+      "block": "out_ptr0",
+      "logical_index": {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]},
+      "offset": {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]},
+      "mask": {"op": "lt", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "X_MINUS_ONE"}]},
+      "value": {
+        "op": "fadd",
+        "args": [
+          {"op": "load", "block": "in_ptr0", "offset": {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, "mask": true, "default": {"float": "0"}},
+          {
+            "op": "fmul",
+            "args": [
+              {"op": "load", "block": "in_ptr1", "offset": 0, "mask": true, "default": {"float": "0"}},
+              {"op": "load", "block": "in_ptr2", "offset": {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, "mask": true, "default": {"float": "0"}}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

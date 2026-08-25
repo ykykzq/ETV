@@ -1,0 +1,132 @@
+"""Command-line interface for ETV."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections import Counter
+from pathlib import Path
+from typing import Iterable, Optional
+
+from .model import Expr, Status
+from .reporting import render_markdown, write_report
+from .schema import InputError, load_program
+from .verify import verify_spec
+from .z3_validator import validated_builtin_rules
+
+
+def _walk(expr: Expr) -> Iterable[Expr]:
+    yield expr
+    for arg in expr.args:
+        yield from _walk(arg)
+
+
+def _check(args: argparse.Namespace) -> int:
+    report = verify_spec(Path(args.spec))
+    if args.out:
+        write_report(report, Path(args.out))
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False))
+    else:
+        print(f"{report['status']} {report['pair_id']}: {report['reason']}")
+        if args.out:
+            print(f"artifacts: {Path(args.out).resolve()}")
+    return {
+        Status.PROVED.value: 0,
+        Status.DISPROVED.value: 1,
+        Status.UNKNOWN.value: 2,
+    }[report["status"]]
+
+
+def _inspect(args: argparse.Namespace) -> int:
+    try:
+        program = load_program(Path(args.program))
+    except InputError as exc:
+        print(f"UNKNOWN {getattr(exc, 'code', 'INVALID_INPUT')}: {exc}", file=sys.stderr)
+        return 2
+    operations = Counter()
+    for store in program.stores:
+        for root in (store.logical_index, store.offset, store.mask, store.value):
+            operations.update(expr.op for expr in _walk(root))
+    value = {
+        "name": program.name,
+        "source": str(program.source),
+        "lanes": program.lanes,
+        "stores": len(program.stores),
+        "operations": {key: operations[key] for key in sorted(operations)},
+    }
+    print(json.dumps(value, indent=2, sort_keys=True))
+    return 0
+
+
+def _rules(args: argparse.Namespace) -> int:
+    _, values = validated_builtin_rules()
+    if args.json:
+        print(json.dumps(values, indent=2, sort_keys=True))
+    else:
+        for value in values:
+            result = value.get("validation", {}).get("result", "not-run")
+            print(f"{value['id']}: {value['statement']} [{value['evidence']}, z3={result}]")
+    return 0
+
+
+def _validate_rule(args: argparse.Namespace) -> int:
+    _, values = validated_builtin_rules()
+    selected = [value for value in values if args.rule_id is None or value["id"] == args.rule_id]
+    if not selected:
+        print(f"unknown rule: {args.rule_id}", file=sys.stderr)
+        return 2
+    print(json.dumps(selected, indent=2, sort_keys=True))
+    return 0 if all(value["status"] == "proved" for value in selected) else 1
+
+
+def _explain(args: argparse.Namespace) -> int:
+    try:
+        report = json.loads(Path(args.report).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"cannot read report: {exc}", file=sys.stderr)
+        return 2
+    print(render_markdown(report), end="")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="etv",
+        description="Bounded semantic equivalence verification for TTIR specializations",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    check = subparsers.add_parser("check", help="verify a pair specification")
+    check.add_argument("spec", help="path to an etv-pair-v1 JSON file")
+    check.add_argument("--out", help="directory for report.json and report.md")
+    check.add_argument("--json", action="store_true", help="print the full machine report")
+    check.set_defaults(handler=_check)
+
+    inspect = subparsers.add_parser("inspect", help="inspect a Semantic TTIR program")
+    inspect.add_argument("program")
+    inspect.set_defaults(handler=_inspect)
+
+    rules = subparsers.add_parser("rules", help="list accepted equality rules")
+    rules.add_argument("--json", action="store_true")
+    rules.set_defaults(handler=_rules)
+
+    validate_rule = subparsers.add_parser("validate-rule", help="replay Z3 admission checks")
+    validate_rule.add_argument("rule_id", nargs="?")
+    validate_rule.set_defaults(handler=_validate_rule)
+
+    explain = subparsers.add_parser("explain", help="render a machine report as Markdown")
+    explain.add_argument("report")
+    explain.set_defaults(handler=_explain)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(list(argv) if argv is not None else None)
+    return int(args.handler(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

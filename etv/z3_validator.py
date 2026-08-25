@@ -1,0 +1,83 @@
+"""Z3 admission gate for equality rules used by the e-graph."""
+
+from __future__ import annotations
+
+import hashlib
+from functools import lru_cache
+from typing import Any, Dict, Mapping, Tuple
+
+import z3
+
+from .rules import Pattern, Rule, builtin_rules
+
+
+def _term(pattern: Pattern, variables: Dict[str, Any]) -> Any:
+    if pattern.variable is not None:
+        return variables.setdefault(pattern.variable, z3.Real(pattern.variable))
+    if pattern.op == "const_float":
+        numerator, denominator = pattern.data
+        return z3.RealVal(numerator) / z3.RealVal(denominator)
+    args = [_term(arg, variables) for arg in pattern.args]
+    if pattern.op == "fadd":
+        return args[0] + args[1]
+    if pattern.op == "fsub":
+        return args[0] - args[1]
+    if pattern.op == "fmul":
+        return args[0] * args[1]
+    if pattern.op == "fdiv":
+        return args[0] / args[1]
+    if pattern.op == "fneg":
+        return -args[0]
+    if pattern.op == "fma":
+        return args[0] * args[1] + args[2]
+    raise ValueError(f"Z3 rule validator does not support {pattern.op!r}")
+
+
+def validate_rule(rule: Rule, timeout_ms: int = 2_000) -> dict:
+    variables: Dict[str, Any] = {}
+    try:
+        lhs = _term(rule.lhs, variables)
+        rhs = _term(rule.rhs, variables)
+    except ValueError as exc:
+        return {
+            **rule.to_json(),
+            "status": "rejected",
+            "validation": {"result": "unsupported", "detail": str(exc)},
+        }
+    solver = z3.Solver()
+    solver.set(timeout=timeout_ms)
+    solver.add(lhs != rhs)
+    formula = solver.sexpr()
+    result = solver.check()
+    validation: Dict[str, Any] = {
+        "solver": "z3",
+        "solver_version": z3.get_version_string(),
+        "logic": "quantifier-free nonlinear real arithmetic",
+        "query": "lhs != rhs",
+        "query_sha256": hashlib.sha256(formula.encode("utf-8")).hexdigest(),
+        "result": str(result),
+    }
+    if result == z3.sat:
+        validation["counterexample"] = {
+            declaration.name(): str(result_value)
+            for declaration, result_value in (
+                (declaration, solver.model()[declaration])
+                for declaration in solver.model().decls()
+            )
+        }
+    value = rule.to_json()
+    value["status"] = "proved" if result == z3.unsat else "rejected"
+    value["validation"] = validation
+    return value
+
+
+@lru_cache(maxsize=1)
+def validated_builtin_rules() -> Tuple[Tuple[Rule, ...], Tuple[dict, ...]]:
+    accepted = []
+    results = []
+    for rule in builtin_rules():
+        result = validate_rule(rule)
+        results.append(result)
+        if result["status"] == "proved":
+            accepted.append(rule)
+    return tuple(accepted), tuple(results)

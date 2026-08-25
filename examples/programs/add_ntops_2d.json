@@ -1,0 +1,113 @@
+{
+  "format": "etv-semantic-program-v1",
+  "name": "ntops_add_2d",
+  "launch": {
+    "programs": {"op": "ceildiv", "args": [{"var": "X"}, 128]},
+    "lanes": 128
+  },
+  "stores": [
+    {
+      "block": "nt_output",
+      "logical_index": {
+        "op": "iadd",
+        "args": [
+          {"op": "imul", "args": [{"var": "pid"}, 128]},
+          {"var": "lane"}
+        ]
+      },
+      "offset": {
+        "op": "iadd",
+        "args": [
+          {
+            "op": "imul",
+            "args": [
+              {
+                "op": "idiv",
+                "args": [
+                  {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]},
+                  {"var": "N"}
+                ]
+              },
+              {"var": "output_stride0"}
+            ]
+          },
+          {
+            "op": "irem",
+            "args": [
+              {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]},
+              {"var": "N"}
+            ]
+          }
+        ]
+      },
+      "mask": {
+        "op": "and",
+        "args": [
+          {
+            "op": "lt",
+            "args": [
+              {"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]},
+              {"var": "X"}
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "and",
+                "args": [
+                  {"op": "ge", "args": [{"op": "idiv", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}, 0]},
+                  {"op": "lt", "args": [{"op": "idiv", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}, {"var": "M"}]}
+                ]
+              },
+              {
+                "op": "and",
+                "args": [
+                  {"op": "ge", "args": [{"op": "irem", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}, 0]},
+                  {"op": "lt", "args": [{"op": "irem", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}, {"var": "N"}]}
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "value": {
+        "op": "fadd",
+        "args": [
+          {
+            "op": "load",
+            "block": "nt_input",
+            "offset": {
+              "op": "iadd",
+              "args": [
+                {"op": "imul", "args": [{"op": "idiv", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}, {"var": "input_stride0"}]},
+                {"op": "irem", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}
+              ]
+            },
+            "mask": {"op": "lt", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "X"}]},
+            "default": {"float": "0"}
+          },
+          {
+            "op": "fmul",
+            "args": [
+              {"scalar": "nt_alpha"},
+              {
+                "op": "load",
+                "block": "nt_other",
+                "offset": {
+                  "op": "iadd",
+                  "args": [
+                    {"op": "imul", "args": [{"op": "idiv", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}, {"var": "other_stride0"}]},
+                    {"op": "irem", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "N"}]}
+                  ]
+                },
+                "mask": {"op": "lt", "args": [{"op": "iadd", "args": [{"op": "imul", "args": [{"var": "pid"}, 128]}, {"var": "lane"}]}, {"var": "X"}]},
+                "default": {"float": "0"}
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

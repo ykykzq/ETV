@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "etv"
+version = "0.1.0"
+description = "A bounded semantic equivalence verifier for specialized TTIR kernels"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "ETV contributors"}]
+dependencies = ["z3-solver==4.16.0.0"]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.2", "hypothesis==6.141.1"]
+
+[project.scripts]
+etv = "etv.cli:main"
+
+[tool.setuptools]
+packages = ["etv"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]

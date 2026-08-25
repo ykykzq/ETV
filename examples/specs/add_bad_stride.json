@@ -1,0 +1,20 @@
+{
+  "format": "etv-pair-v1",
+  "pair_id": "add_bad_output_stride",
+  "lhs": "../programs/add_ntops_2d.json",
+  "rhs": "../programs/add_inductor_linear.json",
+  "semantic_mode": "abstract_float",
+  "roles": {
+    "Alpha": {"lhs": {"kind": "scalar", "name": "nt_alpha"}, "rhs": {"kind": "scalar_block", "name": "in_ptr1", "index": 0}},
+    "Input": {"lhs": {"kind": "block", "name": "nt_input"}, "rhs": {"kind": "block", "name": "in_ptr0"}},
+    "Other": {"lhs": {"kind": "block", "name": "nt_other"}, "rhs": {"kind": "block", "name": "in_ptr2"}},
+    "Output": {"lhs": {"kind": "block", "name": "nt_output"}, "rhs": {"kind": "block", "name": "out_ptr0"}}
+  },
+  "facts": {
+    "bindings": {"M": 8, "N": 16, "X": 128, "input_stride0": 16, "other_stride0": 16, "output_stride0": 17},
+    "assumptions": ["deliberate negative case: Output stride is N + 1"],
+    "disjoint": [["Input", "Other", "Alpha", "Output"]]
+  },
+  "contract": {"output_role": "Output", "output_numel": {"var": "X"}, "require_full_coverage": true, "require_disjoint": ["Input", "Other", "Alpha", "Output"]},
+  "limits": {"max_iterations": 8, "max_enodes": 20000, "timeout_ms": 5000}
+}
