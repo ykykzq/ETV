@@ -170,13 +170,21 @@ class EGraph:
         started = time.monotonic()
         iterations = 0
         stop_reason = "SATURATED"
+        iteration_trace: list[dict] = []
 
         enodes, eclasses = self._counts()
         if enodes > limits.max_enodes:
-            return self._stats(iterations, enodes, eclasses, counts, "ENODE_LIMIT")
+            return self._stats(
+                iterations, enodes, eclasses, counts, "ENODE_LIMIT", iteration_trace
+            )
         if not admitted:
             return self._stats(
-                iterations, enodes, eclasses, counts, "NO_ADMITTED_RULES"
+                iterations,
+                enodes,
+                eclasses,
+                counts,
+                "NO_ADMITTED_RULES",
+                iteration_trace,
             )
 
         unified = ruleset(name=f"etv_unified_{self._next_ruleset}")
@@ -186,12 +194,31 @@ class EGraph:
 
         for iteration in range(limits.max_iterations):
             iterations = iteration + 1
+            before_enodes, before_eclasses = self._counts()
             report = self._graph.run(1, ruleset=unified)
+            iteration_matches: Counter[str] = Counter()
             for rule_decl, match_count in report.num_matches_per_rule.items():
                 rule_id = getattr(rule_decl, "name", None)
                 if rule_id is not None:
                     counts[rule_id] += match_count
+                    iteration_matches[rule_id] += match_count
             enodes, eclasses = self._counts()
+            iteration_trace.append(
+                {
+                    "iteration": iterations,
+                    "before": {
+                        "enodes": before_enodes,
+                        "eclasses": before_eclasses,
+                    },
+                    "after": {"enodes": enodes, "eclasses": eclasses},
+                    "rule_matches": {
+                        rule_id: iteration_matches[rule_id]
+                        for rule_id in sorted(iteration_matches)
+                        if iteration_matches[rule_id]
+                    },
+                    "updated": bool(report.updated),
+                }
+            )
             if enodes > limits.max_enodes:
                 stop_reason = "ENODE_LIMIT"
                 break
@@ -214,7 +241,9 @@ class EGraph:
                     }
                 )
 
-        return self._stats(iterations, enodes, eclasses, counts, stop_reason)
+        return self._stats(
+            iterations, enodes, eclasses, counts, stop_reason, iteration_trace
+        )
 
     def _stats(
         self,
@@ -223,6 +252,7 @@ class EGraph:
         eclasses: int,
         counts: Mapping[str, int],
         stop_reason: str,
+        iteration_trace: list[dict],
     ) -> dict:
         ordered_counts = {
             rule_id: counts[rule_id] for rule_id in sorted(counts) if counts[rule_id]
@@ -235,4 +265,5 @@ class EGraph:
             "rule_matches": ordered_counts,
             "rule_applications": ordered_counts,
             "stop_reason": stop_reason,
+            "iteration_trace": iteration_trace,
         }

@@ -24,8 +24,9 @@ def test_loads_example_program_and_spec():
 def test_loads_side_specific_bindings_from_real_pair():
     spec = load_pair_spec(ROOT / "examples/add/pair.json")
 
-    assert spec.facts.for_side("lhs").bindings["arg4"] == 8
-    assert spec.facts.for_side("rhs").bindings["arg4"] == 128
+    assert spec.facts.for_side("lhs").bindings["arg4"].render() == "var(a)"
+    assert spec.facts.for_side("rhs").bindings["torch_dim0"].render() == "var(a)"
+    assert spec.facts.for_side("rhs").bindings["torch_dim1"].render() == "var(b)"
 
 
 def test_unknown_schema_key_is_rejected(tmp_path):
@@ -94,6 +95,20 @@ def test_loads_fact_gated_rewrite_with_llm_provenance(tmp_path):
     assert declaration.kind == "trusted_fact"
     assert declaration.generated_by == "llm"
     assert declaration.fact_requirements[0].evaluate(spec.facts)
+
+
+def test_partitioning_requires_explicit_llm_enablement(tmp_path):
+    source = json.loads(
+        (FIXTURES / "specs/add_proved.json").read_text(encoding="utf-8")
+    )
+    source["lhs"] = str(FIXTURES / "programs/add_ntops_2d.json")
+    source["rhs"] = str(FIXTURES / "programs/add_inductor_linear.json")
+    source["partition"] = {"enabled": True}
+    path = tmp_path / "partition-without-llm.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    with pytest.raises(InputError, match="requires llm.enabled"):
+        load_pair_spec(path)
 
 
 def test_trusted_rewrite_without_fact_gate_is_rejected(tmp_path):

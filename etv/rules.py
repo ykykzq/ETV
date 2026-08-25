@@ -138,6 +138,18 @@ def render_pattern(pattern: Pattern) -> str:
     return f"{pattern.op}{suffix}({', '.join(render_pattern(arg) for arg in pattern.args)})"
 
 
+def pattern_from_expr(expression: Expr) -> Pattern:
+    """Build an exact ground pattern for an internal expression."""
+
+    return node(
+        expression.op,
+        *(pattern_from_expr(argument) for argument in expression.args),
+        data=expression.data,
+        match_data=True,
+        sort=expression.sort,
+    )
+
+
 def builtin_rules() -> Tuple[Rule, ...]:
     a, b, c = var("a"), var("b"), var("c")
     schema = "z3_real_unsat"

@@ -1,9 +1,10 @@
-"""End-to-end bounded translation validation for Semantic TTIR pairs."""
+"""End-to-end symbolic translation validation for ETV program pairs."""
 
 from __future__ import annotations
 
 import hashlib
 import itertools
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
@@ -16,12 +17,15 @@ from .model import (
     Expr,
     InputError,
     PairSpec,
+    PartitionConfig,
     ProofLevel,
+    Program,
     Sort,
     Status,
     UnsupportedSemantics,
     pairwise,
 )
+from .partition import PartitionError, PartitionPlan, propose_partition_plan
 from .schema import load_pair_spec
 from .parametric import ParametricFailure, verify_parametric_pair
 from .ttir import load_program_artifact
@@ -113,8 +117,8 @@ def _base_report(spec: PairSpec) -> dict:
         for group in spec.facts.disjoint_groups
     )
     return {
-        "schema_version": 3,
-        "tool": {"name": "ETV", "version": "0.4.0"},
+        "schema_version": 4,
+        "tool": {"name": "ETV", "version": "0.5.0"},
         "pair_id": spec.pair_id,
         "status": Status.UNKNOWN.value,
         "reason": "NOT_RUN",
@@ -159,6 +163,7 @@ def _base_report(spec: PairSpec) -> dict:
             "does_not_prove": [
                 "IEEE-754 or bitwise GPU equality",
                 "formal correctness of the raw-TTIR-to-Semantic-TTIR lifting implementation",
+                "formal correctness of the Torch-Prims-to-ETV lifting implementation",
                 (
                     "dynamic rank, unbounded loops, or shapes outside the declared parameter domain"
                     if spec.facts.parameters
@@ -194,8 +199,8 @@ def _finish(
 
 def _invalid_report(path: Path, exc: Exception) -> dict:
     return {
-        "schema_version": 3,
-        "tool": {"name": "ETV", "version": "0.4.0"},
+        "schema_version": 4,
+        "tool": {"name": "ETV", "version": "0.5.0"},
         "pair_id": path.stem,
         "status": Status.UNKNOWN.value,
         "reason": getattr(exc, "code", "INVALID_INPUT"),
@@ -445,15 +450,29 @@ def _combine_saturation(first: dict, second: dict) -> dict:
             key: matches[key] for key in sorted(matches) if matches[key]
         },
         "stop_reason": second.get("stop_reason", first.get("stop_reason")),
+        "phase": "MULTI_PHASE",
+        "iteration_trace": [
+            *first.get("iteration_trace", []),
+            *second.get("iteration_trace", []),
+        ],
         "phases": [first, second],
     }
 
 
-def _complete_compute_proof(
+def _label_saturation(stats: dict, phase: str) -> dict:
+    stats["phase"] = phase
+    for item in stats.get("iteration_trace", []):
+        item["phase"] = phase
+    return stats
+
+
+def _complete_whole_compute_proof(
     report: dict,
     spec: PairSpec,
     root_expressions: Sequence[Tuple[Any, Expr, Expr]],
     store_levels: Sequence[ProofLevel],
+    relational_rules: Sequence[Any] = (),
+    relational_admission: Sequence[Mapping[str, Any]] = (),
 ) -> dict:
     definedness_issues = []
     for logical_index, lhs_expression, rhs_expression in root_expressions:
@@ -487,7 +506,9 @@ def _complete_compute_proof(
         )
     )
 
-    accepted_rules, rule_admission = admitted_rules(spec)
+    ordinary_rules, ordinary_admission = admitted_rules(spec)
+    accepted_rules = tuple(relational_rules) + tuple(ordinary_rules)
+    rule_admission = tuple(relational_admission) + tuple(ordinary_admission)
     egraph = EGraph()
     root_pairs = [
         (
@@ -503,8 +524,34 @@ def _complete_compute_proof(
     initially_unmatched = [
         item for item in root_pairs if not egraph.equivalent(item[3], item[4])
     ]
-    if initially_unmatched:
-        saturation = egraph.saturate(accepted_rules, spec.limits)
+    initial_state = {
+        "enodes": egraph.enode_count,
+        "eclasses": egraph.eclass_count,
+        "unmatched_root_pairs": len(initially_unmatched),
+        "roots": [
+            {"label": str(label), "lhs": lhs.render(), "rhs": rhs.render()}
+            for label, lhs, rhs, _, _ in root_pairs
+        ],
+    }
+    unmatched_after_facts = initially_unmatched
+    if initially_unmatched and relational_rules:
+        saturation = _label_saturation(
+            egraph.saturate(relational_rules, spec.limits),
+            "FACT_DERIVED_RELATIONAL_REWRITES",
+        )
+        unmatched_after_facts = [
+            item for item in root_pairs if not egraph.equivalent(item[3], item[4])
+        ]
+        if unmatched_after_facts and ordinary_rules:
+            algebraic_saturation = _label_saturation(
+                egraph.saturate(ordinary_rules, spec.limits),
+                "ALGEBRAIC_REWRITES",
+            )
+            saturation = _combine_saturation(saturation, algebraic_saturation)
+    elif initially_unmatched:
+        saturation = _label_saturation(
+            egraph.saturate(ordinary_rules, spec.limits), "ALGEBRAIC_REWRITES"
+        )
     else:
         saturation = {
             "backend": egraph.backend,
@@ -514,6 +561,7 @@ def _complete_compute_proof(
             "rule_matches": {},
             "rule_applications": {},
             "stop_reason": "ROOTS_ALREADY_CONGRUENT",
+            "phase": "NO_REWRITE_REQUIRED",
         }
 
     unmatched = [item for item in root_pairs if not egraph.equivalent(item[3], item[4])]
@@ -523,8 +571,17 @@ def _complete_compute_proof(
             assistance = propose_rules(spec, candidates)
             report["proof"]["llm_assistance"] = dict(assistance.audit)
             if assistance.rules:
-                accepted_rules, rule_admission = admitted_rules(spec, assistance.rules)
-                llm_saturation = egraph.saturate(accepted_rules, spec.limits)
+                ordinary_rules, ordinary_admission = admitted_rules(
+                    spec, assistance.rules
+                )
+                accepted_rules = tuple(relational_rules) + tuple(ordinary_rules)
+                rule_admission = tuple(relational_admission) + tuple(
+                    ordinary_admission
+                )
+                llm_saturation = _label_saturation(
+                    egraph.saturate(ordinary_rules, spec.limits),
+                    "LLM_ASSISTED_REWRITES",
+                )
                 saturation = _combine_saturation(saturation, llm_saturation)
                 unmatched = [
                     item
@@ -568,6 +625,11 @@ def _complete_compute_proof(
 
     report["proof"]["egraph"] = {
         "stats": saturation,
+        "initial_state": initial_state,
+        "after_fact_rewrites": {
+            "unmatched_root_pairs": len(unmatched_after_facts),
+            "rules": [rule.rule_id for rule in relational_rules],
+        },
         "root_pairs": len(root_pairs),
         "equivalent_root_pairs": len(root_pairs) - len(unmatched),
         "admitted_rule_ids": [rule.rule_id for rule in accepted_rules],
@@ -630,6 +692,11 @@ def _complete_compute_proof(
         for rule_id in matched_ids
     ):
         used_levels.append(ProofLevel.ALGEBRAIC)
+    if any(
+        admission_by_id.get(rule_id, {}).get("kind") == "relational"
+        for rule_id in matched_ids
+    ):
+        used_levels.append(ProofLevel.PARAMETRIC_SMT)
     if unverified_rule_uses:
         used_levels.append(ProofLevel.TRUSTED_AXIOM)
     report["blocks"].append(
@@ -660,6 +727,315 @@ def _complete_compute_proof(
     return _finish(report, Status.PROVED, "OBSERVABLE_MEMORY_EQUIVALENT")
 
 
+def _merge_rule_logs(reports: Sequence[Mapping[str, Any]]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for item in reports:
+        for entry in item["proof"]["egraph"]["rule_log"]:
+            if entry["id"] not in merged:
+                merged[entry["id"]] = {**dict(entry), "matches": 0, "used": False}
+            current = merged[entry["id"]]
+            current["matches"] = current.get("matches", 0) + entry.get("matches", 0)
+            current["used"] = current["matches"] > 0
+    return list(merged.values())
+
+
+def _partitioned_egraph_report(
+    plan: PartitionPlan, subreports: Sequence[Mapping[str, Any]]
+) -> dict:
+    egraphs = [item["proof"]["egraph"] for item in subreports]
+    rule_log = _merge_rule_logs(subreports)
+    rule_matches = {
+        entry["id"]: entry["matches"] for entry in rule_log if entry["matches"]
+    }
+    admitted_rule_ids = list(
+        dict.fromkeys(
+            rule_id
+            for egraph in egraphs
+            for rule_id in egraph["admitted_rule_ids"]
+        )
+    )
+    root_pairs = sum(item["root_pairs"] for item in egraphs)
+    iteration_trace = [
+        {
+            **trace,
+            "subgraph": batch.partition_id,
+            "phase": f"SUBGRAPH[{batch.partition_id}]/{trace.get('phase', 'UNSPECIFIED')}",
+        }
+        for batch, egraph in zip(plan.batches, egraphs)
+        for trace in egraph["stats"].get("iteration_trace", [])
+    ]
+    return {
+        "stats": {
+            "backend": egraphs[0]["stats"]["backend"],
+            "phase": "PAIRED_SUBGRAPH_DECOMPOSITION",
+            "iterations": sum(item["stats"]["iterations"] for item in egraphs),
+            "enodes": sum(item["stats"]["enodes"] for item in egraphs),
+            "eclasses": sum(item["stats"]["eclasses"] for item in egraphs),
+            "rule_matches": rule_matches,
+            "rule_applications": rule_matches,
+            "stop_reason": "ALL_SUBGRAPHS_EQUIVALENT",
+            "subgraph_count": len(egraphs),
+            "iteration_trace": iteration_trace,
+            "phases": [
+                {
+                    "subgraph": batch.partition_id,
+                    **egraph["stats"],
+                }
+                for batch, egraph in zip(plan.batches, egraphs)
+            ],
+        },
+        "initial_state": {
+            "unmatched_root_pairs": sum(
+                item["initial_state"]["unmatched_root_pairs"] for item in egraphs
+            ),
+            "roots": [],
+        },
+        "after_fact_rewrites": {
+            "unmatched_root_pairs": sum(
+                item["after_fact_rewrites"]["unmatched_root_pairs"]
+                for item in egraphs
+            ),
+            "rules": list(
+                dict.fromkeys(
+                    rule_id
+                    for item in egraphs
+                    for rule_id in item["after_fact_rewrites"]["rules"]
+                )
+            ),
+        },
+        "root_pairs": root_pairs,
+        "equivalent_root_pairs": root_pairs,
+        "admitted_rule_ids": admitted_rule_ids,
+        "rule_log": rule_log,
+        "rule_application": [
+            {
+                "id": entry["id"],
+                "matches": entry["matches"],
+                "used": entry["used"],
+                "admission_status": entry["status"],
+            }
+            for entry in rule_log
+        ],
+        "accepted_rules": list(
+            {
+                entry["id"]: entry
+                for item in egraphs
+                for entry in item["accepted_rules"]
+            }.values()
+        ),
+        "trusted_rule_uses": [
+            entry
+            for entry in rule_log
+            if entry["status"] == "admitted_unverified"
+            and entry["kind"] == "trusted_fact"
+            and entry["used"]
+        ],
+        "unverified_rule_uses": [
+            entry
+            for entry in rule_log
+            if entry["status"] == "admitted_unverified" and entry["used"]
+        ],
+        "subgraphs": [
+            {
+                "id": batch.partition_id,
+                "family": batch.family_id,
+                "semantic": batch.semantic,
+                "dependencies": list(batch.dependencies),
+                "root_pairs": len(batch.root_pairs),
+                "egraph": subreport["proof"]["egraph"],
+            }
+            for batch, subreport in zip(plan.batches, subreports)
+        ],
+    }
+
+
+def _prove_partition_plan(
+    report: dict,
+    spec: PairSpec,
+    plan: PartitionPlan,
+    store_levels: Sequence[ProofLevel],
+    relational_rules: Sequence[Any],
+    relational_admission: Sequence[Mapping[str, Any]],
+) -> Optional[dict]:
+    sub_spec = replace(
+        spec,
+        partition=PartitionConfig(),
+        llm=replace(spec.llm, enabled=False),
+    )
+    subreports = []
+    for batch in plan.batches:
+        subreport = _complete_whole_compute_proof(
+            _base_report(sub_spec),
+            sub_spec,
+            batch.root_pairs,
+            (ProofLevel.DECOMPOSITION, ProofLevel.CONGRUENCE),
+            relational_rules,
+            relational_admission,
+        )
+        subreports.append(subreport)
+        if subreport["status"] != Status.PROVED.value:
+            report["proof"]["partitioning"] = {
+                **dict(plan.audit),
+                "status": "verification_failed",
+                "failed_partition": batch.partition_id,
+                "subgraph_status": subreport["status"],
+                "subgraph_reason": subreport["reason"],
+                "fallback": "whole_program",
+            }
+            report["blocks"].append(
+                _block(
+                    "SUBGRAPH_PARTITION",
+                    Status.UNKNOWN,
+                    "a proposed subgraph obligation was not proved; using whole-program verification",
+                    reason="SUBGRAPH_PROOF_FAILED",
+                    details={
+                        "failed_partition": batch.partition_id,
+                        "subgraph_status": subreport["status"],
+                        "subgraph_reason": subreport["reason"],
+                        "fallback": "whole_program",
+                    },
+                    required_for_final=False,
+                )
+            )
+            return None
+
+    egraph_report = _partitioned_egraph_report(plan, subreports)
+    report["proof"]["partitioning"] = {
+        **dict(plan.audit),
+        "status": "proved",
+        "proof_order": [batch.partition_id for batch in plan.batches],
+        "composition": (
+            "proved child pairs are replaced by identical typed boundary inputs "
+            "before proving each parent pair"
+        ),
+    }
+    report["proof"]["rule_admission"] = subreports[0]["proof"]["rule_admission"]
+    report["proof"]["rule_validation"] = subreports[0]["proof"]["rule_validation"]
+    report["proof"]["egraph"] = egraph_report
+    unverified = egraph_report["unverified_rule_uses"]
+    if unverified:
+        trusted_ids = ", ".join(item["id"] for item in unverified)
+        report["trusted_axioms"].append(
+            f"unverified applied rewrite rule(s): {trusted_ids}"
+        )
+        report["guarantees"]["does_not_prove"].append(
+            "soundness of rewrite rules admitted without a successful validation proof"
+        )
+
+    report["blocks"].append(
+        _block(
+            "SUBGRAPH_PARTITION",
+            Status.PROVED,
+            "the LLM proposal passed structural checks and every paired subgraph was proved",
+            (ProofLevel.STRUCTURAL, ProofLevel.DECOMPOSITION),
+            details={
+                "partitions": len(plan.batches),
+                "proof_order": [batch.partition_id for batch in plan.batches],
+                "whole_program_llm_calls": 1,
+            },
+        )
+    )
+    report["blocks"].append(
+        _block(
+            "DEFINEDNESS",
+            Status.PROVED,
+            "all partial floating operations in every exclusive subgraph have proved domains",
+            (ProofLevel.STRUCTURAL, ProofLevel.DECOMPOSITION),
+        )
+    )
+    compute_levels = [ProofLevel.CONGRUENCE, ProofLevel.DECOMPOSITION]
+    for subreport in subreports:
+        compute = next(
+            block for block in subreport["blocks"] if block["kind"] == "COMPUTE"
+        )
+        for level in compute["proof_levels"]:
+            parsed = ProofLevel(level)
+            if parsed not in compute_levels:
+                compute_levels.append(parsed)
+    report["blocks"].append(
+        _block(
+            "COMPUTE",
+            Status.PROVED,
+            "all dependency-ordered paired subgraphs are equivalent and compose to equal roots",
+            compute_levels,
+            details={
+                "subgraphs": len(plan.batches),
+                "root_pairs": egraph_report["root_pairs"],
+                "rule_matches": egraph_report["stats"]["rule_matches"],
+            },
+        )
+    )
+    report["blocks"].append(
+        _block(
+            "STORE",
+            Status.PROVED,
+            "same domain, address, composed value, and frame condition imply equal final Output memory",
+            tuple(store_levels) + (ProofLevel.DECOMPOSITION,),
+            details={
+                "memory_model": "store(M, Output, offset, value, mask) -> M'",
+                "frame_condition": "all non-Output logical blocks are unchanged",
+            },
+        )
+    )
+    return _finish(report, Status.PROVED, "OBSERVABLE_MEMORY_EQUIVALENT")
+
+
+def _complete_compute_proof(
+    report: dict,
+    spec: PairSpec,
+    lhs_program: Program,
+    rhs_program: Program,
+    root_expressions: Sequence[Tuple[Any, Expr, Expr]],
+    store_levels: Sequence[ProofLevel],
+    relational_rules: Sequence[Any] = (),
+    relational_admission: Sequence[Mapping[str, Any]] = (),
+) -> dict:
+    if spec.partition.enabled:
+        try:
+            plan = propose_partition_plan(
+                spec, lhs_program, rhs_program, root_expressions
+            )
+            partitioned = _prove_partition_plan(
+                report,
+                spec,
+                plan,
+                store_levels,
+                relational_rules,
+                relational_admission,
+            )
+            if partitioned is not None:
+                return partitioned
+        except LLMError as exc:
+            failure_audit = exc.audit if isinstance(exc, PartitionError) else {}
+            report["proof"]["partitioning"] = {
+                "enabled": True,
+                "status": "proposal_rejected",
+                "provider": spec.llm.provider,
+                "configured_model": spec.llm.model,
+                **failure_audit,
+                "error": str(exc),
+                "fallback": "whole_program",
+            }
+            report["blocks"].append(
+                _block(
+                    "SUBGRAPH_PARTITION",
+                    Status.UNKNOWN,
+                    "the LLM partition proposal failed machine checks; using whole-program verification",
+                    reason="SUBGRAPH_PARTITION_REJECTED",
+                    details={"error": str(exc), "fallback": "whole_program"},
+                    required_for_final=False,
+                )
+            )
+    return _complete_whole_compute_proof(
+        report,
+        spec,
+        root_expressions,
+        store_levels,
+        relational_rules,
+        relational_admission,
+    )
+
+
 def verify_pair(spec: PairSpec) -> dict:
     report = _base_report(spec)
     try:
@@ -688,6 +1064,38 @@ def verify_pair(spec: PairSpec) -> dict:
                 details=report["inputs"]["frontends"],
             )
         )
+    if (
+        lhs_program.frontend == "torch_prims_json"
+        or rhs_program.frontend == "torch_prims_json"
+    ):
+        report["trusted_axioms"].append(
+            "ETV Torch-Prims-to-internal-IR lifting implementation"
+        )
+        report["blocks"].append(
+            _block(
+                "FRONTEND",
+                Status.PROVED,
+                "the strict fixed-rank Torch Prims graph was type-checked and "
+                "lifted directly without TorchInductor",
+                (ProofLevel.STRUCTURAL,),
+                details=report["inputs"]["frontends"],
+            )
+        )
+    heterogeneous_symbolic_pair = {
+        lhs_program.frontend,
+        rhs_program.frontend,
+    } == {"libtriton", "torch_prims_json"}
+    if heterogeneous_symbolic_pair and not spec.facts.parameters:
+        report["blocks"].append(
+            _block(
+                "PARAMETER_DOMAIN",
+                Status.UNKNOWN,
+                "TTIR-versus-Prims verification requires fixed-rank symbolic "
+                "parameters, including singleton domains for fixed specializations",
+                reason="SYMBOLIC_FACTS_REQUIRED",
+            )
+        )
+        return _finish(report, Status.UNKNOWN, "SYMBOLIC_FACTS_REQUIRED")
 
     if spec.semantic_mode != "abstract_float":
         report["unsupported"].append(
@@ -772,8 +1180,12 @@ def verify_pair(spec: PairSpec) -> dict:
         return _complete_compute_proof(
             report,
             spec,
+            lhs_program,
+            rhs_program,
             symbolic.root_pairs,
             (ProofLevel.PARAMETRIC_SMT, ProofLevel.CONGRUENCE),
+            symbolic.rewrite_rules,
+            symbolic.rewrite_admission,
         )
 
     try:
@@ -988,6 +1400,8 @@ def verify_pair(spec: PairSpec) -> dict:
     return _complete_compute_proof(
         report,
         spec,
+        lhs_program,
+        rhs_program,
         root_expressions,
         (ProofLevel.BOUNDED_EXHAUSTIVE, ProofLevel.CONGRUENCE),
     )

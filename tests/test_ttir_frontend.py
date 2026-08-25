@@ -38,9 +38,7 @@ def test_real_add_artifacts_match_provenance():
     assert "/private/tmp" not in (root / "ttir/ntops_add.ttir").read_text(
         encoding="utf-8"
     )
-    assert "/private/tmp" not in (root / "ttir/torch_inductor_add.ttir").read_text(
-        encoding="utf-8"
-    )
+    assert (root / "prims/torch_add.prims.json").is_file()
 
 
 def test_pair_spec_accepts_explicit_ttir_frontends():
@@ -48,7 +46,9 @@ def test_pair_spec_accepts_explicit_ttir_frontends():
 
     assert spec.lhs_frontend.kind == "ttir"
     assert spec.lhs_frontend.function == "ntops_add_kernel"
-    assert spec.lhs_frontend.programs.data == 1
+    assert spec.lhs_frontend.programs.render() == "ceildiv(var(c), 256)"
+    assert spec.rhs_frontend.kind == "prims"
+    assert spec.rhs_frontend.programs is None
 
 
 def test_parametric_add_pair_declares_symbolic_raw_ttir_launches():
@@ -56,7 +56,8 @@ def test_parametric_add_pair_declares_symbolic_raw_ttir_launches():
 
     assert spec.lhs_frontend.kind == "ttir"
     assert spec.lhs_frontend.programs.render() == "ceildiv(var(c), 256)"
-    assert spec.rhs_frontend.programs.render() == "ceildiv(var(c), 128)"
+    assert spec.rhs_frontend.kind == "prims"
+    assert spec.rhs_frontend.programs is None
     assert spec.facts.parameters["a"].minimum == 1
     assert spec.facts.parameters["c"].maximum == 2**31 - 1
     assert spec.facts.constraints[0].render() == "eq(imul(var(a), var(b)), var(c))"
@@ -64,14 +65,14 @@ def test_parametric_add_pair_declares_symbolic_raw_ttir_launches():
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
 def test_libtriton_snapshot_is_complete_and_stable():
-    path = ROOT / "examples/add/ttir/torch_inductor_add.ttir"
+    path = ROOT / "examples/add/ttir/ntops_add.ttir"
 
     first = parse_ttir(path)
     second = parse_ttir(path)
 
-    assert first.function == "triton_poi_fused_0"
+    assert first.function == "ntops_add_kernel"
     assert first.parser_version == REQUIRED_TRITON_VERSION
-    assert len(first.arguments) == 5
+    assert len(first.arguments) == 16
     assert {"tt.get_program_id", "tt.load", "tt.store", "arith.mulf"} <= {
         operation.name for operation in first.operations
     }
@@ -134,6 +135,10 @@ def test_raw_ttir_pair_is_lifted_and_proved():
         "name": "libtriton",
         "version": REQUIRED_TRITON_VERSION,
     }
+    assert report["inputs"]["frontends"]["rhs"] == {
+        "name": "torch_prims_json",
+        "version": "1",
+    }
     assert any(block["kind"] == "FRONTEND" for block in report["blocks"])
 
 
@@ -151,7 +156,31 @@ def test_parametric_raw_ttir_pair_is_lifted_and_proved():
         "version": REQUIRED_TRITON_VERSION,
     }
     assert report["proof"]["parametric_domain"]["complete_for_parameter_domain"] is True
-    assert report["proof"]["egraph"]["root_pairs"] == 1
+    assert len(report["proof"]["parametric_domain"]["checks"]) == 45
+    egraph = report["proof"]["egraph"]
+    assert egraph["root_pairs"] == 1
+    assert egraph["initial_state"] | {"roots": []} == {
+        "enodes": 40,
+        "eclasses": 40,
+        "unmatched_root_pairs": 1,
+        "roots": [],
+    }
+    assert egraph["after_fact_rewrites"]["unmatched_root_pairs"] == 0
+    assert egraph["stats"]["enodes"] == 42
+    assert egraph["stats"]["eclasses"] == 34
+    assert egraph["stats"]["phase"] == "FACT_DERIVED_RELATIONAL_REWRITES"
+    assert {
+        item["id"] for item in egraph["rule_application"] if item["used"]
+    } == {
+        "parametric_load_lhs_0",
+        "parametric_scalar_role_lhs_1",
+        "parametric_load_lhs_2",
+        "parametric_store_lhs",
+        "parametric_load_rhs_0",
+        "parametric_load_rhs_1",
+        "parametric_load_rhs_2",
+        "parametric_store_rhs",
+    }
     assert "PARAMETRIC_SMT" in next(
         block["proof_levels"]
         for block in report["blocks"]
@@ -166,7 +195,7 @@ def test_parse_cli_writes_snapshot(tmp_path):
     result = main(
         [
             "parse",
-            str(ROOT / "examples/add/ttir/torch_inductor_add.ttir"),
+            str(ROOT / "examples/add/ttir/ntops_add.ttir"),
             "--out",
             str(output),
             "--no-assembly",

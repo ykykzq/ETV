@@ -1,4 +1,4 @@
-"""SMT-backed verification for fixed-rank programs with symbolic dimensions."""
+"""Fixed-rank symbolic obligations and fact-derived relational rewrites."""
 
 from __future__ import annotations
 
@@ -9,7 +9,17 @@ from typing import Any, Mapping, Optional, Sequence
 import z3
 
 from .evaluator import SideRoles, build_side_roles
-from .model import Expr, PairSpec, Program, ProofLevel, Sort, Status
+from .model import (
+    Expr,
+    PairSpec,
+    Program,
+    ProofLevel,
+    Sort,
+    Status,
+    bool_const,
+    int_const,
+)
+from .rules import Rule, node, pattern_from_expr, render_pattern, var
 
 I32_MIN = -(2**31)
 I32_MAX = 2**31 - 1
@@ -38,6 +48,8 @@ class ParametricResult:
     blocks: tuple[dict, ...]
     proof: Mapping[str, Any]
     root_pairs: tuple[tuple[str, Expr, Expr], ...]
+    rewrite_rules: tuple[Rule, ...] = ()
+    rewrite_admission: tuple[dict, ...] = ()
 
 
 class ParametricFailure(RuntimeError):
@@ -231,53 +243,51 @@ class Prover:
         summary: str,
         witnesses: Sequence[Any] = (),
         status: Status = Status.UNKNOWN,
-    ) -> None:
+    ) -> dict:
         result = self.check_bad(name, bad, witnesses)
         if result["result"] != "unsat":
             raise ParametricFailure(block, reason, summary, result, status=status)
+        return result
 
-    def equivalent(self, name: str, antecedent: Any, lhs: Any, rhs: Any) -> bool:
-        return self.check_bad(name, z3.And(antecedent, lhs != rhs))["result"] == "unsat"
-
-
-class LeafRegistry:
-    def __init__(self, prover: Prover, antecedent: Any) -> None:
-        self.prover = prover
-        self.antecedent = antecedent
-        self.entries: dict[str, list[tuple[Any, Expr]]] = {}
-
-    def intern(self, role: str, offset: Any) -> Expr:
-        entries = self.entries.setdefault(role, [])
-        for index, (known, token) in enumerate(entries):
-            if self.prover.equivalent(
-                f"read-offset:{role}:{index}", self.antecedent, known, offset
-            ):
-                return token
-        token = Expr(
-            "var", data=f"symbolic_offset_{role}_{len(entries)}", sort=Sort.INT
-        )
-        entries.append((offset, token))
-        return token
+def _substitute(expression: Expr, env: Mapping[str, Expr]) -> Expr:
+    if expression.op == "var" and str(expression.data) in env:
+        return env[str(expression.data)]
+    if not expression.args:
+        return expression
+    return Expr(
+        expression.op,
+        args=tuple(_substitute(argument, env) for argument in expression.args),
+        data=expression.data,
+        sort=expression.sort,
+    )
 
 
-class SymbolicValueEvaluator:
+class SymbolicValueRewriter:
     def __init__(
         self,
         context: SMTContext,
         roles: SideRoles,
         prover: Prover,
         antecedent: Any,
-        registry: LeafRegistry,
-        env: Mapping[str, Any],
+        smt_env: Mapping[str, Any],
+        expr_env: Mapping[str, Expr],
+        canonical_index: Expr,
         side: str,
+        rules: list[Rule],
+        admissions: list[dict],
     ) -> None:
         self.context = context
         self.roles = roles
         self.prover = prover
         self.antecedent = antecedent
-        self.registry = registry
-        self.env = env
+        self.smt_env = smt_env
+        self.expr_env = expr_env
+        self.canonical_index = canonical_index
         self.side = side
+        self.rules = rules
+        self.admissions = admissions
+        self._rule_keys: set[tuple[str, str]] = set()
+        self._next_rule = 0
 
     def _defined(self, term: SMTTerm, label: str) -> None:
         self.prover.require_unsat(
@@ -287,6 +297,43 @@ class SymbolicValueEvaluator:
             z3.And(self.antecedent, z3.Not(_and(term.conditions))),
             f"integer definedness was not proved for {label}",
         )
+
+    def _add_rule(
+        self,
+        category: str,
+        lhs: Expr,
+        rhs: Expr,
+        validation: Mapping[str, Any],
+        evidence: ProofLevel = ProofLevel.PARAMETRIC_SMT,
+    ) -> None:
+        lhs_pattern = pattern_from_expr(lhs)
+        rhs_pattern = pattern_from_expr(rhs)
+        key = (render_pattern(lhs_pattern), render_pattern(rhs_pattern))
+        if key in self._rule_keys:
+            return
+        self._rule_keys.add(key)
+        rule_id = f"parametric_{category}_{self.side}_{self._next_rule}"
+        self._next_rule += 1
+        rule = Rule(
+            rule_id=rule_id,
+            lhs=lhs_pattern,
+            rhs=rhs_pattern,
+            evidence=evidence,
+            validator=(
+                "pair_spec_role_mapping"
+                if evidence == ProofLevel.TRUSTED_AXIOM
+                else "pair_facts_and_z3_unsat"
+            ),
+            statement=f"{lhs.render()} == {rhs.render()}",
+            requires=("PairSpec role mapping", "symbolic output domain"),
+            kind="relational",
+            source="etv.parametric",
+        )
+        admission = rule.to_json()
+        admission["status"] = "proved"
+        admission["validation"] = dict(validation)
+        self.rules.append(rule)
+        self.admissions.append(admission)
 
     def value(self, expression: Expr) -> Expr:
         op = expression.op
@@ -298,62 +345,134 @@ class SymbolicValueEvaluator:
                 raise ParametricFailure(
                     "LOAD", "MISSING_ROLE", f"unmapped scalar {expression.data!r}", {}
                 )
-            return Expr("input", data=logical, sort=Sort.FLOAT)
+            physical = Expr(
+                "input", data=f"{self.side}:{expression.data}", sort=Sort.FLOAT
+            )
+            canonical = Expr("input", data=logical, sort=Sort.FLOAT)
+            self._add_rule(
+                "scalar_role",
+                physical,
+                canonical,
+                {
+                    "result": "pair_fact",
+                    "fact": {
+                        "kind": "role_mapping",
+                        "side": self.side,
+                        "physical": str(expression.data),
+                        "logical": logical,
+                    },
+                },
+                evidence=ProofLevel.TRUSTED_AXIOM,
+            )
+            return physical
         if op == "load":
-            offset = self.context.term(expression.args[0], self.env)
-            mask = self.context.term(expression.args[1], self.env)
+            offset = self.context.term(expression.args[0], self.smt_env)
+            mask = self.context.term(expression.args[1], self.smt_env)
             self._defined(offset, "load-offset")
             self._defined(mask, "load-mask")
-            mask_false = self.prover.check_bad(
-                f"{self.side}:load-mask-true",
-                z3.And(self.antecedent, z3.Not(mask.value)),
-            )
-            if mask_false["result"] == "unsat":
-                mapping = self.roles.blocks.get(str(expression.data))
-                if mapping is None:
-                    raise ParametricFailure(
-                        "LOAD",
-                        "MISSING_ROLE",
-                        f"unmapped block {expression.data!r}",
-                        {},
-                    )
-                logical, endpoint = mapping
-                if endpoint.kind == "scalar_block":
-                    self.prover.require_unsat(
-                        "LOAD",
-                        "SCALAR_ABI_MISMATCH",
-                        f"{self.side}:scalar-block-offset",
-                        z3.And(self.antecedent, offset.value != endpoint.index),
-                        "scalar-block offset does not match the declared role endpoint",
-                    )
-                    return Expr("input", data=logical, sort=Sort.FLOAT)
-                token = self.registry.intern(logical, offset.value)
-                return Expr("read", args=(token,), data=logical, sort=Sort.FLOAT)
-            mask_true = self.prover.check_bad(
-                f"{self.side}:load-mask-false", z3.And(self.antecedent, mask.value)
-            )
-            if mask_true["result"] == "unsat":
-                return self.value(expression.args[2])
-            raise ParametricFailure(
+            mask_proof = self.prover.require_unsat(
                 "LOAD",
                 "SYMBOLIC_LOAD_MASK_UNSUPPORTED",
-                "a load mask is not constant over the observed symbolic output domain",
-                {"expression": expression.render(), "side": self.side},
+                f"{self.side}:load-mask-true",
+                z3.And(self.antecedent, z3.Not(mask.value)),
+                "a load mask is not true over the observed symbolic output domain",
             )
+            mapping = self.roles.blocks.get(str(expression.data))
+            if mapping is None:
+                raise ParametricFailure(
+                    "LOAD",
+                    "MISSING_ROLE",
+                    f"unmapped block {expression.data!r}",
+                    {},
+                )
+            logical, endpoint = mapping
+            physical = Expr(
+                "load",
+                args=(
+                    _substitute(expression.args[0], self.expr_env),
+                    _substitute(expression.args[1], self.expr_env),
+                    self.value(expression.args[2]),
+                ),
+                data=f"{self.side}:{expression.data}",
+                sort=Sort.FLOAT,
+            )
+            expected_offset = (
+                z3.IntVal(endpoint.index)
+                if endpoint.kind == "scalar_block"
+                else self.context.term(self.canonical_index, self.smt_env).value
+            )
+            offset_proof = self.prover.require_unsat(
+                "LOAD",
+                (
+                    "SCALAR_ABI_MISMATCH"
+                    if endpoint.kind == "scalar_block"
+                    else "LOAD_ADDRESS_RELATION_NOT_PROVED"
+                ),
+                f"{self.side}:load-address:{logical}",
+                z3.And(self.antecedent, offset.value != expected_offset),
+                f"{self.side} load from {logical} was not proved to use the "
+                "canonical logical address",
+            )
+            canonical = (
+                Expr("input", data=logical, sort=Sort.FLOAT)
+                if endpoint.kind == "scalar_block"
+                else Expr(
+                    "read",
+                    args=(self.canonical_index,),
+                    data=logical,
+                    sort=Sort.FLOAT,
+                )
+            )
+            self._add_rule(
+                "load",
+                physical,
+                canonical,
+                {
+                    "result": "unsat",
+                    "logic": "symbolic integer arithmetic under PairSpec facts",
+                    "premises": {
+                        "role_mapping": {
+                            "side": self.side,
+                            "physical": str(expression.data),
+                            "logical": logical,
+                            "endpoint_kind": endpoint.kind,
+                        },
+                        "mask_true": mask_proof,
+                        "address_equal": offset_proof,
+                    },
+                },
+            )
+            return physical
         if op == "select":
-            condition = self.context.term(expression.args[0], self.env)
+            condition = self.context.term(expression.args[0], self.smt_env)
             self._defined(condition, "select-condition")
-            false_case = self.prover.check_bad(
-                f"{self.side}:select-true",
-                z3.And(self.antecedent, z3.Not(condition.value)),
+            true_branch = self.value(expression.args[1])
+            false_branch = self.value(expression.args[2])
+            physical = Expr(
+                "select",
+                args=(
+                    _substitute(expression.args[0], self.expr_env),
+                    true_branch,
+                    false_branch,
+                ),
+                sort=expression.sort,
             )
-            if false_case["result"] == "unsat":
-                return self.value(expression.args[1])
-            true_case = self.prover.check_bad(
-                f"{self.side}:select-false", z3.And(self.antecedent, condition.value)
-            )
-            if true_case["result"] == "unsat":
-                return self.value(expression.args[2])
+            for expected, selected, bad in (
+                (True, true_branch, z3.Not(condition.value)),
+                (False, false_branch, condition.value),
+            ):
+                proof = self.prover.check_bad(
+                    f"{self.side}:select-constant:{str(expected).lower()}",
+                    z3.And(self.antecedent, bad),
+                )
+                if proof["result"] == "unsat":
+                    self._add_rule(
+                        "select",
+                        physical,
+                        selected,
+                        {"result": "unsat", "condition_value": expected, "proof": proof},
+                    )
+                    return physical
             raise ParametricFailure(
                 "COMPUTE",
                 "SYMBOLIC_SELECT_UNSUPPORTED",
@@ -372,6 +491,64 @@ class SymbolicValueEvaluator:
             f"symbolic value operation {op!r} is unsupported",
             {"expression": expression.render(), "side": self.side},
         )
+
+
+def _store_rule(
+    side: str,
+    physical_block: str,
+    logical_role: str,
+    offset: Expr,
+    mask: Expr,
+    canonical_index: Expr,
+    offset_proof: Mapping[str, Any],
+    mask_proof: Mapping[str, Any],
+) -> tuple[Rule, dict]:
+    value = var("stored_value")
+    lhs = node(
+        "observe_store",
+        pattern_from_expr(offset),
+        pattern_from_expr(mask),
+        value,
+        data=f"{side}:{physical_block}",
+        match_data=True,
+        sort=Sort.FLOAT,
+    )
+    rhs = node(
+        "observe_store",
+        pattern_from_expr(canonical_index),
+        pattern_from_expr(bool_const(True)),
+        value,
+        data=logical_role,
+        match_data=True,
+        sort=Sort.FLOAT,
+    )
+    rule = Rule(
+        rule_id=f"parametric_store_{side}",
+        lhs=lhs,
+        rhs=rhs,
+        evidence=ProofLevel.PARAMETRIC_SMT,
+        validator="pair_facts_and_z3_unsat",
+        statement=f"{render_pattern(lhs)} == {render_pattern(rhs)}",
+        requires=("PairSpec output role mapping", "symbolic output domain"),
+        kind="relational",
+        source="etv.parametric",
+    )
+    admission = rule.to_json()
+    admission["status"] = "proved"
+    admission["validation"] = {
+        "result": "unsat",
+        "logic": "symbolic integer arithmetic under PairSpec facts",
+        "premises": {
+            "role_mapping": {
+                "side": side,
+                "physical": physical_block,
+                "logical": logical_role,
+            },
+            "mask_true": dict(mask_proof),
+            "address_equal": dict(offset_proof),
+        },
+    }
+    return rule, admission
 
 
 def _proof_block(
@@ -529,6 +706,7 @@ def verify_parametric_pair(
         candidate_env = {
             "pid": k / program.lanes,
             "lane": k % program.lanes,
+            "logical_output_k": k,
         }
         candidate_logical = context.term(store.logical_index, candidate_env)
         candidate_mask = context.term(store.mask, candidate_env)
@@ -625,6 +803,24 @@ def verify_parametric_pair(
             "programs": programs.value,
             "candidate_env": candidate_env,
             "candidate_offset": candidate_offset.value,
+            "candidate_expr_env": {
+                "pid": Expr(
+                    "idiv",
+                    args=(
+                        Expr("var", data="logical_output_k", sort=Sort.INT),
+                        int_const(program.lanes),
+                    ),
+                    sort=Sort.INT,
+                ),
+                "lane": Expr(
+                    "irem",
+                    args=(
+                        Expr("var", data="logical_output_k", sort=Sort.INT),
+                        int_const(program.lanes),
+                    ),
+                    sort=Sort.INT,
+                ),
+            },
         }
 
     prover.require_unsat(
@@ -641,19 +837,67 @@ def verify_parametric_pair(
         status=Status.DISPROVED,
     )
 
-    registry = LeafRegistry(prover, k_domain)
-    values: dict[str, Expr] = {}
+    canonical_index = Expr("var", data="logical_output_k", sort=Sort.INT)
+    rewrite_rules: list[Rule] = []
+    rewrite_admission: list[dict] = []
+    roots: dict[str, Expr] = {}
     for side in ("lhs", "rhs"):
         item = side_data[side]
-        values[side] = SymbolicValueEvaluator(
+        store = item["program"].stores[0]
+        value_rewriter = SymbolicValueRewriter(
             item["context"],
             item["roles"],
             prover,
             k_domain,
-            registry,
             item["candidate_env"],
+            item["candidate_expr_env"],
+            canonical_index,
             side,
-        ).value(item["program"].stores[0].value)
+            rewrite_rules,
+            rewrite_admission,
+        )
+        physical_value = value_rewriter.value(store.value)
+        physical_offset = _substitute(store.offset, item["candidate_expr_env"])
+        physical_mask = _substitute(store.mask, item["candidate_expr_env"])
+        mask_term = item["context"].term(store.mask, item["candidate_env"])
+        store_mask_proof = prover.require_unsat(
+            "MASK",
+            "PARAMETRIC_MASK_NOT_EXACT",
+            f"{side}:canonical-store-mask-true",
+            z3.And(k_domain, z3.Not(mask_term.value)),
+            f"{side} canonical store is not active over the full output domain",
+            (k,),
+            status=Status.DISPROVED,
+        )
+        canonical_term = item["context"].term(canonical_index, item["candidate_env"])
+        store_offset_proof = prover.require_unsat(
+            "ADDRESS",
+            "OUTPUT_ADDRESS_MISMATCH",
+            f"{side}:canonical-store-address",
+            z3.And(k_domain, item["candidate_offset"] != canonical_term.value),
+            f"{side} output address does not rewrite to the canonical logical address",
+            (k,),
+            status=Status.DISPROVED,
+        )
+        physical_root = Expr(
+            "observe_store",
+            args=(physical_offset, physical_mask, physical_value),
+            data=f"{side}:{store.block}",
+            sort=Sort.FLOAT,
+        )
+        roots[side] = physical_root
+        rule, admission = _store_rule(
+            side,
+            store.block,
+            spec.contract.output_role,
+            physical_offset,
+            physical_mask,
+            canonical_index,
+            store_offset_proof,
+            store_mask_proof,
+        )
+        rewrite_rules.append(rule)
+        rewrite_admission.append(admission)
 
     blocks.extend(
         (
@@ -680,11 +924,22 @@ def verify_parametric_pair(
             ),
         )
     )
-    if _leaf_signature(values["lhs"]) == _leaf_signature(values["rhs"]):
+    load_rewrites = [
+        item for item in rewrite_admission if item["id"].startswith("parametric_load_")
+    ]
+    if load_rewrites:
         blocks.append(
             _proof_block(
                 "LOAD",
-                "SMT-equivalent addresses were normalized to the same logical read leaves",
+                "physical loads are retained until fact-derived, SMT-conditioned "
+                "rewrites map them to logical reads",
+                {
+                    "rewrite_rule_ids": [item["id"] for item in load_rewrites],
+                    "decision_boundary": (
+                        "load equivalence is accepted only after e-graph rule "
+                        "application"
+                    ),
+                },
             )
         )
     else:
@@ -692,13 +947,16 @@ def verify_parametric_pair(
             {
                 "kind": "LOAD",
                 "status": Status.UNKNOWN.value,
-                "summary": "symbolic input dependency frontiers differ; compute proof will decide observability",
+                "summary": (
+                    "symbolic input dependency frontiers differ; compute proof will "
+                    "decide observability"
+                ),
                 "reason": "LOAD_FRONTIER_MISMATCH",
                 "proof_levels": [],
                 "required_for_final": False,
                 "details": {
-                    "lhs": list(_leaf_signature(values["lhs"])),
-                    "rhs": list(_leaf_signature(values["rhs"])),
+                    "lhs": list(_leaf_signature(roots["lhs"])),
+                    "rhs": list(_leaf_signature(roots["rhs"])),
                 },
             }
         )
@@ -717,6 +975,21 @@ def verify_parametric_pair(
             "output_numel": spec.contract.output_numel.to_json(),
             "checks": prover.checks,
             "complete_for_parameter_domain": True,
+            "rewrite_targets": {
+                "lhs": roots["lhs"].render(),
+                "rhs": roots["rhs"].render(),
+            },
+            "fact_derived_rewrites": [
+                {
+                    "id": item["id"],
+                    "statement": item["statement"],
+                    "evidence": item["evidence"],
+                    "validation": item["validation"],
+                }
+                for item in rewrite_admission
+            ],
         },
-        root_pairs=(("logical_output_k", values["lhs"], values["rhs"]),),
+        root_pairs=(("logical_output_k", roots["lhs"], roots["rhs"]),),
+        rewrite_rules=tuple(rewrite_rules),
+        rewrite_admission=tuple(rewrite_admission),
     )

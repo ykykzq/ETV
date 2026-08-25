@@ -33,6 +33,7 @@ class ProofLevel(str, Enum):
     STRUCTURAL = "STRUCTURAL"
     ALGEBRAIC = "ALGEBRAIC"
     CONGRUENCE = "CONGRUENCE"
+    DECOMPOSITION = "DECOMPOSITION"
     TRUSTED_AXIOM = "TRUSTED_AXIOM"
     EMPIRICAL = "EMPIRICAL"
 
@@ -61,7 +62,7 @@ class UnsupportedSemantics(RuntimeError):
 
 @dataclass(frozen=True)
 class Expr:
-    """A typed, immutable Semantic TTIR expression."""
+    """A typed, immutable expression in ETV's common internal representation."""
 
     op: str
     args: Tuple["Expr", ...] = ()
@@ -110,6 +111,13 @@ class Expr:
             return f"{self.op}({self.data})"
         if self.op == "read":
             return f"read({self.data}, {self.args[0].render()})"
+        if self.op == "load":
+            return f"load({self.data}, {', '.join(arg.render() for arg in self.args)})"
+        if self.op == "observe_store":
+            return (
+                f"observe_store({self.data}, "
+                f"{', '.join(arg.render() for arg in self.args)})"
+            )
         if not self.args:
             return self.op if self.data is None else f"{self.op}({self.data})"
         return f"{self.op}({', '.join(arg.render() for arg in self.args)})"
@@ -227,7 +235,7 @@ class RulePolicy:
 
 @dataclass(frozen=True)
 class LLMConfig:
-    """Optional, auditable rule assistance. Credentials are read from the environment."""
+    """Optional, auditable LLM assistance. Credentials come from the environment."""
 
     enabled: bool = False
     provider: str = "deepseek"
@@ -237,6 +245,15 @@ class LLMConfig:
     generate_rules: bool = True
     max_candidates: int = 8
     timeout_ms: int = 30_000
+
+
+@dataclass(frozen=True)
+class PartitionConfig:
+    """Controls LLM-proposed, machine-checked paired subgraph decomposition."""
+
+    enabled: bool = False
+    min_partitions: int = 2
+    max_partitions: int = 16
 
 
 @dataclass(frozen=True)
@@ -263,6 +280,7 @@ class PairSpec:
     rewrite_rules: Tuple["Rule", ...] = ()
     rule_policy: RulePolicy = RulePolicy()
     llm: LLMConfig = LLMConfig()
+    partition: PartitionConfig = PartitionConfig()
 
     def role(self, logical: str) -> RolePair:
         for role in self.roles:

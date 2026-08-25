@@ -1,0 +1,55 @@
+{
+  "format": "etv-pair-v1",
+  "pair_id": "add_symbolic_ttir_ir_vs_torch_prims",
+  "lhs": "../programs/add_symbolic_2d.json",
+  "rhs": "../programs/add_torch_prims.json",
+  "frontends": {
+    "lhs": {"kind": "semantic_json"},
+    "rhs": {"kind": "prims"}
+  },
+  "semantic_mode": "abstract_float",
+  "roles": {
+    "Alpha": {
+      "lhs": {"kind": "scalar", "name": "lhs_alpha"},
+      "rhs": {"kind": "scalar_block", "name": "rhs_alpha", "index": 0}
+    },
+    "Input": {
+      "lhs": {"kind": "block", "name": "lhs_input"},
+      "rhs": {"kind": "block", "name": "rhs_input"}
+    },
+    "Other": {
+      "lhs": {"kind": "block", "name": "lhs_other"},
+      "rhs": {"kind": "block", "name": "rhs_other"}
+    },
+    "Output": {
+      "lhs": {"kind": "block", "name": "lhs_output"},
+      "rhs": {"kind": "block", "name": "rhs_output"}
+    }
+  },
+  "facts": {
+    "bindings": {},
+    "side_bindings": {
+      "rhs": {
+        "rhs_dim0": {"var": "a"},
+        "rhs_dim1": {"var": "b"}
+      }
+    },
+    "parameters": {
+      "a": {"min": 1},
+      "b": {"min": 1},
+      "c": {"min": 1}
+    },
+    "constraints": [
+      {"op": "eq", "args": [{"op": "imul", "args": [{"var": "a"}, {"var": "b"}]}, {"var": "c"}]}
+    ],
+    "assumptions": [],
+    "disjoint": [["Input", "Other", "Output"]]
+  },
+  "contract": {
+    "output_role": "Output",
+    "output_numel": {"var": "c"},
+    "require_full_coverage": true,
+    "require_disjoint": ["Input", "Other", "Output"]
+  },
+  "limits": {"max_iterations": 8, "max_enodes": 20000, "timeout_ms": 10000}
+}

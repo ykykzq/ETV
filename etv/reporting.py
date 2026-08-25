@@ -78,6 +78,36 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 f"Parametric domain: `{parameter_names}`; {proved_checks} SMT obligations proved UNSAT, "
                 f"with one satisfiable domain check."
             )
+        partitioning = proof.get("partitioning")
+        if partitioning:
+            lines.extend(["", "### Subgraph Partitioning", ""])
+            lines.append(
+                f"Provider/model: `{partitioning.get('provider')}/"
+                f"{partitioning.get('configured_model')}`; status: "
+                f"`{partitioning.get('status')}`; whole-program calls: "
+                f"{partitioning.get('whole_program_calls', 0)}."
+            )
+            partitions = partitioning.get("partitions", [])
+            if partitions:
+                lines.extend(
+                    [
+                        "",
+                        "| Subgraph | Family | Semantic | Dependencies | Instances |",
+                        "| --- | --- | --- | --- | --- |",
+                    ]
+                )
+                for item in partitions:
+                    dependencies = ", ".join(item.get("dependencies", [])) or "-"
+                    semantic = str(item.get("semantic", "")).replace("|", "\\|")
+                    lines.append(
+                        f"| `{item.get('id')}` | `{item.get('family')}` | {semantic} | "
+                        f"{dependencies} | {item.get('instances')} |"
+                    )
+            if partitioning.get("fallback"):
+                lines.append(
+                    f"Fallback: `{partitioning.get('fallback')}`; "
+                    f"error: {partitioning.get('error', partitioning.get('subgraph_reason', 'unknown'))}."
+                )
         egraph = proof.get("egraph")
         if egraph:
             stats = egraph.get("stats", {})
@@ -87,6 +117,14 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 f"{stats.get('enodes')} e-nodes, {stats.get('eclasses')} e-classes, "
                 f"{stats.get('iterations')} iterations, stop reason `{stats.get('stop_reason')}`."
             )
+            initial = egraph.get("initial_state", {})
+            if initial:
+                lines.append(
+                    f"Initial unmatched roots: {initial.get('unmatched_root_pairs')}; "
+                    f"rewrite phase: `{stats.get('phase', 'UNSPECIFIED')}`; "
+                    f"unmatched after fact rewrites: "
+                    f"{egraph.get('after_fact_rewrites', {}).get('unmatched_root_pairs')}."
+                )
             rules = stats.get("rule_matches", {})
             lines.append(
                 "Matched rules: "
@@ -95,6 +133,43 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                     or "none"
                 )
             )
+            relational = [
+                item
+                for item in egraph.get("rule_application", [])
+                if item.get("used") and str(item.get("id", "")).startswith("parametric_")
+            ]
+            if relational:
+                lines.extend(["", "### Applied Relational Rewrites", ""])
+                lines.extend(
+                    f"- `{item.get('id')}` matched {item.get('matches')} time(s); "
+                    f"admission `{item.get('admission_status')}`."
+                    for item in relational
+                )
+            trace = stats.get("iteration_trace", [])
+            if trace:
+                lines.extend(
+                    [
+                        "",
+                        "### E-graph Iterations",
+                        "",
+                        "| Phase/iteration | Before | After | Updated | Matched rules |",
+                        "| --- | --- | --- | --- | --- |",
+                    ]
+                )
+                for item in trace:
+                    before = item.get("before", {})
+                    after = item.get("after", {})
+                    matched = ", ".join(
+                        f"{name} x{count}"
+                        for name, count in item.get("rule_matches", {}).items()
+                    ) or "none"
+                    lines.append(
+                        f"| {item.get('phase', stats.get('phase', 'UNSPECIFIED'))} "
+                        f"#{item.get('iteration')} | "
+                        f"{before.get('enodes')}/{before.get('eclasses')} | "
+                        f"{after.get('enodes')}/{after.get('eclasses')} | "
+                        f"{item.get('updated')} | {matched} |"
+                    )
             unverified = egraph.get(
                 "unverified_rule_uses", egraph.get("trusted_rule_uses", [])
             )

@@ -1,96 +1,84 @@
 # 实现状态
 
-## MVP 验收结果
+## 已完成路径
 
-| 用例 | 预期 | 已实现结果 |
-| --- | --- | --- |
-| 上游 ntops 二维 Add 与实际 TorchInductor Add | 证明等价 | `PROVED`；真实生成 TTIR，左/右分别枚举 256/128 lane，128 个有效输出 |
-| 参数化 raw TTIR 的二维 `[a,b]` Add 与一维 `[c]` Add | 在 `a*b=c` 下证明任意正 i32 shape 等价 | `PROVED`；libtriton 提升后完成 38 个 UNSAT 参数化义务，未使用重写规则 |
-| `ABSTRACT_FLOAT` 下 mul+add 与 FMA（内部夹具） | 使用已准入的桥接规则证明 | `PROVED`，`fma_def` 已由 Z3 验证 |
-| `output_stride0 = N + 1` | 地址反例 | `DISPROVED(OUTPUT_ADDRESS_MISMATCH)` |
-| rhs 掩码为 `k < X - 1` | 掩码反例 | `DISPROVED(MASK_MISMATCH)` |
-| rhs 的 add 改为 sub | 值反例 | `DISPROVED(COMPUTE_MISMATCH)` |
-| 缺少 no-alias 声明 | 无法得出结论 | `UNKNOWN(MISSING_ALIAS_FACT)` |
-| 合成 raw TTIR mul+add 与 FMA（内部夹具） | libtriton 解析后证明 | `PROVED`，用于前端与规则回归，不再作为用户示例 |
-| 含 `scf.for` 的 raw TTIR | 完整解析但不提升 | parser/verifier 通过；验证阶段为 `UNKNOWN(TTIR_REGION_SEMANTICS_UNSUPPORTED)` |
+| 用例 | 结果 |
+| --- | --- |
+| 九齿 Add raw TTIR vs Torch Add Prims，固定 `[8,16]` singleton 参数域 | `PROVED`；使用符号关系规则，不走 TorchInductor |
+| 九齿形态二维 `[a,b]` TTIR vs Torch 二维 Prims，`a*b=c` | `PROVED`；任意允许的正 i32 维度 |
+| Semantic IR 二维 Add vs Prims Add | `PROVED`；无需 libtriton 的相同重写路径回归 |
+| mul+add vs FMA | `PROVED`；应用经 Z3 验证的 `fma_def` |
+| 错误 stride/mask/compute | `DISPROVED` 并给出反例 |
+| 缺少 no-alias 或符号关系 | `UNKNOWN`/非 `PROVED` |
+| 含 `scf.for` 的 TTIR | parse/verify 成功，提升返回 `UNKNOWN` |
 
-当前测试套件共 47 项；不含 libtriton 的 Python 3.12 + egglog 环境中为 41 项通过、
-6 项 raw TTIR 测试跳过。完整 Python 3.12 + libtriton + egglog 环境可运行全部测试。
-测试覆盖 schema 拒绝、有符号除法/取余、i32 溢出、基于性质的扁平化
-验证、egglog 统一饱和/同余/资源预算、Z3 规则准入/拒绝、fact gate 与可信规则
-审计、全正 i32 参数域上的 `a*b=c` shape 定理、缺失关系前提的非证明回归、LLM
-条件规则生成与第二轮饱和、确定性报告、CLI 退出码、libtriton 快照稳定性、region
-解析、真实 Add raw TTIR 端到端证明、参数化 raw TTIR 的 `a*b=c` 证明，以及真实
-artifact/provenance 哈希一致性。
+当前测试共 58 项。无 libtriton 环境为 52 项通过、6 项 raw TTIR 测试跳过；安装
+Triton/libtriton 3.7.1 后运行全部 58 项。
 
 ## 组件矩阵
 
 | 组件 | 状态 | 说明 |
 | --- | --- | --- |
-| 严格的 PairSpec/结果契约 | 已完成 | JSON v1，拒绝未知字段，支持共享及左右单侧整数/参数表达式绑定 |
-| 逻辑 ABI/角色对齐 | MVP 范围内已完成 | block、scalar、scalar-block |
-| 事实/no-alias 上下文 | MVP 范围内已完成 | 固定/参数绑定、关系约束与成对不相交分组 |
-| Semantic TTIR 类型化表达式 | 逐点子集已完成 | 整数、掩码、load、抽象计算、store |
-| raw TTIR/MLIR 解析器 | 已完成 | Triton/libtriton 3.7.1，全方言注册、parse、verify、稳定快照 |
-| raw TTIR 语义提升 | 逐点子集已完成 | 静态 tensor 标量化、广播、地址、load、计算、单 store；未建模操作返回 `UNKNOWN` |
-| 有限启动域求值器 | 已完成 | 覆盖全部固定 program/lane，含 signed-i32 保护 |
-| 固定秩符号 shape | 已完成基础路径 | Z3 Int 参数域、关系约束、覆盖/唯一性/地址/竞争；无动态 rank |
-| 掩码/地址/覆盖性证明 | 固定实例及固定秩参数域已完成 | 有界穷举或参数化 SMT |
-| 无竞争证明 | 单 store 范围内已完成 | 地址单射性 |
-| 内存观察器 | 单 Output 范围内已完成 | 全映射 block；不支持原位更新、原子操作和边界安全证明 |
-| 等式饱和 | 计算 MVP 范围内已完成 | egglog 13.2.0、统一 ruleset、同余闭包、迭代/节点/时间预算 |
-| 代数规则准入与应用 | 当前规则已完成 | 内建规则严格 Z3；自定义规则支持 required/best_effort/trusted，准入与匹配分别审计 |
-| Fact 规则准入 | 已完成但属于信任缺口 | PairSpec gate 决定启用；等式未经验证，报告为 `admitted_unverified` |
-| 统一规则运行 | 已完成 | 不再按操作族筛选；初始规则与可选 LLM 新规则分别统一饱和 |
-| 具体反例搜索 | 有理数算术子集已完成 | 确定性、精确值 |
-| 浮点定义域 | 精确常量定义域已完成 | 符号定义域返回 `UNKNOWN` |
-| JSON/Markdown 报告 | 已完成 | 确定性、输入哈希与信任边界 |
-| `scf.for` / `tt.reduce` 摘要 | 未实现 | M3 |
-| IEEE/容差浮点证明 | 未实现 | 明确位于当前语义范围之外 |
-| 多 kernel/外部摘要 | 未实现 | 后续工作 |
-| LLM 规则辅助 | 可选路径已完成 | DeepSeek 节点选择、条件规则生成、prompt/response hash 与严格 schema；不构成证明 |
+| PairSpec/结果 schema | 已完成 | 严格字段、角色、事实、参数域、契约和规则策略 |
+| raw TTIR 前端 | 已完成基础路径 | libtriton 3.7.1 parse/verify/快照与无环逐点提升 |
+| Torch Prims 前端 | 已完成基础路径 | 严格 `etv-prims-program-v1`，固定 rank、显式广播、核心逐点 op |
+| TorchInductor 路径 | 已移除 | Torch 侧不再生成 Triton/TTIR |
+| 固定 rank 符号 shape | 已完成基础路径 | 维度值与 launch 规模符号化，不支持动态 rank |
+| 参数/shape 关系 | 已完成 | Z3 Int 参数域和 `a*b=c` 一类机器可读约束 |
+| 覆盖、唯一写入、地址、竞争 | 已完成单 store 路径 | 参数化 SMT 反例查询 |
+| 未归一化 load/store 根 | 已完成 | 保留 side、物理端点、offset、mask、value |
+| fact-derived 关系规则 | 已完成 | scalar/load/store 条件规则，规则准入与应用分离 |
+| e-graph | 已完成 | egglog 13.2.0、整图或逐子图独立饱和、同余及逐轮日志 |
+| 代数规则 | 已完成当前集合 | 17 条内建规则默认经 Z3 Real 证明 |
+| 自定义条件规则 | 已完成 | required/best_effort/trusted 策略与信任警告 |
+| LLM 辅助 | 可选路径已完成 | DeepSeek 节点选择、带 fact gate 规则生成、严格 schema/provenance |
+| 成对子图划分 | 已完成纯计算基础路径 | 一次整程序 LLM 扫描、根覆盖/路径/依赖 DAG 检查、逐子图 egglog 与组合证明 |
+| 具体反例 | 已完成当前算术子集 | 地址、mask 与精确有理数值反例 |
+| 报告 | 已完成 | schema v4，输入哈希、条件证明、规则应用、迭代轨迹、信任边界 |
+| 循环/归约 | 未实现 | `scf.for`、`tt.reduce` 不提升 |
+| 控制流/副作用子程序划分 | 未实现 | 当前只切分已提升的纯浮点表达式树，不切分 store、循环或 shared memory |
+| 多 program/kernel orchestration | 未实现 | 单 kernel、单 store |
+| IEEE-754/容差 | 未实现 | 当前为 `ABSTRACT_FLOAT` |
+| 独立 proof certificate | 未实现 | egglog 与 ETV 编码仍在可信计算基 |
 
-## 与压缩包里程碑的关系
+## 当前判定边界
 
-### M0：前端与契约
+对 TTIR/Prims 异构输入，ETV 要求 `facts.parameters`。即使固定 shape 也使用 singleton
+参数域。验证成功必须同时满足：
 
-MVP 范围内已完成。PairSpec、结果 schema、Semantic TTIR JSON、锁定的 libtriton 解析器/verifier、类型化快照、逐点提升器、`parse`/`inspect`/`check` 命令以及 raw TTIR golden/端到端测试均已实现。
+```text
+参数/launch/覆盖/地址条件已证明
+and fact-derived load/store 规则实际匹配
+and （完整 observe_store 根进入同一 e-class
+     or 所有依赖有序子图根分别进入同一 e-class 并完成组合）
+```
 
-### M1：add 端到端验证
+SMT 不直接比较最终抽象浮点程序；物理 load 也不会在进入 e-graph 前被重命名成同一
+read。`initial_state`、`rule_application` 和 `after_fact_rewrites` 共同防止这种退化。
 
-已从真实上游代码到 raw TTIR 边界端到端完成。ntops 侧经 ninetoothed，参考侧
-经 PyTorch FakeTensor/FX/TorchInductor，两侧 TTIR 再由 libtriton 解析和提升。
-索引、掩码、地址、scalar 对 scalar-block ABI、load、计算、store、报告和测试均
-已可用。详细记录见[真实 Add 验证](add_validation.md)。
+## LLM 与规则生成
 
-### M2：逐点算子扩展与候选生成
+现有 LLM 路径在确定性规则失败后运行：先选择节点，再生成必须依赖已有 fact 的规则。
+模型不能决定结论。候选规则可能由 Z3 证明，也可在 PairSpec 明确选择的弱化策略下
+作为可信公理；后者若实际使用，会进入最终报告警告。
 
-部分完成。表达式语言和 egglog 支持核心逐点操作；所有已准入规则在统一图中运行，
-PairSpec 可声明 SMT 代数规则或 fact-gated 可信规则。固定秩 shape 参数及
-`a*b=c` 一类机器可读关系已能进入参数化整数证明。运行时值采样器、共享前沿规则
-综合器以及更大的真实 TTIR 语料尚未实现。
+尚缺：候选规则隔离仓库、自动边界条件综合、跨程序对规则晋升、独立验证证书。
 
-### M3：循环与归一化
+## 子图划分
 
-未实现。层归一化/RMS 归一化报告仍作为设计与验收输入。仅添加一个 `theta` 节点而不完成覆盖性和归纳证明义务，不视为完成该里程碑。
+PairSpec 可通过 `partition.enabled` 启用划分，同时必须设置 `llm.enabled`。模型一次扫描
+左右完整程序与全部计算根，返回成对子图路径；ETV 重新计算覆盖、唯一归属、左右依赖
+拓扑与拓扑序。每个子图独立饱和，已证明的子图用共同边界 token 连接父图。模型的
+语义标签和路径提议不是可信等价公理，所有局部对仍须由现有规则体系证明。
 
-### M4：自动规则生成
+当前缺口是跨 store、控制流、归约、共享内存和多 kernel 的 region 划分；也尚未根据
+e-node 预算自动决定是否启用、调整粒度或二次划分。
 
-类型化规则 DSL、LLM provenance、SMT 准入、fact gate 和可选 DeepSeek 两阶段
-辅助已经存在。默认策略不允许代数规则绕过 Z3；PairSpec 可显式选择
-`best_effort` 或 `trusted`，但实际使用的未证明规则会以 `TRUSTED_AXIOM` 和警告
-进入报告。尚缺隔离候选存储、自动边界条件综合、回归晋升策略和独立证明证书。
+## 下一步
 
-## 后续工程步骤
-
-1. 增加 CUDA 主机上的实际 runtime/TTIR dump 交叉检查，比较离线 sm80 codegen 与
-   真实 launch 选择；该步骤不应替代形式验证，但可缩小提取链风险。
-2. 为非线性 launch/store 域增加显式逻辑 frontier 标注，移除当前
-   `pid * lanes + lane` 的逐点约定。
-3. 将当前 Z3 Int 参数化路径扩展为与 TTIR 溢出完全一致的位向量/混合整数证明，
-   同时保留固定实例的有界回归测试。
-4. 增加带机器可读谓词的条件规则，从 `sqrt/rsqrt/div` 的正值/非零定义域开始。
-5. 只有同时实现覆盖性、唯一性、单位元、地址和归约顺序证明义务后，才为
-   `scf.for`、`tt.reduce` 引入 `Theta/Reduce/Tile` 摘要。
-6. 为 egglog 等价结果增加可独立检查的 proof certificate 或解释导出，缩小当前
-   可信计算基。
+1. 扩展 Prims dtype/layout/view/reshape 语义，并让 stride 对应成为显式关系规则；
+2. 将整数证明扩展为与 TTIR 溢出完全一致的位向量/混合整数模型；
+3. 为 `div/sqrt/rsqrt` 增加机器可读定义域谓词；
+4. 增加 e-graph explanation/proof certificate 导出；
+5. 只有覆盖、归纳、单位元、归约顺序和地址义务齐备后才支持循环/归约；
+6. 将划分从纯表达式树扩展到显式 region/内存 effect，并为跨分区等式建立接口摘要。

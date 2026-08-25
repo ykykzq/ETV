@@ -1,0 +1,8 @@
+graph():
+    %input_tensor_1 : [num_users=1] = placeholder[target=input_tensor_1]
+    %alpha_1 : [num_users=1] = placeholder[target=alpha_1]
+    %other_1 : [num_users=1] = placeholder[target=other_1]
+    %broadcast_in_dim : [num_users=1] = call_function[target=torch.ops.prims.broadcast_in_dim.default](args = (%alpha_1, [8, 16], []), kwargs = {})
+    %mul : [num_users=1] = call_function[target=torch.ops.prims.mul.default](args = (%broadcast_in_dim, %other_1), kwargs = {})
+    %add : [num_users=1] = call_function[target=torch.ops.prims.add.default](args = (%input_tensor_1, %mul), kwargs = {})
+    return add

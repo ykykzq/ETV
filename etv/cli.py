@@ -11,8 +11,8 @@ from typing import Iterable, Optional
 
 from .model import Expr, Status
 from .reporting import render_markdown, write_report
-from .schema import InputError, load_program
-from .ttir import parse_ttir
+from .schema import InputError
+from .ttir import load_program_artifact, parse_ttir
 from .verify import verify_spec
 from .z3_validator import validated_builtin_rules
 
@@ -51,7 +51,7 @@ def _inspect(args: argparse.Namespace) -> int:
         print(json.dumps(module.to_json(include_assembly=False), indent=2, sort_keys=True))
         return 0
     try:
-        program = load_program(path)
+        program = load_program_artifact(path)
     except InputError as exc:
         print(f"UNKNOWN {getattr(exc, 'code', 'INVALID_INPUT')}: {exc}", file=sys.stderr)
         return 2
@@ -122,7 +122,7 @@ def _explain(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="etv",
-        description="Bounded semantic equivalence verification for TTIR specializations",
+        description="Symbolic equivalence verification for TTIR and Torch Prims programs",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -132,7 +132,9 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--json", action="store_true", help="print the full machine report")
     check.set_defaults(handler=_check)
 
-    inspect = subparsers.add_parser("inspect", help="inspect a Semantic JSON or raw TTIR program")
+    inspect = subparsers.add_parser(
+        "inspect", help="inspect a Semantic JSON, Torch Prims, or raw TTIR program"
+    )
     inspect.add_argument("program")
     inspect.add_argument("--function", help="TTIR function to inspect when the module is ambiguous")
     inspect.set_defaults(handler=_inspect)

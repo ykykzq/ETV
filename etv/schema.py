@@ -1,4 +1,4 @@
-"""Strict JSON readers for Semantic TTIR programs and pair specifications."""
+"""Strict JSON readers for internal programs, PairSpecs, and rewrite declarations."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from .model import (
     Limits,
     Parameter,
     PairSpec,
+    PartitionConfig,
     Program,
     ProofLevel,
     RulePolicy,
@@ -374,6 +375,8 @@ def _rewrite_rule(value: Any, where: str) -> Rule:
     rule_id = value.get("id")
     if not isinstance(rule_id, str) or not _RULE_ID.fullmatch(rule_id):
         raise InputError(f"{where}.id must be a stable rule identifier")
+    if rule_id.startswith("parametric_"):
+        raise InputError(f"{where}.id uses the reserved 'parametric_' prefix")
     kind = value.get("kind")
     if kind not in {"algebraic", "trusted_fact"}:
         raise InputError(f"{where}.kind must be algebraic or trusted_fact")
@@ -474,6 +477,7 @@ def load_pair_spec(path: Path) -> PairSpec:
             "rewrite_rules",
             "rule_policy",
             "llm",
+            "partition",
         },
         str(path),
     )
@@ -730,6 +734,34 @@ def load_pair_spec(path: Path) -> PairSpec:
         ):
             raise InputError(f"{path}.llm.{key} must be a positive integer")
 
+    partition_raw = raw.get("partition", {})
+    if not isinstance(partition_raw, dict):
+        raise InputError(f"{path}.partition must be an object")
+    _only_keys(
+        partition_raw,
+        {"enabled", "min_partitions", "max_partitions"},
+        f"{path}.partition",
+    )
+    partition_defaults = PartitionConfig()
+    partition_values = {
+        key: partition_raw.get(key, getattr(partition_defaults, key))
+        for key in ("enabled", "min_partitions", "max_partitions")
+    }
+    if not isinstance(partition_values["enabled"], bool):
+        raise InputError(f"{path}.partition.enabled must be boolean")
+    for key in ("min_partitions", "max_partitions"):
+        value = partition_values[key]
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise InputError(f"{path}.partition.{key} must be a positive integer")
+    if partition_values["min_partitions"] > partition_values["max_partitions"]:
+        raise InputError(
+            f"{path}.partition.min_partitions cannot exceed max_partitions"
+        )
+    if partition_values["enabled"] and not llm_values["enabled"]:
+        raise InputError(
+            f"{path}.partition.enabled requires llm.enabled so the whole-program scan is explicit"
+        )
+
     base = path.parent
     frontends_raw = raw.get("frontends", {})
     if not isinstance(frontends_raw, dict):
@@ -743,12 +775,18 @@ def load_pair_spec(path: Path) -> PairSpec:
             raise InputError(f"{where} must be an object")
         _only_keys(value, {"kind", "function", "programs"}, where)
         kind = value.get("kind", "auto")
-        if kind not in {"auto", "semantic_json", "ttir"}:
-            raise InputError(f"{where}.kind must be auto, semantic_json, or ttir")
+        if kind not in {"auto", "semantic_json", "ttir", "prims"}:
+            raise InputError(
+                f"{where}.kind must be auto, semantic_json, ttir, or prims"
+            )
         function = value.get("function")
         if function is not None and (not isinstance(function, str) or not function):
             raise InputError(f"{where}.function must be a non-empty string")
         programs = value.get("programs")
+        if kind == "prims" and (function is not None or programs is not None):
+            raise InputError(
+                f"{where} Prims graphs encode their output domain and do not accept function or programs"
+            )
         return FrontendSpec(
             kind=kind,
             function=function,
@@ -811,4 +849,5 @@ def load_pair_spec(path: Path) -> PairSpec:
             non_algebraic_validation=non_algebraic_validation,
         ),
         llm=LLMConfig(**llm_values),
+        partition=PartitionConfig(**partition_values),
     )

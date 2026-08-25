@@ -1,0 +1,73 @@
+{
+  "format": "etv-prims-program-v1",
+  "inputs": [
+    {
+      "dtype": "float32",
+      "name": "input",
+      "shape": [
+        {
+          "var": "torch_dim0"
+        },
+        {
+          "var": "torch_dim1"
+        }
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "alpha",
+      "shape": []
+    },
+    {
+      "dtype": "float32",
+      "name": "other",
+      "shape": [
+        {
+          "var": "torch_dim0"
+        },
+        {
+          "var": "torch_dim1"
+        }
+      ]
+    }
+  ],
+  "name": "torch_add_prims",
+  "nodes": [
+    {
+      "args": [
+        "alpha"
+      ],
+      "broadcast_dimensions": [],
+      "name": "broadcast_alpha",
+      "op": "prims.broadcast_in_dim",
+      "shape": [
+        {
+          "var": "torch_dim0"
+        },
+        {
+          "var": "torch_dim1"
+        }
+      ]
+    },
+    {
+      "args": [
+        "broadcast_alpha",
+        "other"
+      ],
+      "name": "scaled_other",
+      "op": "prims.mul"
+    },
+    {
+      "args": [
+        "input",
+        "scaled_other"
+      ],
+      "name": "result",
+      "op": "prims.add"
+    }
+  ],
+  "output": {
+    "block": "output",
+    "value": "result"
+  }
+}

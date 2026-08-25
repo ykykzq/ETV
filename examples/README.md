@@ -1,33 +1,36 @@
 # 示例
 
-`examples/` 只包含一个面向用户的验证样例：从真实上游代码重新生成的 Add
-程序对。旧的手写 Semantic JSON、故障变体和小型 FMA TTIR 已移到
-`tests/fixtures/semantic/`，它们只用于验证 ETV 自身行为，不再作为工程能力展示。
+`examples/add` 展示同一 Add 语义的两条输入路线：
 
-## 内容
+```text
+左侧：ntops -> ninetoothed -> Triton -> raw TTIR
+右侧：PyTorch -> TorchRefsMode/make_fx -> Torch Prims JSON
+```
+
+Torch 侧不经过 TorchInductor。
 
 | 路径 | 内容 |
 | --- | --- |
-| `add/pair.json` | `[8,16]`、连续布局、单 program 的实际 PairSpec |
-| `add/provenance.json` | 上游提交、源码与 artifact 哈希、工具链和适配声明 |
-| `add/sources/ntops_add.triton.py` | ninetoothed 从 ntops Add 生成的 Triton 源码 |
-| `add/sources/ntops_add.triton.json` | ninetoothed 生成的 SSA/布局元数据 |
-| `add/sources/torch_inductor_add.fx.txt` | PyTorch FakeTensor 捕获的 FX 图 |
-| `add/sources/torch_inductor_add.generated.py` | TorchInductor 原样生成的内核源码 |
-| `add/sources/torch_inductor_add.triton.py` | 仅移除 launch decorator 的离线 TTIR 编译适配源码 |
-| `add/ttir/*.ttir` | Triton 3.7.1 为 CUDA sm80 生成并优化的两侧 TTIR |
-
-## 验证
+| `add/pair.json` | 固定 `[8,16]` PairSpec |
+| `add/pair_parametric.json` | 固定 rank、符号维度 `a,b,c` 的 PairSpec |
+| `add/provenance.json` | 上游提交、工具链和 artifact SHA-256 |
+| `add/sources/ntops_add.triton.py` | ninetoothed 生成的 Triton 源码 |
+| `add/sources/ntops_add.triton.json` | ninetoothed SSA/布局元数据 |
+| `add/sources/torch_prims_add.fx.txt` | PyTorch 2.8 捕获的 Prims FX 图 |
+| `add/prims/torch_add.prims.json` | 严格、可重放、固定 rank 的符号 Prims 输入 |
+| `add/ttir/ntops_add.ttir` | Triton 3.7.1 为 CUDA sm80 生成的九齿侧 TTIR |
+| `add/ttir/parametric_2d_add.ttir` | 参数化二维 TTIR 验证输入 |
 
 ```bash
-.venv/bin/python -m etv check examples/add/pair.json \
-  --out build/add_upstream
+.venv/bin/python -m etv check examples/add/pair_parametric.json \
+  --out build/add_parametric
 ```
 
 结果应为：
 
 ```text
-PROVED ntops_add_vs_torch_inductor_add: OBSERVABLE_MEMORY_EQUIVALENT
+PROVED parametric_ninetoothed_add_vs_torch_prims_add: OBSERVABLE_MEMORY_EQUIVALENT
 ```
 
-复现提取过程和结果解释见[真实 Add 验证](../docs/add_validation.md)。
+来源与固定实例见[Add 验证](../docs/add_validation.md)，逐条规则与 e-graph 变化见
+[参数化 Add 验证全过程](../docs/add_parametric_verification_details.md)。

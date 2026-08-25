@@ -1,7 +1,7 @@
 {
   "contract": {
     "output_numel": {
-      "var": "X"
+      "var": "c"
     },
     "output_role": "Output",
     "require_disjoint": [
@@ -13,9 +13,28 @@
   },
   "facts": {
     "assumptions": [],
-    "bindings": {
-      "X": 128
-    },
+    "bindings": {},
+    "constraints": [
+      {
+        "args": [
+          {
+            "args": [
+              {
+                "var": "a"
+              },
+              {
+                "var": "b"
+              }
+            ],
+            "op": "imul"
+          },
+          {
+            "var": "c"
+          }
+        ],
+        "op": "eq"
+      }
+    ],
     "disjoint": [
       [
         "Input",
@@ -23,6 +42,20 @@
         "Output"
       ]
     ],
+    "parameters": {
+      "a": {
+        "max": 8,
+        "min": 8
+      },
+      "b": {
+        "max": 16,
+        "min": 16
+      },
+      "c": {
+        "max": 128,
+        "min": 128
+      }
+    },
     "side_bindings": {
       "lhs": {
         "arg10": 16,
@@ -31,15 +64,24 @@
         "arg13": 16,
         "arg14": 16,
         "arg15": 1,
-        "arg4": 8,
-        "arg5": 16,
+        "arg4": {
+          "var": "a"
+        },
+        "arg5": {
+          "var": "b"
+        },
         "arg6": 16,
         "arg7": 1,
         "arg8": 8,
         "arg9": 16
       },
       "rhs": {
-        "arg4": 128
+        "torch_dim0": {
+          "var": "a"
+        },
+        "torch_dim1": {
+          "var": "b"
+        }
       }
     }
   },
@@ -48,12 +90,18 @@
     "lhs": {
       "function": "ntops_add_kernel",
       "kind": "ttir",
-      "programs": 1
+      "programs": {
+        "args": [
+          {
+            "var": "c"
+          },
+          256
+        ],
+        "op": "ceildiv"
+      }
     },
     "rhs": {
-      "function": "triton_poi_fused_0",
-      "kind": "ttir",
-      "programs": 1
+      "kind": "prims"
     }
   },
   "lhs": "ttir/ntops_add.ttir",
@@ -62,8 +110,8 @@
     "max_iterations": 8,
     "timeout_ms": 10000
   },
-  "pair_id": "ntops_add_vs_torch_inductor_add",
-  "rhs": "ttir/torch_inductor_add.ttir",
+  "pair_id": "ntops_add_vs_torch_prims_add",
+  "rhs": "prims/torch_add.prims.json",
   "roles": {
     "Alpha": {
       "lhs": {
@@ -73,7 +121,7 @@
       "rhs": {
         "index": 0,
         "kind": "scalar_block",
-        "name": "arg1"
+        "name": "alpha"
       }
     },
     "Input": {
@@ -83,7 +131,7 @@
       },
       "rhs": {
         "kind": "block",
-        "name": "arg0"
+        "name": "input"
       }
     },
     "Other": {
@@ -93,7 +141,7 @@
       },
       "rhs": {
         "kind": "block",
-        "name": "arg2"
+        "name": "other"
       }
     },
     "Output": {
@@ -103,7 +151,7 @@
       },
       "rhs": {
         "kind": "block",
-        "name": "arg3"
+        "name": "output"
       }
     }
   },

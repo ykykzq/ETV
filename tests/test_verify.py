@@ -181,6 +181,9 @@ def test_parametric_2d_to_1d_shape_relation_is_proved():
     assert report["reason"] == "OBSERVABLE_MEMORY_EQUIVALENT"
     assert report["proof"]["parametric_domain"]["complete_for_parameter_domain"] is True
     assert report["proof"]["egraph"]["root_pairs"] == 1
+    assert report["proof"]["egraph"]["initial_state"]["unmatched_root_pairs"] == 1
+    assert report["proof"]["egraph"]["after_fact_rewrites"]["unmatched_root_pairs"] == 0
+    assert report["proof"]["egraph"]["stats"]["iterations"] > 0
     assert all(
         check["result"] in {"sat", "unsat"}
         for check in report["proof"]["parametric_domain"]["checks"]

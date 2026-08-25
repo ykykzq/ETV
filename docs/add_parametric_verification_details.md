@@ -1,574 +1,384 @@
 # 参数化 Add 验证全过程
 
-本文逐步记录 `examples/add/pair_parametric.json` 的一次真实验证。目标是在固定
-rank、符号 shape 的范围内证明：对任意正 signed-i32 参数 `a`、`b`、`c`，只要
-`a*b=c`，使用二维行主序地址的 Add kernel 与使用一维线性地址的 Add kernel
-产生相同的最终 `Output` 内存。
-
-本文描述的是当前实现和实际 `report.json` 中发生的过程。一个容易误解但很重要的
-事实是：本例有 17 条内建代数规则通过准入，但实际应用规则的序列为空。SMT 在
-e-graph 之前已经证明并归一化了地址和读取叶子；两个浮点计算根插入 e-graph 时
-结构完全相同，因此验证器直接以同余完成计算证明，没有运行第 1 次规则饱和迭代。
-
-## 1. 输入、命令与最终结果
-
-验证有三个原始输入：
-
-| 输入 | 作用 |
-| --- | --- |
-| `examples/add/ttir/parametric_2d_add.ttir` | 左侧 raw TTIR；shape 为 `[a,b]`，256 lanes/program |
-| `examples/add/ttir/parametric_1d_add.ttir` | 右侧 raw TTIR；shape 为 `[c]`，128 lanes/program |
-| `examples/add/pair_parametric.json` | 声明前端、launch、角色、参数域、关系约束、no-alias 和验证契约 |
-
-本次报告记录的输入 SHA-256 为：
-
-| 输入 | SHA-256 |
-| --- | --- |
-| 左侧 TTIR | `f963453962d40f5d7e0db2d2ffb171f578b1121daec01a8aba89bf7b9b8360ba` |
-| 右侧 TTIR | `5682274295157a75e22a57c46c33cfb8561139ef807aeccf2d660be5c6d229d0` |
-| PairSpec | `478a5145601130410ba6d5c02a8317d65b21e5d713a0208e431aedd781444cbd` |
-
-这两份参数化 TTIR 是用于符号证明的可审计基准，不是
-`examples/add/provenance.json` 声明的上游编译 artifact；真实上游固定 shape pair
-仍由 `examples/add/pair.json` 描述。
-
-执行命令：
-
-```bash
-python -m etv check examples/add/pair_parametric.json \
-  --out build/add_parametric_raw
-```
-
-实际输出：
+本文逐步记录 `examples/add/pair_parametric.json` 的验证。输入是九齿侧 raw TTIR、
+Torch 侧 Prims 图和 PairSpec；目标是在固定 rank、任意正 i32 维度且 `a*b=c` 时证明：
 
 ```text
-PROVED parametric_2d_add_vs_1d_add: OBSERVABLE_MEMORY_EQUIVALENT
+output = input + alpha * other
 ```
 
-报告中的证明范围是：
+## 1. 原始输入
 
-```text
-fixed-rank symbolic-shape single-store parametric translation validation
-```
-
-也就是固定 rank 2 对 rank 1、每侧恰好一个 store、固定 launch 公式，但 shape
-维度值在完整声明域中任取，而不是只测试几个样例。
-
-```mermaid
-flowchart TD
-  L["左侧 raw TTIR: rank 2, 256 lanes"] --> P["libtriton 3.7.1 parse + verify"]
-  R["右侧 raw TTIR: rank 1, 128 lanes"] --> P
-  S["PairSpec: 参数、a*b=c、角色、契约"] --> V["ETV 严格 schema 与事实检查"]
-  P --> T["提升为 Semantic TTIR StoreTemplate"]
-  V --> T
-  T --> Z["Z3: 参数域、launch、mask、coverage、address、load"]
-  Z --> N["归一化逻辑读取叶子"]
-  N --> E["egglog: 比较唯一计算根对"]
-  E --> M["最终 Output 内存等价"]
-```
-
-## 2. PairSpec 给验证器的事实
-
-### 2.1 参数域与关系
+| 文件 | 含义 |
+| --- | --- |
+| `ttir/parametric_2d_add.ttir` | 九齿形态的二维 TTIR，256 lanes/program |
+| `prims/torch_add.prims.json` | Torch Prims：broadcast、mul、add |
+| `pair_parametric.json` | 参数、launch、角色、指针关系、no-alias 和输出契约 |
 
 PairSpec 声明：
 
 ```text
-1 <= a <= 2147483647
-1 <= b <= 2147483647
-1 <= c <= 2147483647
-imul(a, b) == c
-```
+a,b,c in signed-i32
+a >= 1, b >= 1, c >= 1
+a*b = c
 
-这里的 `imul` 不是无界数学乘法的无条件假设。SMT 编码同时加入 signed-i32
-定义性条件，所以只量化乘积可由 signed-i32 表示并等于 `c` 的参数组合。底层使用
-Z3 `Int`，再显式加入每次 `iadd/isub/imul/idiv/irem/ceildiv` 的 i32 范围或定义域
-条件，而不是静默允许机器整数溢出。
-
-参数域首先要可满足。实际模型为：
-
-```text
-a = 1, b = 1, c = 1
-```
-
-这个模型只用于证明前提不是空集；后续结论仍然对整个声明域全称成立。
-
-### 2.2 launch 与输出契约
-
-PairSpec 补充 raw TTIR 中没有编码的 launch grid：
-
-```text
-lhs.programs = ceildiv(c, 256)
-rhs.programs = ceildiv(c, 128)
-contract.output_numel = c
-```
-
-契约要求 `Output[0,c)` 完整覆盖，且 `Input`、`Other`、`Output` 两两不相交。
-验证器必须证明两侧每个逻辑输出都有且只有一个 writer、物理输出地址无竞争、两侧
-对应 writer 地址相同，才能进入计算等价检查。
-
-### 2.3 物理 ABI 到逻辑角色
-
-两份 TTIR 的参数位置不同。PairSpec 使用逻辑角色消除这个物理 ABI 差异：
-
-| 逻辑角色 | 左侧 | 右侧 |
-| --- | --- | --- |
-| `Input` | block `arg0` | block `arg0` |
-| `Other` | block `arg1` | block `arg2` |
-| `Alpha` | scalar `arg2` | scalar-block `arg1[0]` |
-| `Output` | block `arg3` | block `arg3` |
-
-shape 参数也按 side 单独绑定：
-
-```text
 lhs.arg4 = a
 lhs.arg5 = b
-rhs.arg4 = c
+rhs.torch_dim0 = a
+rhs.torch_dim1 = b
+
+lhs programs = ceildiv(c,256)
+output_numel = c
 ```
 
-角色对应、参数绑定、关系约束和 no-alias 都是 PairSpec 提供的可信事实。验证器会
-检查这些事实是否足以关闭证明义务，但不会证明调用者提供的 shape 元数据本身来自
-真实运行时对象。
-
-## 3. 两份原始 TTIR 分别做什么
-
-### 3.1 左侧二维 kernel
-
-对 program id `pid` 和 lane id `lane`，左侧 TTIR 计算：
+角色：
 
 ```text
-k_lhs   = pid * 256 + lane
-numel   = a * b
-mask    = k_lhs < a*b
-row     = k_lhs div b
-column  = k_lhs rem b
-offset  = row*b + column
-value   = Input[offset] + Alpha * Other[offset]
+Input  : lhs.arg0 <-> rhs.input
+Other  : lhs.arg1 <-> rhs.other
+Alpha  : lhs.arg2 <-> rhs.alpha[0]
+Output : lhs.arg3 <-> rhs.output
 ```
 
-有效 lane 把结果写到 `Output[offset]`。`divsi` 和 `remsi` 使用 signed 语义；在
-本证明的有效域中 `k>=0`、`b>0`，因此它们与常见的非负整数商和余数一致。
+`Input/Other/Output` 两两不别名。以上事实是条件证明的前提，不是从程序名或参数顺序
+猜测出来的结论。
 
-### 3.2 右侧一维 kernel
+## 2. 两侧转换为共同 IR
 
-右侧计算：
+### 2.1 TTIR 侧
+
+libtriton 3.7.1 完成 parse、方言注册和 IR verify。提升后的关键表达式为：
 
 ```text
-k_rhs  = pid * 128 + lane
-mask   = k_rhs < c
-offset = k_rhs
-Alpha  = load(arg1, offset=0)
-value  = Input[offset] + Alpha * Other[offset]
+logical = pid*256 + lane
+mask    = logical < a*b
+offset  = (logical div b)*b + (logical rem b)
+
+value = fadd(
+  load(arg0, offset, mask, 0),
+  fmul(scalar(arg2), load(arg1, offset, mask, 0)))
+
+store(arg3, offset, mask, value)
 ```
 
-两侧 lane 数和 launch program 数不同，Alpha 的 ABI 也不同，所以不能只比较 TTIR
-文本或 SSA 结构。验证目标是相同逻辑输出 `k` 上的可观察内存行为。
+### 2.2 Prims 侧
 
-## 4. libtriton 解析与 Semantic TTIR 提升
-
-ETV 固定使用 Triton/libtriton 3.7.1。两份 raw TTIR 都依次经过：
-
-1. 注册 MLIR/Triton 方言；
-2. `parse_mlir_module` 解析完整语法；
-3. MLIR verifier 检查 SSA、类型和 operation 约束；
-4. 选择 PairSpec 指定的函数；
-5. 将支持的 acyclic pointwise 子集提升为类型化 Semantic TTIR；
-6. 每侧生成一个 `StoreTemplate`。
-
-提升器不以正则表达式替代 TTIR 模块解析。libtriton 已经完成解析和 verifier；
-提升器遍历类型化 operation/value，再将 `arith.muli`、`arith.divsi`、
-`tt.addptr`、`tt.load`、`arith.mulf`、`arith.addf` 和 `tt.store` 等映射到
-Semantic TTIR 表达式。canonical operation assembly 只作为少量属性读取的后备
-元数据，不承担模块语法或 SSA 解析。
-
-实际提升结果可以概括为：
-
-| 字段 | 左侧 | 右侧 |
-| --- | --- | --- |
-| programs | `ceildiv(c,256)` | `ceildiv(c,128)` |
-| lanes | 256 | 128 |
-| logical index | `pid*256+lane` | `pid*128+lane` |
-| mask | `logical<a*b` | `logical<c` |
-| output offset | `(logical div b)*b+(logical rem b)` | `logical` |
-| store value | `load(Input)+Alpha*load(Other)` | `load(Input)+load(Alpha[0])*load(Other)` |
-
-当前提升器要求每侧恰好一个 `tt.store`。region、循环、多 store、原子操作等即使能
-被 libtriton 正确解析，也不会在这里被悄悄忽略，而会返回 `UNKNOWN`。
-
-## 5. 参数化 SMT 证明
-
-### 5.1 基础公式
-
-令参数域与关系的合取为 `D(a,b,c)`：
+严格 JSON 中的节点是：
 
 ```text
-D := ranges(a,b,c)
-  and i32_defined(a*b)
-  and a*b=c
+broadcast_alpha = prims.broadcast_in_dim(alpha, [torch_dim0,torch_dim1], [])
+scaled_other    = prims.mul(broadcast_alpha, other)
+result          = prims.add(input, scaled_other)
 ```
 
-令任意待观察逻辑输出为：
+Prims 提升器按 row-major 逻辑索引构造输入 load。rank 固定为 2，两个维度值由
+PairSpec 绑定为 `a,b`。内部逻辑域为：
+
+```text
+programs = a*b
+lanes = 1
+logical = pid
+store(rhs.output, pid, true, result(pid))
+```
+
+这只是共同 IR 的逻辑张量域，不是 Torch GPU launch。
+
+## 3. 参数符号化
+
+令任意输出位置为 `k`：
 
 ```text
 K(k) := 0 <= k < c
 ```
 
-除“参数域可满足”外，每个证明义务都采用反例查询：
+每侧 canonical writer 为：
+
+```text
+pid_side  = k div lanes_side
+lane_side = k rem lanes_side
+```
+
+定义缩写：
+
+```text
+qL(k) = (k div 256)*256 + (k rem 256)
+oL(k) = (qL(k) div b)*b + (qL(k) rem b)
+mL(k) = qL(k) < a*b
+
+qR(k)   = k div 1
+rowR(k) = (qR(k) div b) rem a
+colR(k) = qR(k) rem b
+oR(k)   = rowR(k)*b + colR(k)
+```
+
+这些表达式没有在进入 e-graph 前被求成某个具体 shape 的整数。
+
+## 4. SMT 证明的职责
+
+验证器先构造参数域：
+
+```text
+D := ranges(a,b,c) and a*b=c and required signed-i32 definedness
+```
+
+第一次查询检查 `D` 可满足，结果为 `SAT`，排除真空证明。之后每项查询形式为：
 
 ```text
 D and counterexample
 ```
 
-Z3 返回 `UNSAT` 表示在整个参数域内不存在该类反例。任一必要查询为 `SAT` 或
-`UNKNOWN`，验证器都不会继续给出本次 `PROVED`。
+本次报告共 45 次 Z3 调用：1 次 `SAT` 的非空域检查，44 次必要反例查询均为
+`UNSAT`。它们覆盖：
 
-### 5.2 canonical writer
+- `c` 始终为正且定义；
+- 两侧 program 数合法；
+- active logical index 在 `[0,c)`；
+- canonical writer 对每个 `k` 有效且 active；
+- logical writer 唯一；
+- output address 单射、无竞争；
+- 左右 output address 对应；
+- 每个 load offset/mask 有定义；
+- 每个被观察 load 的 mask 恒真；
+- 每个 load 地址对应 canonical 逻辑位置 `k`；
+- 两侧 store mask 恒真且 store address 对应 `k`。
 
-对每一侧 lane 数 `L`，验证器为逻辑输出 `k` 构造 canonical writer：
+关键变化是：这些 `UNSAT` 结果只允许相应规则进入 e-graph，不直接返回相同的 read
+叶子，也不直接判定最终值相等。
+
+## 5. 初始重写目标
+
+代入 canonical writer 后，左根是：
 
 ```text
-pid  = k div L
-lane = k rem L
+observe_store(lhs:arg3, oL(k), mL(k),
+  fadd(
+    load(lhs:arg0, oL(k), mL(k), 0),
+    fmul(
+      input(lhs:arg2),
+      load(lhs:arg1, oL(k), mL(k), 0))))
 ```
 
-然后证明它位于 launch grid 中、mask 为真、logical index 等于 `k`。再引入第二组
-`pid_2/lane_2`，证明不存在两个不同 lane 写同一逻辑输出，也不存在两个不同 lane
-写同一物理地址。
-
-### 5.3 地址等价不是 e-graph 浮点重写
-
-对 canonical writer，左右输出地址分别为：
+右根是：
 
 ```text
-lhs_offset(k) = (k div b)*b + (k rem b)
-rhs_offset(k) = k
+observe_store(rhs:output, qR(k), true,
+  fadd(
+    load(rhs:input, oR(k), true, 0),
+    fmul(
+      load(rhs:alpha, 0, true, 0),
+      load(rhs:other, oR(k), true, 0))))
 ```
 
-验证器查询：
+注意五类实际差异仍存在：physical block、Alpha ABI、launch/lane 索引、二维 offset、
+store mask。此时两个根不属于同一 e-class。
+
+## 6. 本次新增的 8 条条件规则
+
+### 6.1 左侧 load/scalar
 
 ```text
-D and K(k) and lhs_offset(k) != rhs_offset(k)
+parametric_load_lhs_0:
+  load(lhs:arg0,oL(k),mL(k),0) -> read(Input,k)
+
+parametric_scalar_role_lhs_1:
+  input(lhs:arg2) -> input(Alpha)
+
+parametric_load_lhs_2:
+  load(lhs:arg1,oL(k),mL(k),0) -> read(Other,k)
 ```
 
-结果为 `UNSAT`。这个等式连同除数非零、signed 除法定义性和中间 i32
-可表示性，是 Z3 的整数证明，不是 `fadd_comm`、`fmul_comm` 等 e-graph 浮点规则。
-这一区分避免把 shape/address 代数与计算表达式重写混在一起。
+两条 load 规则要求角色映射成立、`mL(k)=true`、`oL(k)=k`，并由相应 UNSAT 查询
+证明。scalar 规则来自 PairSpec 的 ABI 角色前提。
 
-### 5.4 实际 39 次检查
-
-报告记录 39 次求解器调用：1 次为 `SAT` 的非空域检查，其余 38 次反例查询均为
-`UNSAT`。
-
-| 序号 | 检查 | 数量 | 实际结果 | 关闭的风险 |
-| --- | --- | ---: | --- | --- |
-| 1 | `parameter-domain-satisfiable` | 1 | `SAT` | 排除空前提导致的真空证明 |
-| 2 | `output-numel-positive-and-defined` | 1 | `UNSAT` | `c` 非正或定义失败 |
-| 3-11 | 左侧 launch/index/mask/coverage/address/uniqueness/injectivity | 9 | 全部 `UNSAT` | 非法 lane、漏写、重复写、竞争、未定义地址 |
-| 12-20 | 右侧同类义务 | 9 | 全部 `UNSAT` | 同上 |
-| 21 | `lhs-rhs-output-address-equality` | 1 | `UNSAT` | 相同逻辑输出写入不同地址 |
-| 22-27 | 左侧 Input/Other 两个 load 的 offset/mask 定义性与 mask 恒真 | 6 | 全部 `UNSAT` | 观察域上的未定义或条件读取 |
-| 28-30 | 右侧 Input load 的同类检查 | 3 | 全部 `UNSAT` | 同上 |
-| 31 | `read-offset:Input:0` | 1 | `UNSAT` | 左右 Input 读取不同 offset |
-| 32-34 | 右侧 Alpha load 的 offset/mask 定义性与 mask 恒真 | 3 | 全部 `UNSAT` | Alpha 读取不稳定 |
-| 35 | `rhs:scalar-block-offset` | 1 | `UNSAT` | Alpha 没有读取 PairSpec 声明的 `arg1[0]` |
-| 36-38 | 右侧 Other load 的 offset/mask 定义性与 mask 恒真 | 3 | 全部 `UNSAT` | 观察域上的未定义或条件读取 |
-| 39 | `read-offset:Other:0` | 1 | `UNSAT` | 左右 Other 读取不同 offset |
-
-报告中的 `lhs:load-offset:defined`、`lhs:load-mask:defined`、
-`lhs:load-mask-true` 名称各出现两次，因为左侧有 Input 和 Other 两个普通 load；
-右侧对应名称各出现三次，因为还有 Alpha scalar-block load。每次调用仍有独立的
-query hash，可以在 `report.json` 中逐项审计。
-
-## 6. 从物理 load 到统一逻辑读取叶子
-
-地址证明完成后，`SymbolicValueEvaluator` 在 `K(k)` 域上重建两侧浮点值。
-
-左侧先建立两个逻辑读取 token：
+### 6.2 左侧 store
 
 ```text
-read(Input, symbolic_offset_Input_0)
-read(Other, symbolic_offset_Other_0)
+parametric_store_lhs:
+  observe_store(lhs:arg3,oL(k),mL(k),v)
+    -> observe_store(Output,k,true,v)
 ```
 
-处理右侧时，`LeafRegistry` 使用 Z3 证明右侧 offset 分别与已有 Input/Other offset
-相等，所以复用同一个 token，而不是创建新的叶子。右侧 `arg1[0]` 又由 ABI 角色和
-`rhs:scalar-block-offset` 检查归一化为：
+条件是 `arg3 -> Output`、`mL(k)=true`、`oL(k)=k`。`v` 是 pattern 变量；该规则
+不会绕过 value 子树的证明。
+
+### 6.3 右侧 load
 
 ```text
-input(Alpha)
+parametric_load_rhs_0:
+  load(rhs:input,oR(k),true,0) -> read(Input,k)
+
+parametric_load_rhs_1:
+  load(rhs:alpha,0,true,0) -> input(Alpha)
+
+parametric_load_rhs_2:
+  load(rhs:other,oR(k),true,0) -> read(Other,k)
 ```
 
-因此进入计算验证的唯一根对是：
+Alpha 规则额外检查 scalar-block endpoint 的声明 offset 为 0。普通 load 规则利用
+`torch_dim0=a`、`torch_dim1=b` 和 `a*b=c` 证明 row-major offset 对应 `k`。
+
+### 6.4 右侧 store
 
 ```text
-lhs_root = fadd(
-  read(Input, symbolic_offset_Input_0),
-  fmul(input(Alpha), read(Other, symbolic_offset_Other_0)))
-
-rhs_root = fadd(
-  read(Input, symbolic_offset_Input_0),
-  fmul(input(Alpha), read(Other, symbolic_offset_Other_0)))
+parametric_store_rhs:
+  observe_store(rhs:output,qR(k),true,v)
+    -> observe_store(Output,k,true,v)
 ```
 
-两者是相同的类型化 `Expr`。这一步解释了为什么 raw TTIR 中复杂的二维地址和不同
-Alpha ABI 不再出现在计算 e-graph 中：它们已由前面的 SMT/ABI 义务处理，而不是
-被无条件删除。
+其中 `qR(k)=k div 1=k` 的条件由 SMT 证明。
 
-## 7. 重写规则的准入、条件与目标
-
-### 7.1 规则准入与规则应用是两件事
-
-本 PairSpec 没有声明 `rewrite_rules`，也没有启用 LLM。默认规则策略为：
+每条规则都同时出现在：
 
 ```text
-rule_policy.algebraic_validation = required
-semantic_mode = abstract_float
+proof.parametric_domain.fact_derived_rewrites
+proof.rule_admission
+proof.egraph.rule_application
 ```
 
-验证器仍会对 17 条内建浮点代数规则执行准入。每条规则的公共准入条件是：
+前两个字段说明为什么允许使用，第三个字段说明是否真的匹配。
 
-1. 当前语义必须是 `ABSTRACT_FLOAT`；
-2. 将 pattern 变量编码为 Z3 Real；
-3. 查询 `lhs != rhs`；
-4. 只有结果为 `UNSAT` 才标记为 `proved` 并允许进入 egglog ruleset。
+## 7. 17 条内建代数规则
 
-若真的运行饱和，一条规则还必须满足以下应用条件：
+验证器仍准入 `fadd_comm/fadd_assoc/fmul_comm/fmul_assoc/fadd_zero/.../fma_def`
+共 17 条抽象实数规则。每条都由 Z3 Real 证明 `lhs != rhs` 不可满足。
 
-1. e-graph 中存在与规则左侧 pattern 匹配的节点；
-2. 该规则已经通过准入及其 fact requirements；
-3. 饱和没有超过 `max_iterations=8`、`max_enodes=20000`、`timeout_ms=10000`；
-4. egglog 将匹配根与规则右侧做 `union`，而不是用字符串替换旧节点。
+本例的计算树在 load/scalar 规范化后结构已经相同，因此 fact-derived 阶段就闭合根，
+没有启动 `ALGEBRAIC_REWRITES` 阶段。17 条规则的实际 match 为 0。这里“规则已证明”
+不等于“规则已用于本次证明”。
 
-### 7.2 本例准入的 17 条规则
+## 8. e-graph 逐步变化
 
-所有规则的 `requires` 都是 `semantic_mode == abstract_float`，所有 Z3 准入查询都为
-`UNSAT`。下表的“实际匹配”全部为 0；原因不是所有 pattern 都无法匹配，而是根在
-饱和前已经同余，验证器根本没有调用 ruleset。
-
-| ID | 等式 | 实际匹配/应用 |
-| --- | --- | ---: |
-| `fadd_comm` | `a+b = b+a` | 0 |
-| `fadd_assoc` | `(a+b)+c = a+(b+c)` | 0 |
-| `fmul_comm` | `a*b = b*a` | 0 |
-| `fmul_assoc` | `(a*b)*c = a*(b*c)` | 0 |
-| `fadd_zero` | `a+0 = a` | 0 |
-| `fmul_one` | `a*1 = a` | 0 |
-| `fmul_zero` | `a*0 = 0` | 0 |
-| `fdiv_one` | `a/1 = a` | 0 |
-| `fsub_def` | `a-b = a+(-b)` | 0 |
-| `fneg_involution` | `-(-a) = a` | 0 |
-| `fsub_zero` | `a-0 = a` | 0 |
-| `fsub_self` | `a-a = 0` | 0 |
-| `fadd_inverse` | `a+(-a) = 0` | 0 |
-| `fneg_zero` | `-0 = 0` | 0 |
-| `fmul_add_distrib` | `a*(b+c) = a*b+a*c` | 0 |
-| `fmul_sub_distrib` | `a*(b-c) = a*b-a*c` | 0 |
-| `fma_def` | `fma(a,b,c) = a*b+c` | 0 |
-
-这里没有 fact-gated 规则、未经证明规则或 LLM 生成规则，所以：
+### 8.1 插入之前
 
 ```text
-trusted_rule_uses    = []
-unverified_rule_uses = []
-```
-
-### 7.3 重写目标和成功条件
-
-规则不是用来改写整个 TTIR，也不是用来证明 launch 或地址。它只面向第 6 节得到
-的浮点计算根对。计算成功条件是：
-
-```text
-eclass(lhs_root) == eclass(rhs_root)
-```
-
-如果初始不相等，验证器才运行统一 ruleset；若常规饱和后仍不相等且 PairSpec 显式
-启用 LLM，才会把未匹配根交给 LLM 选择和提出带条件规则。本例初始即相等，因此
-这两个分支都没有执行。
-
-## 8. e-graph 的真实逐步状态
-
-### 8.1 阶段 0：空图
-
-开始时：
-
-```text
-e-nodes  = 0
+e-nodes   = 0
 e-classes = 0
-roots     = []
 ```
 
-17 条规则已经完成准入，但尚未注册为一个运行中的 ruleset。
+### 8.2 插入两侧完整根
 
-### 8.2 阶段 1：插入左侧根
-
-`add_expr(lhs_root)` 递归插入 7 个节点。概念上的 e-class 为：
-
-| e-class | 唯一 e-node |
-| --- | --- |
-| `C0` | `var(symbolic_offset_Input_0)` |
-| `C1` | `read(Input, C0)` |
-| `C2` | `input(Alpha)` |
-| `C3` | `var(symbolic_offset_Other_0)` |
-| `C4` | `read(Other, C3)` |
-| `C5` | `fmul(C2, C4)` |
-| `C6` | `fadd(C1, C5)` |
-
-左侧根 `etv_root_0` 指向 `C6`：
+两侧物理 load/store 和索引表达式均被保留：
 
 ```text
-e-nodes   = 7
-e-classes = 7
+e-nodes   = 40
+e-classes = 40
+unmatched_root_pairs = 1
 ```
 
-此时没有应用规则，也没有显式 union。
+与旧实现不同，hash-consing 不会让两根提前相同。
 
-### 8.3 阶段 2：插入右侧根
+### 8.3 fact-derived 第 1 轮
 
-`add_expr(rhs_root)` 递归遇到完全相同的 op、children、data 和 sort。egglog 的
-hash-consing 复用 `C0..C6`，不创建新节点：
+统一 ruleset 在第一轮匹配全部 8 条规则：
 
 ```text
-etv_root_0 -> C6
-etv_root_1 -> C6
-
-e-nodes   = 7
-e-classes = 7
+parametric_load_lhs_0        x1
+parametric_scalar_role_lhs_1 x1
+parametric_load_lhs_2        x1
+parametric_store_lhs         x1
+parametric_load_rhs_0        x1
+parametric_load_rhs_1        x1
+parametric_load_rhs_2        x1
+parametric_store_rhs         x1
 ```
 
-这不是通过 `fadd_comm` 或其他规则合并的。两个 root 在创建时就引用同一 canonical
-term/e-class。
+概念上的合并顺序是：
 
-### 8.4 阶段 3：rebuild 与初始同余检查
+1. 两侧 Input load 加入 `read(Input,k)` 所在 e-class；
+2. 两侧 Alpha 表示加入 `input(Alpha)` 所在 e-class；
+3. 两侧 Other load 加入 `read(Other,k)` 所在 e-class；
+4. 同余闭包合并两侧 `fmul`；
+5. 同余闭包合并两侧 `fadd`；
+6. 两侧 store 各加入 canonical `observe_store(Output,k,true,value)`；
+7. value 子类相同后，同余闭包合并最终 store 根。
 
-ETV 调用 `rebuild()`；egglog 在注册表达式时已经维护图结构，这个包装方法不会增加
-节点。随后检查：
+egglog 同一轮批量执行匹配，因此报告不伪造逐条 wall-clock 顺序。第一轮结束：
 
 ```text
-equivalent(etv_root_0, etv_root_1) == true
-initially_unmatched == []
+before: 40 e-nodes / 40 e-classes
+after : 42 e-nodes / 34 e-classes
+updated = true
+unmatched_root_pairs = 0
 ```
 
-图仍为 7 e-node、7 e-class。
+报告只把这一轮的总量变化记为 `+2 e-node/-6 e-class`；具体 canonical 表示与 union
+由 egglog 在同一 ruleset 中批量建立，不把聚合计数反推成虚构的逐条内部执行顺序。
 
-### 8.5 阶段 4：饱和决策
+### 8.4 fact-derived 第 2 轮
 
-验证器的分支是：
+第二轮仍能 e-match 右侧规则，但没有产生新 union：
 
 ```text
-if initially_unmatched:
-    saturate(admitted_rules)
-else:
-    stop_reason = ROOTS_ALREADY_CONGRUENT
+before: 42 e-nodes / 34 e-classes
+after : 42 e-nodes / 34 e-classes
+updated = false
+stop_reason = SATURATED
 ```
 
-本例走 `else`。因此真实规则应用序列为：
+累计 match count 中部分右侧规则显示 x2，这是 egglog 每轮匹配统计，不表示等式被
+破坏性地应用两次。图在第二轮没有变化。
+
+最终：
 
 ```text
-[]
-```
-
-不存在“应用第 1 条规则之后”的实际图，也不存在第 1 次 egglog ruleset 迭代。
-报告中的 `iterations=0` 表示饱和没有启动，不是运行了一轮但没有匹配。
-
-最终 e-graph 统计：
-
-```text
-root_pairs            = 1
+iterations = 2
+phase = FACT_DERIVED_RELATIONAL_REWRITES
 equivalent_root_pairs = 1
-e-nodes               = 7
-e-classes             = 7
-iterations            = 0
-rule_matches          = {}
-rule_applications     = {}
-stop_reason           = ROOTS_ALREADY_CONGRUENT
+after_fact_rewrites.unmatched_root_pairs = 0
 ```
 
-### 8.6 辅助示意：单条规则会怎样改变图
+## 9. 为什么 load 等价现在是重写证明
 
-本小节不是本次报告的执行轨迹，只用于解释“应用一条规则后 e-graph 发生什么”。
-假设强制对第 8.2 节的图运行交换律：
+旧路径先询问 SMT 两个 offset 是否相等，然后直接返回同一个
+`read(Input,symbolic_offset)`。这样 e-graph 看不到物理 load，根会在零轮饱和时同余。
 
-1. `fmul_comm` 匹配 `C5 = fmul(C2,C4)`；新增 e-node
-   `fmul(C4,C2)`，并将它 union 到 `C5`。概念统计变为 8 e-node、7 e-class。
-2. `fadd_comm` 匹配 `C6 = fadd(C1,C5)`；新增 e-node
-   `fadd(C5,C1)`，并将它 union 到 `C6`。概念统计变为 9 e-node、7 e-class。
-
-旧节点不会被删除；同一个 e-class 同时保存多个等价表示。这正是 equality
-saturation 与单向 AST 替换的区别。实际 ETV 使用统一 ruleset，一次迭代可能同时
-匹配多条规则，所以只有报告中的 match count 才是实际轨迹；上面的逐条数字只是
-隔离规则后的教学示意。
-
-## 9. 从计算同余到最终内存等价
-
-计算根同余还不是最终结论。`STORE` block 组合此前已经关闭的义务：
+新路径中 SMT 结果只出现在规则 admission。e-graph 初始明确看到：
 
 ```text
-same active domain
-and same unique writer
-and same output address
-and same computed value
-and all non-Output logical blocks unchanged
-=> same final Output memory
+load(lhs:arg0,oL,mL,0) != load(rhs:input,oR,true,0)
 ```
 
-本次报告的 12 个必要 proof block 全部为 `PROVED`：
+只有两条经过条件证明的规则都实际匹配后，它们才共享 `read(Input,k)` e-class。删除
+任一必要 load/store 规则都会留下 unmatched 根，不能得到本次 `PROVED`。
 
-| Block | 主要证据 |
+## 10. 最终结论
+
+必要 proof blocks 包括：
+
+| Block | 证据 |
 | --- | --- |
-| `FRONTEND` | libtriton parse/verify，`STRUCTURAL` |
-| `ABI` | PairSpec 角色对应，`TRUSTED_AXIOM` |
-| `PARAMETER_DOMAIN` | `PARAMETRIC_SMT` |
-| `INDEX` | `PARAMETRIC_SMT` |
-| `MASK` | `PARAMETRIC_SMT` |
-| `COVERAGE` | `PARAMETRIC_SMT` |
-| `RACE_FREEDOM` | `PARAMETRIC_SMT` |
-| `ADDRESS` | `PARAMETRIC_SMT` |
-| `LOAD` | `PARAMETRIC_SMT` 证明后的叶子归一化 |
-| `DEFINEDNESS` | 浮点表达式结构检查，`STRUCTURAL` |
-| `COMPUTE` | e-graph `CONGRUENCE` |
-| `STORE` | `PARAMETRIC_SMT + CONGRUENCE` |
+| `FRONTEND` | libtriton TTIR 检查与严格 Prims schema |
+| `ABI` | PairSpec 角色前提 |
+| `PARAMETER_DOMAIN` | 参数域 SAT、关系约束 |
+| `INDEX/MASK/COVERAGE` | 参数化 SMT |
+| `RACE_FREEDOM/ADDRESS` | 参数化 SMT |
+| `LOAD` | 条件规则准入，最终由规则应用闭合 |
+| `DEFINEDNESS` | 浮点结构检查 |
+| `COMPUTE` | egglog congruence + 已应用关系规则 |
+| `STORE` | 完整 observe_store 根相等 |
 
-任何一个 required block 不能关闭，最终状态都不会是 `PROVED`。
+最终输出：
 
-## 10. 证明了什么，没有证明什么
+```text
+PROVED parametric_ninetoothed_add_vs_torch_prims_add: OBSERVABLE_MEMORY_EQUIVALENT
+```
 
-本例证明：对所有满足声明域和 `a*b=c` 关系的 shape 参数，以及所有
-`ABSTRACT_FLOAT` 输入值，两侧产生相同的最终 `Output` 内存。
+该结论量化所有满足前提的 `a,b,c` 与所有 `ABSTRACT_FLOAT` 输入值。它不涵盖
+IEEE-754 位级行为、动态 rank、循环/归约、多 kernel、buffer 边界或提升器自身的
+形式正确性。
 
-它没有证明：
-
-- IEEE-754、容差或 GPU bitwise 等价；
-- 动态 rank、循环、多 store、原子操作或 shared-memory 语义；
-- 任意 stride、dtype、target 或 PairSpec 之外的 launch；
-- 分配 buffer 的真实边界安全；
-- 调用者提供的 shape/role/no-alias 事实一定符合运行时；
-- TTIR-to-Semantic-TTIR 提升器自身的形式正确性。
-
-当前可信计算基包括 PairSpec 事实、`ABSTRACT_FLOAT` 解释、Semantic TTIR/内存模型、
-TTIR 提升器、Z3、egglog 以及报告生成逻辑。由于本例没有使用未经验证的重写规则，
-不存在额外的 rule-specific trusted axiom。
-
-## 11. 如何复核
-
-重新运行验证后，可直接查看：
+## 11. 复核命令
 
 ```bash
-jq '.proof.parametric_domain.checks' build/add_parametric_raw/report.json
-jq '.proof.egraph' build/add_parametric_raw/report.json
+.venv/bin/python -m etv check examples/add/pair_parametric.json \
+  --out build/add_parametric
+
+jq '.proof.parametric_domain.checks' build/add_parametric/report.json
+jq '.proof.parametric_domain.fact_derived_rewrites' build/add_parametric/report.json
+jq '.proof.egraph.initial_state' build/add_parametric/report.json
+jq '.proof.egraph.stats.iteration_trace' build/add_parametric/report.json
+jq '.proof.egraph.rule_application' build/add_parametric/report.json
 ```
 
-重点字段应为：
-
-```text
-proof.parametric_domain.complete_for_parameter_domain = true
-proof.egraph.root_pairs = 1
-proof.egraph.equivalent_root_pairs = 1
-proof.egraph.stats.iterations = 0
-proof.egraph.stats.stop_reason = ROOTS_ALREADY_CONGRUENT
-proof.egraph.trusted_rule_uses = []
-proof.egraph.unverified_rule_uses = []
-```
-
-更一般的验证器契约见[完整验证过程](verification_process.md)，真实上游固定 shape
-Add 的来源与验证见[真实 Add 验证](add_validation.md)，当前能力边界见
-[实现状态](implementation_status.md)。
+通用契约见[完整验证过程](verification_process.md)，输入来源见
+[Add 验证](add_validation.md)。
