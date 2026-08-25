@@ -37,7 +37,7 @@ libtriton 解析文件、执行 module verifier，并遍历完整 operation/oper
 
 - `tt.get_program_id`、`tt.make_range`、`tt.splat`、`tt.broadcast`；
 - `tt.addptr`、`tt.load`、`tt.store`；
-- `arith.constant`、整数算术/比较、浮点逐点算术、`arith.select`；
+- `arith.constant`、整数算术/比较、整数 cast、浮点逐点算术、`arith.select`；
 - `math.sqrt`、`math.rsqrt` 等已列入语义的纯操作。
 
 libtriton 可以完整解析但提升器尚不支持的 region、循环、归约或副作用会返回
@@ -67,6 +67,13 @@ observe_store(side:physical_output, offset(k), mask(k), value(k))
 两侧物理名称和 side 标签始终保留。不能仅因为两个变量都叫 `arg0` 就视为相同输入；
 它们必须经 PairSpec 角色映射和已准入关系规则连接。
 
+整数 `arith.extsi/extui/trunci/index_cast/index_castui` 不在提升时折叠。内部 IR 分别保留
+`sext/zext/trunc/index_cast/index_castui` operator 及源、目标类型，例如
+`sext[i8->i32](x)`。egglog 没有内建 cast 恒等规则；两侧 cast 结构不一致时，固定规模
+路径要求显式规则实际匹配，否则返回 `CAST_EQUIVALENCE_NOT_REWRITTEN`。相同 cast 结构
+可由同余处理。显式位宽的 cast 使用有限位宽语义；目标相关的 `index` 位宽尚无 ABI
+声明，因此具体求值或 SMT 遇到它会返回 `UNKNOWN`，不会把它视为恒等。
+
 为提高证明内核测试速度，`load_internal_pair_spec`、`load_program` 和
 `verify_internal_spec` 可读取 `etv-semantic-program-v1` 测试夹具。这是 Python 内部
 测试 API，不由 CLI 暴露，也不是第三种生产前端。
@@ -95,9 +102,11 @@ PairSpec 的内部唯一事实源是 `PredicateSet`。`spec.roles` 与 `spec.fac
 `user:<path>`。注册表是单次验证的不可变数据，不会 hack、patch 或修改 egglog 包，
 也不会把用户规则永久加入进程级全局集合。
 
-代数规则进入 Z3 Real 准入门；事实相关规则必须满足 predicate gate。参数化关系规则由
-ETV 从谓词生成，并用针对当前程序对的 SMT 义务证明适用条件。没有验证器的自定义
-关系规则只能 `admitted_unverified`，其实际使用会降低报告的 soundness 等级。
+浮点代数规则进入 Z3 Real 准入门；显式 `iN` 整数 cast 规则使用精确的模数/符号扩展
+公式准入。事实相关规则必须满足 predicate gate。参数化关系规则由 ETV 从谓词生成，
+并用针对当前程序对的 SMT 义务证明适用条件。涉及目标相关 `index` 位宽的通用规则不会
+被 Z3 准入。没有验证器的自定义关系规则只能 `admitted_unverified`，其实际使用会降低
+报告的 soundness 等级。
 
 ## 参数化与内存义务
 

@@ -4,7 +4,13 @@ from pathlib import Path
 import pytest
 
 from etv.model import InputError
-from etv.schema import load_internal_pair_spec, load_pair_spec, load_program, parse_expr
+from etv.schema import (
+    load_internal_pair_spec,
+    load_pair_spec,
+    load_program,
+    parse_expr,
+    parse_rewrite_rule,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"
@@ -19,6 +25,40 @@ def test_loads_example_program_and_spec():
     assert len(program.stores) == 1
     assert spec.pair_id == "add_ntops_2d_vs_inductor_linear"
     assert spec.facts.bindings["X"] == 128
+
+
+def test_integer_cast_expression_requires_and_preserves_type_metadata():
+    expression = parse_expr(
+        {"op": "sext", "args": [{"var": "x"}], "data": ["i8", "i32"]}
+    )
+
+    assert expression.data == ("i8", "i32")
+    assert expression.render() == "sext[i8->i32](var(x))"
+    assert expression.to_json()["data"] == ("i8", "i32")
+
+
+def test_integer_cast_expression_rejects_missing_type_metadata():
+    with pytest.raises(InputError, match="cast data"):
+        parse_expr({"op": "sext", "args": [{"var": "x"}]})
+
+
+def test_rewrite_schema_preserves_exact_integer_cast_types():
+    rule = parse_rewrite_rule(
+        {
+            "id": "typed_cast_rule",
+            "kind": "algebraic",
+            "lhs": {
+                "op": "sext",
+                "args": [{"match": "value"}],
+                "data": ["i8", "i32"],
+            },
+            "rhs": {"match": "value"},
+        }
+    )
+
+    assert rule.lhs.op == "sext"
+    assert rule.lhs.data == ("i8", "i32")
+    assert rule.lhs.match_data is True
 
 
 def test_loads_side_specific_bindings_from_real_pair():

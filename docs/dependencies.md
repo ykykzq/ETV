@@ -31,8 +31,8 @@ egglog 13.2.0 要求 Python 3.11 以上，因此 ETV 不再支持原来的 Pytho
 | `pytest` | `8.4.2` | 单元测试、集成测试和 CLI 测试 |
 | `hypothesis` | `6.141.1` | 整数恒等式的性质测试 |
 
-直接开发依赖记录在 `requirements-dev.txt` 中，传递依赖由 pip 解析。仅运行证明内核
-单元测试（raw TT IR 集成测试会跳过）可通过以下命令重建环境：
+开发依赖统一声明在 `pyproject.toml` 的 `dev` extra 中，传递依赖由 pip 解析。仅运行
+证明内核单元测试（raw TT IR 集成测试会跳过）可通过以下命令重建环境：
 
 ```bash
 python3.12 -m venv .venv
@@ -46,7 +46,8 @@ python3.12 -m venv .venv
 ## 真实 Add 提取依赖
 
 `examples/add` 的日常验证只需要 ETV 和 libtriton；只有重新生成该目录时才需要
-以下额外依赖。它们记录在 `requirements-extraction.txt`，不进入 ETV 运行时依赖：
+以下额外依赖。它们统一声明在 `pyproject.toml` 的 `extraction` extra 中，不进入 ETV
+核心运行时依赖：
 
 | 依赖 | 固定版本/提交 | 用途 |
 | --- | --- | --- |
@@ -64,6 +65,16 @@ python3.12 -m venv .venv
 提取工具要求 ninetoothed 以 editable 模式指向固定 checkout，并检查 ntops/
 ninetoothed 的 Git HEAD、两个 ntops 源文件哈希以及 Python 包版本。详细命令见
 [真实 Add 验证](add_validation.md)。
+
+提取环境可先统一安装 pyproject 中声明的依赖；运行提取工具前，再用同一固定提交的
+本地 checkout 以 editable 模式覆盖 ninetoothed：
+
+```bash
+python3.12 -m venv .extract-venv
+.extract-venv/bin/python -m pip install --upgrade pip
+.extract-venv/bin/python -m pip install -e '.[extraction,ttir]'
+.extract-venv/bin/python -m pip install -e /path/to/ninetoothed
+```
 
 Linux 上启用 raw TTIR：
 

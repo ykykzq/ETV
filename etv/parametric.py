@@ -8,6 +8,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 import z3
 
+from .casts import INTEGER_CAST_OPS, integer_width, normalize_cast_data
 from .evaluator import SideRoles, build_side_roles
 from .ir import Expr, Program, Sort, bool_const, int_const
 from .model import (
@@ -82,6 +83,15 @@ def _trunc_div(lhs: Any, rhs: Any) -> Any:
     return z3.If(z3.Xor(lhs < 0, rhs < 0), -quotient, quotient)
 
 
+def _unsigned_wrap(value: Any, width: int) -> Any:
+    return value % (1 << width)
+
+
+def _signed_wrap(value: Any, width: int) -> Any:
+    unsigned = _unsigned_wrap(value, width)
+    return z3.If(unsigned >= (1 << (width - 1)), unsigned - (1 << width), unsigned)
+
+
 class SMTContext:
     def __init__(
         self,
@@ -137,6 +147,37 @@ class SMTContext:
             condition for child in children for condition in child.conditions
         )
         values = tuple(child.value for child in children)
+        if op in INTEGER_CAST_OPS:
+            try:
+                source_type, result_type = normalize_cast_data(expression.data)
+                source_width = integer_width(source_type)
+                result_width = integer_width(result_type)
+            except ValueError as exc:
+                raise ParametricFailure(
+                    "PARAMETER_DOMAIN",
+                    "SYMBOLIC_INTEGER_CAST_UNSUPPORTED",
+                    f"cannot encode integer cast {expression.render()}: {exc}",
+                    {"operation": op, "side": self.side},
+                ) from exc
+            raw = z3.If(values[0], 1, 0) if z3.is_bool(values[0]) else values[0]
+            if op == "sext" and result_width > source_width:
+                result = _signed_wrap(raw, source_width)
+            elif op == "zext" and result_width > source_width:
+                result = _unsigned_wrap(raw, source_width)
+            elif op == "trunc" and result_width < source_width:
+                truncated = _signed_wrap(raw, result_width)
+                result = truncated != 0 if result_type == "i1" else truncated
+            else:
+                raise ParametricFailure(
+                    "PARAMETER_DOMAIN",
+                    "SYMBOLIC_INTEGER_CAST_UNSUPPORTED",
+                    f"invalid or target-dependent integer cast {expression.render()}",
+                    {"operation": op, "side": self.side},
+                )
+            result_conditions = (
+                conditions if result_type == "i1" else (*conditions, _i32(result))
+            )
+            return SMTTerm(result, result_conditions)
         if op == "iadd":
             result = values[0] + values[1]
             return SMTTerm(result, (*conditions, _i32(result)))
@@ -244,6 +285,7 @@ class Prover:
         if result["result"] != "unsat":
             raise ParametricFailure(block, reason, summary, result, status=status)
         return result
+
 
 def _substitute(expression: Expr, env: Mapping[str, Expr]) -> Expr:
     if expression.op == "var" and str(expression.data) in env:
@@ -466,7 +508,11 @@ class SymbolicValueRewriter:
                         "select",
                         physical,
                         selected,
-                        {"result": "unsat", "condition_value": expected, "proof": proof},
+                        {
+                            "result": "unsat",
+                            "condition_value": expected,
+                            "proof": proof,
+                        },
                     )
                     return physical
             raise ParametricFailure(

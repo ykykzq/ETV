@@ -8,6 +8,8 @@ from typing import Any, Dict, Iterable, Mapping, Tuple
 
 import z3
 
+from .casts import INTEGER_CAST_OPS, integer_width, normalize_cast_data
+from .ir import Sort
 from .model import PairSpec
 from .rules import Pattern, Rule, builtin_rules
 
@@ -21,13 +23,76 @@ UNVERIFIED_ALGEBRAIC_WARNING = (
 )
 
 
-def _term(pattern: Pattern, variables: Dict[str, Any]) -> Any:
+def _pattern_domain(pattern: Pattern, fallback: str = "real") -> str:
     if pattern.variable is not None:
-        return variables.setdefault(pattern.variable, z3.Real(pattern.variable))
+        return fallback
+    if pattern.op in INTEGER_CAST_OPS:
+        _, result = normalize_cast_data(pattern.data)
+        return "bool" if result == "i1" else "int"
+    if pattern.op == "const_int" or pattern.sort == Sort.INT:
+        return "int"
+    if pattern.op == "const_bool" or pattern.sort == Sort.BOOL:
+        return "bool"
+    return "real"
+
+
+def _unsigned_wrap(value: Any, width: int) -> Any:
+    return value % (1 << width)
+
+
+def _signed_wrap(value: Any, width: int) -> Any:
+    unsigned = _unsigned_wrap(value, width)
+    return z3.If(unsigned >= (1 << (width - 1)), unsigned - (1 << width), unsigned)
+
+
+def _term(
+    pattern: Pattern,
+    variables: Dict[str, Any],
+    variable_domains: Dict[str, str],
+    expected_domain: str = "real",
+) -> Any:
+    if pattern.variable is not None:
+        previous = variable_domains.get(pattern.variable)
+        if previous is not None and previous != expected_domain:
+            raise ValueError(
+                f"pattern variable {pattern.variable!r} is used as both {previous} and "
+                f"{expected_domain}"
+            )
+        variable_domains[pattern.variable] = expected_domain
+        if pattern.variable not in variables:
+            constructor = {
+                "real": z3.Real,
+                "int": z3.Int,
+                "bool": z3.Bool,
+            }[expected_domain]
+            variables[pattern.variable] = constructor(pattern.variable)
+        return variables[pattern.variable]
     if pattern.op == "const_float":
         numerator, denominator = pattern.data
         return z3.RealVal(numerator) / z3.RealVal(denominator)
-    args = [_term(arg, variables) for arg in pattern.args]
+    if pattern.op == "const_int":
+        return z3.IntVal(int(pattern.data))
+    if pattern.op == "const_bool":
+        return z3.BoolVal(bool(pattern.data))
+    if pattern.op in INTEGER_CAST_OPS:
+        source_type, result_type = normalize_cast_data(pattern.data)
+        source_width = integer_width(source_type)
+        result_width = integer_width(result_type)
+        source_domain = "bool" if source_type == "i1" else "int"
+        raw = _term(pattern.args[0], variables, variable_domains, source_domain)
+        raw_int = z3.If(raw, 1, 0) if source_domain == "bool" else raw
+        if pattern.op == "sext" and result_width > source_width:
+            result = _signed_wrap(raw_int, source_width)
+        elif pattern.op == "zext" and result_width > source_width:
+            result = _unsigned_wrap(raw_int, source_width)
+        elif pattern.op == "trunc" and result_width < source_width:
+            result = _signed_wrap(raw_int, result_width)
+        else:
+            raise ValueError(
+                f"invalid or target-dependent integer cast {pattern.op}{pattern.data!r}"
+            )
+        return result != 0 if result_type == "i1" else result
+    args = [_term(arg, variables, variable_domains, "real") for arg in pattern.args]
     if pattern.op == "fadd":
         return args[0] + args[1]
     if pattern.op == "fsub":
@@ -53,9 +118,16 @@ def validate_rule(rule: Rule, timeout_ms: int = 2_000) -> dict:
         }
         return value
     variables: Dict[str, Any] = {}
+    variable_domains: Dict[str, str] = {}
     try:
-        lhs = _term(rule.lhs, variables)
-        rhs = _term(rule.rhs, variables)
+        domain = _pattern_domain(rule.lhs)
+        rhs_domain = _pattern_domain(rule.rhs, domain)
+        if rhs_domain != domain:
+            raise ValueError(
+                f"rule result domains differ: lhs is {domain}, rhs is {rhs_domain}"
+            )
+        lhs = _term(rule.lhs, variables, variable_domains, domain)
+        rhs = _term(rule.rhs, variables, variable_domains, domain)
     except ValueError as exc:
         return {
             **rule.to_json(),
@@ -70,7 +142,11 @@ def validate_rule(rule: Rule, timeout_ms: int = 2_000) -> dict:
     validation: Dict[str, Any] = {
         "solver": "z3",
         "solver_version": z3.get_version_string(),
-        "logic": "quantifier-free nonlinear real arithmetic",
+        "logic": (
+            "quantifier-free integer arithmetic with exact finite-width cast formulas"
+            if domain in {"int", "bool"}
+            else "quantifier-free nonlinear real arithmetic"
+        ),
         "query": "lhs != rhs",
         "query_sha256": hashlib.sha256(formula.encode("utf-8")).hexdigest(),
         "result": str(result),

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Dict, Mapping, Tuple, Union
 
+from .casts import INTEGER_CAST_OPS, apply_integer_cast
 from .ir import Expr, Program, Sort, bool_const, float_const, int_const
 from .model import (
     Evaluation,
@@ -130,6 +131,22 @@ def eval_expr(
                 )
             return Expr("input", data=logical, sort=Sort.FLOAT)
         return Expr("read", args=(int_const(offset),), data=logical, sort=Sort.FLOAT)
+
+    if op in INTEGER_CAST_OPS:
+        value = eval_expr(expr.args[0], env, facts, roles)
+        if isinstance(value, Expr):
+            raise UnsupportedSemantics(
+                f"symbolic operand for integer cast {op!r} is unsupported",
+                "SYMBOLIC_INTEGER_CAST_UNSUPPORTED",
+            )
+        try:
+            result = apply_integer_cast(op, value, expr.data)
+        except ValueError as exc:
+            raise UnsupportedSemantics(
+                f"cannot evaluate integer cast {expr.render()}: {exc}",
+                "INTEGER_CAST_UNSUPPORTED",
+            ) from exc
+        return result if isinstance(result, bool) else _i32(result, op)
 
     if op in {"and", "or"}:
         lhs = _as_bool(eval_expr(expr.args[0], env, facts, roles), op)

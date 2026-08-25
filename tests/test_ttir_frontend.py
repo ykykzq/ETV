@@ -6,11 +6,12 @@ from pathlib import Path
 import pytest
 
 from etv.cli import main
-from etv.ir import int_const
+from etv.ir import Expr, Sort, int_const
 from etv.model import InputError, Status, UnsupportedSemantics
 from etv.schema import load_pair_spec
 from etv.ttir import LibTritonParser, REQUIRED_TRITON_VERSION, parse_ttir
 from etv.ttir.lift import lift_ttir
+from etv.ttir.model import TTIRArgument, TTIRModule, TTIROperation, TTIRValue
 from etv.verify import verify_spec
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,81 @@ def _has_pinned_libtriton() -> bool:
 
 
 HAS_LIBTRITON = _has_pinned_libtriton()
+
+
+def _cast_module(operation_name: str, source_type: str, result_type: str) -> TTIRModule:
+    output = TTIRValue(1, "!tt.ptr<f32>")
+    source = TTIRValue(2, source_type)
+    casted = TTIRValue(3, result_type)
+    zero = TTIRValue(4, "f32")
+    pointer = TTIRValue(5, "!tt.ptr<f32>")
+
+    def operation(index, name, operands=(), results=(), attributes=None, assembly=None):
+        return TTIROperation(
+            index=index,
+            name=name,
+            operands=tuple(operands),
+            results=tuple(results),
+            block_id=0,
+            regions=0,
+            attributes={} if attributes is None else attributes,
+            assembly=assembly,
+        )
+
+    return TTIRModule(
+        source=ROOT / "tests/fixtures/synthetic_cast.ttir",
+        source_sha256="0" * 64,
+        parser="test",
+        parser_version=REQUIRED_TRITON_VERSION,
+        function="cast_kernel",
+        arguments=(TTIRArgument(0, output), TTIRArgument(1, source)),
+        operations=(
+            operation(0, operation_name, (source,), (casted,)),
+            operation(
+                1, "arith.constant", results=(zero,), attributes={"value": "0.0"}
+            ),
+            operation(2, "tt.addptr", (output, casted), (pointer,)),
+            operation(3, "tt.store", (pointer, zero)),
+            operation(4, "tt.func", attributes={"sym_name": "cast_kernel"}),
+        ),
+        canonical_assembly="",
+    )
+
+
+def _find_expr(expression: Expr, op: str):
+    if expression.op == op:
+        return expression
+    return next(
+        (
+            found
+            for argument in expression.args
+            if (found := _find_expr(argument, op)) is not None
+        ),
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("operation_name", "source_type", "result_type", "semantic_op"),
+    [
+        ("arith.extsi", "i8", "i32", "sext"),
+        ("arith.extui", "i8", "i32", "zext"),
+        ("arith.trunci", "i32", "i8", "trunc"),
+        ("arith.index_cast", "i32", "index", "index_cast"),
+        ("arith.index_castui", "i32", "index", "index_castui"),
+    ],
+)
+def test_lifter_preserves_integer_cast_operators(
+    operation_name, source_type, result_type, semantic_op
+):
+    program = lift_ttir(
+        _cast_module(operation_name, source_type, result_type), int_const(1)
+    )
+
+    cast = _find_expr(program.stores[0].offset, semantic_op)
+    assert cast is not None
+    assert cast.data == (source_type, result_type)
+    assert cast.sort == Sort.INT
 
 
 def test_real_add_artifacts_match_provenance():

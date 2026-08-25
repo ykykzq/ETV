@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+from collections import Counter
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
+from .casts import INTEGER_CAST_OPS
 from .egraph import EGraph
 from .evaluator import SideRoles, eval_expr, evaluate_program
 from .ir import Expr, Program, Sort
@@ -141,7 +143,7 @@ def _base_report(spec: PairSpec) -> dict:
     ]
     return {
         "schema_version": 5,
-        "tool": {"name": "ETV", "version": "0.6.0"},
+        "tool": {"name": "ETV", "version": "0.6.1"},
         "pair_id": spec.pair_id,
         "status": Status.UNKNOWN.value,
         "reason": "NOT_RUN",
@@ -224,9 +226,11 @@ def _finish(
     report["status"] = status.value
     report["reason"] = reason
     report["counterexample"] = counterexample
-    unverified = (
-        report.get("proof", {}).get("egraph", {}).get("unverified_rule_uses", [])
-    )
+    proof = report.get("proof", {})
+    unverified = [
+        *proof.get("egraph", {}).get("unverified_rule_uses", []),
+        *proof.get("cast_rewrites", {}).get("unverified_rule_uses", []),
+    ]
     conditional = [
         f"unverified rewrite rule: {entry['id']}"
         for entry in unverified
@@ -262,7 +266,7 @@ def _finish(
 def _invalid_report(path: Path, exc: Exception) -> dict:
     return {
         "schema_version": 5,
-        "tool": {"name": "ETV", "version": "0.6.0"},
+        "tool": {"name": "ETV", "version": "0.6.1"},
         "pair_id": path.stem,
         "status": Status.UNKNOWN.value,
         "reason": getattr(exc, "code", "INVALID_INPUT"),
@@ -504,6 +508,120 @@ def _expected_numel(spec: PairSpec) -> int:
     return value
 
 
+def _integer_casts(program: Program) -> list[Expr]:
+    casts: list[Expr] = []
+
+    def visit(expression: Expr) -> None:
+        if expression.op in INTEGER_CAST_OPS:
+            casts.append(expression)
+        for argument in expression.args:
+            visit(argument)
+
+    visit(program.programs)
+    for store in program.stores:
+        visit(store.logical_index)
+        visit(store.offset)
+        visit(store.mask)
+        visit(store.value)
+    return casts
+
+
+def _cast_descriptor(expression: Expr) -> tuple[str, Any]:
+    return expression.op, expression.data
+
+
+def _cast_rewrite_audit(spec: PairSpec, lhs: Program, rhs: Program) -> dict:
+    """Require rewrites for cast-shape differences before bounded evaluation."""
+
+    lhs_casts = _integer_casts(lhs)
+    rhs_casts = _integer_casts(rhs)
+    lhs_counts = Counter(_cast_descriptor(item) for item in lhs_casts)
+    rhs_counts = Counter(_cast_descriptor(item) for item in rhs_casts)
+    summary = {
+        "lhs": [item.render() for item in lhs_casts],
+        "rhs": [item.render() for item in rhs_casts],
+    }
+    if lhs_counts == rhs_counts:
+        return {
+            "status": "structurally_aligned",
+            "casts": summary,
+            "rule_matches": {},
+            "unverified_rule_uses": [],
+        }
+
+    lhs_remaining = list(lhs_casts)
+    rhs_remaining = list(rhs_casts)
+    for descriptor in sorted(set(lhs_counts) & set(rhs_counts), key=repr):
+        for _ in range(min(lhs_counts[descriptor], rhs_counts[descriptor])):
+            lhs_remaining.pop(
+                next(
+                    index
+                    for index, item in enumerate(lhs_remaining)
+                    if _cast_descriptor(item) == descriptor
+                )
+            )
+            rhs_remaining.pop(
+                next(
+                    index
+                    for index, item in enumerate(rhs_remaining)
+                    if _cast_descriptor(item) == descriptor
+                )
+            )
+
+    rules, admissions = admitted_rules(spec)
+    graph = EGraph()
+    lhs_roots = [
+        (item, graph.add_expr(item), graph.add_expr(item.args[0]))
+        for item in lhs_remaining
+    ]
+    rhs_roots = [
+        (item, graph.add_expr(item), graph.add_expr(item.args[0]))
+        for item in rhs_remaining
+    ]
+    stats = graph.saturate(rules, spec.limits)
+
+    unresolved: list[tuple[str, Expr]] = []
+    available_rhs = set(range(len(rhs_roots)))
+    for item, root, child in lhs_roots:
+        match = next(
+            (
+                index
+                for index in sorted(available_rhs)
+                if graph.equivalent(root, rhs_roots[index][1])
+            ),
+            None,
+        )
+        if match is not None:
+            available_rhs.remove(match)
+        elif not graph.equivalent(root, child):
+            unresolved.append(("lhs", item))
+    for index in sorted(available_rhs):
+        item, root, child = rhs_roots[index]
+        if not graph.equivalent(root, child):
+            unresolved.append(("rhs", item))
+
+    matches = stats.get("rule_matches", {})
+    used = [
+        {**dict(admission), "matches": matches.get(admission["id"], 0), "used": True}
+        for admission in admissions
+        if matches.get(admission["id"], 0)
+    ]
+    return {
+        "status": "unresolved" if unresolved else "rewritten",
+        "casts": summary,
+        "unresolved": [
+            {"side": side, "expression": expression.render()}
+            for side, expression in unresolved
+        ],
+        "rule_matches": dict(matches),
+        "rule_admission": used,
+        "unverified_rule_uses": [
+            item for item in used if item.get("status") == "admitted_unverified"
+        ],
+        "stats": stats,
+    }
+
+
 def _combine_saturation(first: dict, second: dict) -> dict:
     matches: Dict[str, int] = {}
     for stats in (first, second):
@@ -645,9 +763,7 @@ def _complete_whole_compute_proof(
                     spec, assistance.rules
                 )
                 accepted_rules = tuple(relational_rules) + tuple(ordinary_rules)
-                rule_admission = tuple(relational_admission) + tuple(
-                    ordinary_admission
-                )
+                rule_admission = tuple(relational_admission) + tuple(ordinary_admission)
                 llm_saturation = _label_saturation(
                     egraph.saturate(ordinary_rules, spec.limits),
                     "LLM_ASSISTED_REWRITES",
@@ -821,9 +937,7 @@ def _partitioned_egraph_report(
     }
     admitted_rule_ids = list(
         dict.fromkeys(
-            rule_id
-            for egraph in egraphs
-            for rule_id in egraph["admitted_rule_ids"]
+            rule_id for egraph in egraphs for rule_id in egraph["admitted_rule_ids"]
         )
     )
     root_pairs = sum(item["root_pairs"] for item in egraphs)
@@ -1119,10 +1233,14 @@ def verify_pair(spec: PairSpec) -> dict:
             _block("FRONTEND", Status.UNKNOWN, str(exc), reason=exc.code)
         )
         return _finish(report, Status.UNKNOWN, exc.code)
-    return _verify_lifted_pair(report, spec, lhs_program, rhs_program, require_ttir=True)
+    return _verify_lifted_pair(
+        report, spec, lhs_program, rhs_program, require_ttir=True
+    )
 
 
-def verify_internal_pair(spec: PairSpec, lhs_program: Program, rhs_program: Program) -> dict:
+def verify_internal_pair(
+    spec: PairSpec, lhs_program: Program, rhs_program: Program
+) -> dict:
     """Run the proof core on pre-lifted Semantic IR for verifier tests."""
 
     return _verify_lifted_pair(
@@ -1252,6 +1370,49 @@ def _verify_lifted_pair(
             (ProofLevel.PARAMETRIC_SMT, ProofLevel.CONGRUENCE),
             symbolic.rewrite_rules,
             symbolic.rewrite_admission,
+        )
+
+    cast_audit = _cast_rewrite_audit(spec, lhs_program, rhs_program)
+    if cast_audit["casts"]["lhs"] or cast_audit["casts"]["rhs"]:
+        report["proof"]["cast_rewrites"] = cast_audit
+        if cast_audit["status"] == "unresolved":
+            report["blocks"].append(
+                _block(
+                    "CAST",
+                    Status.UNKNOWN,
+                    "integer cast differences were preserved but no admitted rewrite "
+                    "established their equivalence",
+                    reason="CAST_EQUIVALENCE_NOT_REWRITTEN",
+                    details=cast_audit,
+                )
+            )
+            return _finish(report, Status.UNKNOWN, "CAST_EQUIVALENCE_NOT_REWRITTEN")
+        levels = [ProofLevel.CONGRUENCE]
+        if cast_audit["status"] == "rewritten":
+            levels.append(ProofLevel.ALGEBRAIC)
+        if cast_audit["unverified_rule_uses"]:
+            levels.append(ProofLevel.TRUSTED_AXIOM)
+            trusted_ids = ", ".join(
+                item["id"] for item in cast_audit["unverified_rule_uses"]
+            )
+            report["trusted_axioms"].append(
+                f"unverified applied integer-cast rewrite rule(s): {trusted_ids}"
+            )
+            report["guarantees"]["does_not_prove"].append(
+                "soundness of integer-cast rules admitted without validation"
+            )
+        report["blocks"].append(
+            _block(
+                "CAST",
+                Status.PROVED,
+                (
+                    "integer cast operators are structurally aligned on both sides"
+                    if cast_audit["status"] == "structurally_aligned"
+                    else "all differing integer cast operators were discharged by admitted rewrites"
+                ),
+                levels,
+                details=cast_audit,
+            )
         )
 
     try:

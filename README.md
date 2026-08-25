@@ -1,7 +1,10 @@
 # ETV
 
-ETV（Equivalence for TTIR Verification）验证两份 raw TT IR kernel 在给定
-PairSpec 前提下是否具有相同的可观察输出内存。两侧输入统一为 `.ttir`/`.mlir`：
+[中文](README_cn.md)
+
+ETV verifies whether two raw TT IR kernels have identical observable output
+memory under the assumptions declared in a PairSpec. Both inputs must be
+`.ttir` or `.mlir` files:
 
 ```text
 lhs.ttir -> libtriton parse/verify -> TTIR snapshot -> ETV IR --+
@@ -9,20 +12,30 @@ lhs.ttir -> libtriton parse/verify -> TTIR snapshot -> ETV IR --+
 rhs.ttir -> libtriton parse/verify -> TTIR snapshot -> ETV IR --+
 ```
 
-ETV IR 是面向验证的共同语义表示，描述 launch、逐 lane 地址、mask、load、算术和
-store；它不是 e-graph。证明阶段才把 ETV IR 中的表达式编码进 egglog e-graph，利用
-重写与同余闭包判断两侧 `observe_store` 是否进入同一个 e-class。
+ETV IR is a verification-oriented semantic representation of launches,
+per-lane addresses, masks, loads, arithmetic, and stores. It is not an e-graph.
+Only the proof stage encodes ETV IR expressions into an egglog e-graph and uses
+rewrites plus congruence closure to determine whether the two `observe_store`
+roots belong to the same e-class.
 
-## 结果
+## Results
 
-- `PROVED`：在 PairSpec 全部前提下，可观察 Output 内存等价；
-- `DISPROVED`：找到可重放的地址、mask 或抽象数值反例；
-- `UNKNOWN`：输入超出语义子集，或事实、定义域、规则、资源不足。
+- `PROVED`: observable Output memory is equivalent under all PairSpec premises;
+- `DISPROVED`: a replayable address, mask, or abstract-value counterexample was found;
+- `UNKNOWN`: the input is outside the semantic subset, or facts, domains, rules,
+  or resources are insufficient.
 
-当前浮点模式 `ABSTRACT_FLOAT` 使用精确数学值，不代表 IEEE-754、容差或 GPU 位级
-等价。当前 MVP 面向固定 rank、单 kernel、单 store 的无环逐点程序。
+The current `ABSTRACT_FLOAT` mode uses exact mathematical values. It does not
+represent IEEE-754, tolerance-based, or GPU bitwise equivalence. The current MVP
+targets fixed-rank, single-kernel, single-store, acyclic pointwise programs.
 
-## 安装
+Integer casts remain explicit IR operators carrying source and target types
+after TT IR lifting. The verifier has no default `cast(x) = x` rule. A cast
+structure mismatch must be eliminated by an admitted rewrite that actually
+fires; otherwise the result is `UNKNOWN(CAST_EQUIVALENCE_NOT_REWRITTEN)`. An
+undeclared target-dependent `index` width likewise produces `UNKNOWN`.
+
+## Installation
 
 ```bash
 python3.12 -m venv .venv
@@ -31,34 +44,36 @@ python3.12 -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-Linux 可直接安装 `ttir` extra。macOS 需要源码构建 Triton 3.7.1，见
-[依赖与环境](docs/dependencies.md)。
+The `ttir` extra can be installed directly on Linux. Building Triton 3.7.1 from
+source is required on macOS; see [Dependencies and Environment](docs/dependencies.md).
 
-## 使用
+## Usage
 
-固定 `[8,16]` 的真实 Add 程序对：
+Verify the real Add program pair with fixed shape `[8,16]`:
 
 ```bash
 .venv/bin/python -m etv check examples/add/pair.json --out build/add
 ```
 
-左侧来自 ntops/ninetoothed，右侧来自 PyTorch/TorchInductor；两侧都是真实生成的
-TT IR。预期结果：
+The left-hand side comes from ntops/ninetoothed and the right-hand side from
+PyTorch/TorchInductor. Both are genuinely generated TT IR. Expected result:
 
 ```text
 PROVED ntops_add_vs_torch_inductor_add: OBSERVABLE_MEMORY_EQUIVALENT
 ```
 
-参数化的 256-lane 二维 TT IR 对 128-lane 一维 TT IR：
+Verify a parameterized two-dimensional 256-lane TT IR program against a
+one-dimensional 128-lane TT IR program:
 
 ```bash
 .venv/bin/python -m etv check examples/add/pair_parametric.json \
   --out build/add_parametric
 ```
 
-该例在 `a>0, b>0, c>0, a*b=c` 下证明地址、mask、覆盖和计算等价。
+This example proves address, mask, coverage, and computation equivalence under
+`a > 0`, `b > 0`, `c > 0`, and `a * b = c`.
 
-解析单个 TT IR 并导出稳定快照：
+Parse a single TT IR file and export a stable snapshot:
 
 ```bash
 .venv/bin/python -m etv parse examples/add/ttir/ntops_add.ttir \
@@ -66,13 +81,15 @@ PROVED ntops_add_vs_torch_inductor_add: OBSERVABLE_MEMORY_EQUIVALENT
 .venv/bin/python -m etv inspect examples/add/ttir/torch_inductor_add.ttir
 ```
 
-`check` 和 `inspect` 不接受 Semantic JSON 或 Prims。`tests/fixtures/semantic` 中的
-JSON 只供证明内核单元测试使用，通过 Python 专用 API `verify_internal_spec` 进入，
-不属于用户输入协议；raw TT IR 集成夹具位于 `tests/fixtures/ttir`。
+`check` and `inspect` do not accept Semantic JSON or Prims. JSON files under
+`tests/fixtures/semantic` are proof-kernel unit-test fixtures that enter through
+the Python-only `verify_internal_spec` API; they are not part of the user input
+protocol. Raw TT IR integration fixtures live under `tests/fixtures/ttir`.
 
 ## PairSpec
 
-PairSpec v2 把配置、自然语言上下文、形式谓词、观察目标和重写库严格分开：
+PairSpec v2 strictly separates configuration, natural-language context, formal
+predicates, observation targets, and rewrite libraries:
 
 ```json
 {
@@ -109,38 +126,49 @@ PairSpec v2 把配置、自然语言上下文、形式谓词、观察目标和�
 }
 ```
 
-TT IR 本身不包含 host launch grid，因此 `programs` 必须显式给出，也可以是
-`ceildiv(c, 256)` 之类的符号表达式。`assumptions.for_llm` 不参与形式证明；ABI、shape、
-跨程序关系和 no-alias 信息必须写成 `predicates`。完整格式见
-[TT IR 输入格式](docs/ttir_input.md)与[完整验证过程](docs/verification_process.md)。
+TT IR does not contain the host launch grid, so `programs` must be supplied
+explicitly. It may also be a symbolic expression such as `ceildiv(c, 256)`.
+`assumptions.for_llm` never participates in formal proof. ABI, shape,
+cross-program relations, and no-alias information must be encoded as
+`predicates`. See [TT IR Input Format](docs/ttir_input.md) and
+[Complete Verification Process](docs/verification_process.md).
 
-## 等式饱和与 LLM
+## Equality Saturation and LLM Assistance
 
-内建代数规则先由 Z3 Real 证明。布局、地址、mask、标量 ABI 等关系规则由 ETV 根据
-PairSpec 谓词生成，并由参数化 SMT 查询证明适用条件；只有规则在 egglog 中实际匹配
-并合并根，才会关闭等价目标。用户规则位于独立的 `etv-rewrite-v1` 文件，加载后带
-`user:<path>` 来源与文件 SHA-256。用户或 LLM 新增的非代数规则可按当前策略作为可信
-规则准入，但若实际使用，报告会标为 `admitted_unverified`，且 `soundness.level` 会降为
-`conditional_on_unverified_rewrites`。
+Built-in floating-point algebraic rules are proved over Z3 Reals before use;
+explicit-width integer cast rules are checked with Z3 integer formulas. ETV
+derives layout, address, mask, and scalar ABI relation rules from PairSpec
+predicates and proves their applicability with parameterized SMT queries. An
+equivalence goal is closed only when a rule actually matches in egglog and
+merges its roots. User rules live in a separate `etv-rewrite-v1` file and are
+tagged with a `user:<path>` source and the file's SHA-256 digest. A new
+non-algebraic user or LLM rule may be admitted as trusted under the current
+policy, but if it fires the report marks it `admitted_unverified` and lowers
+`soundness.level` to `conditional_on_unverified_rewrites`.
 
-可选子图划分让 LLM 扫描完整左右程序并提出对应子图边界。ETV 自己检查根覆盖、路径
-唯一性、左右依赖拓扑、无环性和类型，再按依赖顺序分别验证；LLM 不决定等价结论。
+Optional subgraph partitioning lets an LLM scan the complete left and right
+programs and propose corresponding boundaries. ETV itself checks root coverage,
+path uniqueness, left/right dependency topology, acyclicity, and types before
+verifying partitions in dependency order. The LLM never decides equivalence.
 
-## 仓库结构
+## Repository Layout
 
 ```text
-etv/ir.py                     TT IR 提升后的共同语义 IR
-etv/ttir/libtriton.py         固定版本 libtriton 解析、验证与快照
-etv/ttir/lift.py              TT IR 到 ETV IR 的语义提升
-etv/schema.py                 TT IR PairSpec 与内部测试夹具 schema
-etv/parametric.py             参数化 SMT 义务和谓词派生规则
-etv/rules.py                  内建规则库与 predicate requirement
-etv/egraph.py                 egglog 编码、饱和与应用日志
-etv/partition.py              LLM 成对子图提议与机器检查
-etv/verify.py                 端到端证明编排
-tools/extract_add_pair.py     ntops/TorchInductor 双 TT IR 提取
-examples/add/                 程序对、PairSpec、源代码与来源哈希
+etv/ir.py                     Common semantic IR lifted from TT IR
+etv/casts.py                  Integer cast type metadata and finite-width semantics
+etv/ttir/libtriton.py         Pinned libtriton parsing, verification, and snapshots
+etv/ttir/lift.py              Semantic lifting from TT IR to ETV IR
+etv/schema.py                 TT IR PairSpec and internal test-fixture schemas
+etv/parametric.py             Parameterized SMT obligations and predicate-derived rules
+etv/rules.py                  Built-in rule library and predicate requirements
+etv/egraph.py                 egglog encoding, saturation, and application logs
+etv/partition.py              LLM paired-subgraph proposals and machine validation
+etv/verify.py                 End-to-end proof orchestration
+tools/extract_add_pair.py     ntops/TorchInductor dual-TT-IR extraction
+examples/add/                 Program pair, PairSpec, sources, and provenance hashes
 ```
 
-进一步阅读：[架构](docs/architecture.md)、[完整验证过程](docs/verification_process.md)、
-[实现状态](docs/implementation_status.md)和[真实 Add 验证](docs/add_validation.md)。
+Further reading: [Architecture](docs/architecture.md),
+[Complete Verification Process](docs/verification_process.md),
+[Implementation Status](docs/implementation_status.md), and
+[Real Add Verification](docs/add_validation.md).

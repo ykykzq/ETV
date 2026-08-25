@@ -73,6 +73,9 @@ class Expr:
                 f"observe_store({self.data}, "
                 f"{', '.join(arg.render() for arg in self.args)})"
             )
+        if self.op in {"sext", "zext", "trunc", "index_cast", "index_castui"}:
+            source, result = self.data
+            return f"{self.op}[{source}->{result}]({self.args[0].render()})"
         if not self.args:
             return self.op if self.data is None else f"{self.op}({self.data})"
         return f"{self.op}({', '.join(arg.render() for arg in self.args)})"

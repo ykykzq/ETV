@@ -1,6 +1,7 @@
 from etv.egraph import EGraph
 from etv.ir import Expr, Sort
-from etv.model import Limits
+from etv.model import Limits, ProofLevel
+from etv.rules import Rule, node, var
 from etv.z3_validator import validated_builtin_rules
 
 
@@ -10,7 +11,9 @@ def value(name):
 
 def test_fma_and_mul_add_saturate_to_same_eclass():
     a, b, c = value("a"), value("b"), value("c")
-    lhs = Expr("fadd", args=(c, Expr("fmul", args=(a, b), sort=Sort.FLOAT)), sort=Sort.FLOAT)
+    lhs = Expr(
+        "fadd", args=(c, Expr("fmul", args=(a, b), sort=Sort.FLOAT)), sort=Sort.FLOAT
+    )
     rhs = Expr("fma", args=(a, b, c), sort=Sort.FLOAT)
     graph = EGraph()
     lhs_root = graph.add_expr(lhs)
@@ -62,3 +65,47 @@ def test_egglog_enode_budget_is_reported_before_saturation():
 
     assert stats["stop_reason"] == "ENODE_LIMIT"
     assert stats["iterations"] == 0
+
+
+def test_integer_cast_is_not_an_implicit_egraph_identity():
+    value = Expr("var", data="x", sort=Sort.INT)
+    cast = Expr("sext", args=(value,), data=("i8", "i32"), sort=Sort.INT)
+    graph = EGraph()
+    value_root = graph.add_expr(value)
+    cast_root = graph.add_expr(cast)
+    builtin, _ = validated_builtin_rules()
+
+    stats = graph.saturate(builtin, Limits())
+
+    assert not graph.equivalent(value_root, cast_root)
+    assert all("cast" not in rule_id for rule_id in stats["rule_matches"])
+
+
+def test_integer_cast_can_only_merge_with_value_through_an_explicit_rule():
+    value = Expr("var", data="x", sort=Sort.INT)
+    cast = Expr("sext", args=(value,), data=("i8", "i32"), sort=Sort.INT)
+    graph = EGraph()
+    value_root = graph.add_expr(value)
+    cast_root = graph.add_expr(cast)
+    matched = var("value")
+    declaration = Rule(
+        "test_explicit_cast_equivalence",
+        node(
+            "sext",
+            matched,
+            data=("i8", "i32"),
+            match_data=True,
+            sort=Sort.INT,
+        ),
+        matched,
+        ProofLevel.TRUSTED_AXIOM,
+        "test_only",
+        "sext[i8->i32](value) == value",
+        kind="trusted_predicate",
+        source="test",
+    )
+
+    stats = graph.saturate((declaration,), Limits())
+
+    assert graph.equivalent(value_root, cast_root)
+    assert stats["rule_matches"][declaration.rule_id] >= 1

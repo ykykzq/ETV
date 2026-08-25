@@ -10,6 +10,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Tuple
 
+from .casts import INTEGER_CAST_OPS, normalize_cast_data
 from .ir import (
     Expr,
     Program,
@@ -78,10 +79,22 @@ _ARITY = {
     "frsqrt": 1,
     "fma": 3,
     "select": 3,
+    **{name: 1 for name in INTEGER_CAST_OPS},
 }
 
 _SORT = {
-    **{name: Sort.INT for name in ("iadd", "isub", "imul", "idiv", "irem", "ceildiv")},
+    **{
+        name: Sort.INT
+        for name in (
+            "iadd",
+            "isub",
+            "imul",
+            "idiv",
+            "irem",
+            "ceildiv",
+            *INTEGER_CAST_OPS,
+        )
+    },
     **{
         name: Sort.BOOL
         for name in ("lt", "le", "gt", "ge", "eq", "ne", "and", "or", "not")
@@ -113,6 +126,7 @@ _SYMBOLIC_PREDICATE_OPS = {
     "or",
     "not",
     "select",
+    *INTEGER_CAST_OPS,
 }
 
 
@@ -189,7 +203,11 @@ def parse_expr(value: Any, where: str = "expression") -> Expr:
             raise InputError(f"{where}.default must be abstract_float")
         return Expr("load", args=(offset, mask, default), data=block, sort=Sort.FLOAT)
 
-    _only_keys(value, {"op", "args"}, where)
+    _only_keys(
+        value,
+        {"op", "args", "data"} if op in INTEGER_CAST_OPS else {"op", "args"},
+        where,
+    )
     if op not in _ARITY:
         raise InputError(f"unsupported expression op {op!r} in {where}")
     args = value.get("args")
@@ -198,7 +216,20 @@ def parse_expr(value: Any, where: str = "expression") -> Expr:
     parsed_args = tuple(
         parse_expr(arg, f"{where}.{op}[{index}]") for index, arg in enumerate(args)
     )
-    if op == "select":
+    cast_data = None
+    if op in INTEGER_CAST_OPS:
+        try:
+            cast_data = normalize_cast_data(value.get("data"))
+        except ValueError as exc:
+            raise InputError(f"{where}.{op} has invalid cast data: {exc}") from exc
+        source_type, result_type = cast_data
+        operand_sort = Sort.BOOL if source_type == "i1" else Sort.INT
+        if parsed_args[0].sort != operand_sort:
+            raise InputError(
+                f"{where}.{op} operand sort does not match source type {source_type}"
+            )
+        result_sort = Sort.BOOL if result_type == "i1" else Sort.INT
+    elif op == "select":
         if parsed_args[0].sort != Sort.BOOL:
             raise InputError(f"{where}.select condition must be boolean")
         result_sort = parsed_args[1].sort
@@ -229,7 +260,7 @@ def parse_expr(value: Any, where: str = "expression") -> Expr:
         result_sort = Sort.FLOAT
     else:
         result_sort = _SORT[op]
-    return Expr(op, args=parsed_args, sort=result_sort)
+    return Expr(op, args=parsed_args, data=cast_data, sort=result_sort)
 
 
 def _validate_symbolic_predicate(expression: Expr, where: str) -> None:
@@ -382,8 +413,17 @@ def _rewrite_pattern(value: Any, where: str) -> Pattern:
     if not isinstance(args, list) or len(args) != _ARITY[op]:
         raise InputError(f"{where}.{op} expects {_ARITY[op]} argument(s)")
     sort_raw = value.get("sort")
+    cast_data = None
+    if op in INTEGER_CAST_OPS:
+        try:
+            cast_data = normalize_cast_data(value.get("data"))
+        except ValueError as exc:
+            raise InputError(f"{where}.{op} has invalid cast data: {exc}") from exc
+        inferred_sort = Sort.BOOL if cast_data[1] == "i1" else Sort.INT
+    else:
+        inferred_sort = Sort.FLOAT if op == "select" else _SORT[op]
     if sort_raw is None:
-        sort = Sort.FLOAT if op == "select" else _SORT[op]
+        sort = inferred_sort
     else:
         try:
             sort = Sort(sort_raw)
@@ -391,13 +431,17 @@ def _rewrite_pattern(value: Any, where: str) -> Pattern:
             raise InputError(
                 f"{where}.sort must be int, bool, or abstract_float"
             ) from exc
+        if op in INTEGER_CAST_OPS and sort != inferred_sort:
+            raise InputError(
+                f"{where}.sort does not match integer cast result type {cast_data[1]}"
+            )
     return node(
         op,
         *(
             _rewrite_pattern(arg, f"{where}.{op}[{index}]")
             for index, arg in enumerate(args)
         ),
-        data=value.get("data"),
+        data=cast_data if op in INTEGER_CAST_OPS else value.get("data"),
         match_data="data" in value,
         sort=sort,
     )

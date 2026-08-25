@@ -64,6 +64,11 @@ load(base,
 store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Program 是普通不可变
 语义对象，不包含等价类；后续有限求值、SMT、划分和 egglog 都读取它。
 
+整数 cast 不做前端恒等归一化。`arith.extsi/extui/trunci/index_cast/index_castui` 提升为
+携带源/目标类型的 `sext/zext/trunc/index_cast/index_castui` 节点。于是
+`sext[i8->i32](x)` 与 `x` 是两个不同的内部 IR term；除非显式规则被准入并实际命中，
+egglog 不会合并它们。两侧完全相同的 cast 节点仍可由结构相等与同余闭包处理。
+
 合法但未建模的 TT IR 返回 `UNKNOWN`，例如 region、循环、归约、原子操作或不支持的
 类型。`UNKNOWN` 表示没有结论，而不是不等价。
 
@@ -77,7 +82,9 @@ store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Pro
 - `div/sqrt/rsqrt` 等部分函数必须证明定义域，否则返回 `UNKNOWN`。
 
 整数用于地址和 shape。固定规模求值检查 signed i32 范围与除零；参数化路径通过 Z3
-加入定义性/范围义务。当前整数模型仍不是完整的 TT IR 位向量语义。
+加入定义性/范围义务。显式 `iN` cast 按低位截断、符号扩展或零扩展解释，不会直接返回
+operand。`index` 的位宽由 target data layout 决定，而当前 PairSpec 尚未声明该信息；
+因此相关 cast 返回 `UNKNOWN`。除 cast 外，当前整数模型仍不是完整的 TT IR 位向量语义。
 
 ## 5. ABI 谓词与内存观察
 
@@ -101,16 +108,19 @@ store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Pro
 
 当 PairSpec 没有符号参数时，ETV 枚举两侧全部 `program x lane`：
 
-1. 求值 store 的 logical index、offset 和 mask；
-2. 检查单个逻辑元素没有重复活动写；
-3. 检查活动逻辑域恰好覆盖 `[0, output_numel)`；
-4. 比较两侧每个逻辑元素的 output offset 和 mask；
-5. 保留两侧 value 表达式进入计算等价证明。
+1. 对齐两侧 cast 结构；差异必须由已准入规则实际消解；
+2. 求值 store 的 logical index、offset 和 mask；
+3. 检查单个逻辑元素没有重复活动写；
+4. 检查活动逻辑域恰好覆盖 `[0, output_numel)`；
+5. 比较两侧每个逻辑元素的 output offset 和 mask；
+6. 保留两侧 value 表达式进入计算等价证明。
 
 地址或 mask 不同可直接给出具体反例。值表达式不同则交给 egglog；无法合并时，Z3
 尝试构造抽象输入值模型，找到则为 `DISPROVED(COMPUTE_MISMATCH)`。
 
-有限枚举结论只覆盖 PairSpec 中固定的 launch 和 binding，不外推其他 shape。
+有限枚举结论只覆盖 PairSpec 中固定的 launch 和 binding，不外推其他 shape。即使某个 cast
+在被枚举值上碰巧等于 operand，也不能跳过第 1 项；缺少规则时返回
+`UNKNOWN(CAST_EQUIVALENCE_NOT_REWRITTEN)`。
 
 ## 7. 参数化义务
 
@@ -154,9 +164,11 @@ PairSpec 的 `rewrites` 列表按本次运行加载。验证器记录文件 SHA-
 
 ### 代数规则
 
-内建和用户自定义代数规则被翻译为 Z3 Real 等式。ETV 查询是否存在使左右不等的赋值；
-仅 `unsat` 才按 `ALGEBRAIC` 准入。例如交换律、结合律和 `fma(a,b,c) = a*b+c`。这些
-证明只对 `ABSTRACT_FLOAT` 有效。
+浮点代数规则被翻译为 Z3 Real 等式；显式 `iN` cast 规则被翻译为 Z3 Int 上的有限位宽
+模数、符号扩展和零扩展公式。ETV 查询是否存在使左右不等的赋值，仅 `unsat` 才按
+`ALGEBRAIC` 准入。因此无条件 `sext[i8->i32](x)=x` 会产生反例并被拒绝。依赖输入范围
+才能成立的 cast 关系必须引用 PairSpec predicate 并走关系规则；`index` 位宽未知时通用
+cast 规则也不会被形式准入。
 
 ### 事实派生关系规则
 
@@ -187,6 +199,11 @@ check(same_eclass(lhs_root, rhs_root))
 所有当前可能导致等价的情况在统一 e-graph 内考虑：代数形态、角色对应、scalar-block
 读取、不同 layout 的地址映射、不同 lane/launch、mask 和完整 store 观察。同余闭包会
 把已合并子表达式传播到父表达式。
+
+cast operator 与类型 payload 是 egglog term 的组成部分。规则库默认没有
+`cast(x) -> x`；固定规模路径另有 `CAST` 义务和 `proof.cast_rewrites` 应用日志，保证有限
+枚举不会在规则之外把 cast 当作恒等。参数化路径则用精确 cast SMT 公式证明地址条件，
+并把结论封装为随后必须在 egglog 中匹配的关系规则。
 
 饱和受 `max_iterations`、`max_enodes`、`timeout_ms` 限制。耗尽资源返回 `UNKNOWN`，
 不会以“没有找到证明”推断不等价。

@@ -1,14 +1,22 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
+import z3
 
 from etv.llm import LLMAssistance
 from etv.ir import Expr, Sort
-from etv.model import Status
+from etv.model import ProofLevel, Status
+from etv.parametric import ParametricFailure, SMTContext
 from etv.reporting import write_report
-from etv.schema import parse_rewrite_rule
-from etv.verify import _definedness_issue, verify_internal_spec as verify_spec
+from etv.rules import PredicateRequirement, Rule, node, var
+from etv.schema import load_internal_pair_spec, load_program, parse_rewrite_rule
+from etv.verify import (
+    _definedness_issue,
+    verify_internal_pair,
+    verify_internal_spec as verify_spec,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/semantic"
@@ -45,6 +53,94 @@ def test_machine_report_is_deterministic():
     path = FIXTURES / "specs/add_fma_proved.json"
 
     assert verify_spec(path) == verify_spec(path)
+
+
+def _pair_with_lhs_offset_cast():
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_proved.json")
+    lhs = load_program(spec.lhs_path)
+    rhs = load_program(spec.rhs_path)
+    store = lhs.stores[0]
+    cast = Expr(
+        "sext",
+        args=(store.offset,),
+        data=("i8", "i32"),
+        sort=Sort.INT,
+    )
+    return spec, replace(lhs, stores=(replace(store, offset=cast),)), rhs
+
+
+def test_bounded_verifier_does_not_silently_discharge_integer_cast():
+    spec, lhs, rhs = _pair_with_lhs_offset_cast()
+
+    report = verify_internal_pair(spec, lhs, rhs)
+
+    assert report["status"] == Status.UNKNOWN.value
+    assert report["reason"] == "CAST_EQUIVALENCE_NOT_REWRITTEN"
+    cast_block = next(block for block in report["blocks"] if block["kind"] == "CAST")
+    assert cast_block["status"] == Status.UNKNOWN.value
+    assert "sext[i8->i32]" in cast_block["details"]["unresolved"][0]["expression"]
+
+
+def test_bounded_verifier_uses_explicit_cast_rewrite_and_reports_trust():
+    spec, lhs, rhs = _pair_with_lhs_offset_cast()
+    value = var("value")
+    declaration = Rule(
+        "specialized_sext_identity",
+        node(
+            "sext",
+            value,
+            data=("i8", "i32"),
+            match_data=True,
+            sort=Sort.INT,
+        ),
+        value,
+        ProofLevel.TRUSTED_AXIOM,
+        "pair_predicate",
+        "the bounded offset specialization makes sext identity",
+        kind="trusted_fact",
+        source="test",
+        predicate_requirements=(
+            PredicateRequirement(kind="assumption", value=spec.facts.assumptions[0]),
+        ),
+    )
+    spec = replace(spec, rewrite_rules=(declaration,))
+
+    report = verify_internal_pair(spec, lhs, rhs)
+
+    assert report["status"] == Status.PROVED.value
+    assert report["proof"]["cast_rewrites"]["rule_matches"][declaration.rule_id] >= 1
+    assert report["soundness"]["level"] == "conditional_on_unverified_rewrites"
+
+
+def test_parametric_encoder_uses_integer_cast_bitwidth_semantics():
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_parametric_shapes.json")
+    value = z3.Int("cast_value")
+    expression = Expr(
+        "zext",
+        args=(Expr("var", data="cast_value", sort=Sort.INT),),
+        data=("i8", "i32"),
+        sort=Sort.INT,
+    )
+
+    term = SMTContext(spec, {}).term(expression, {"cast_value": value})
+    solver = z3.Solver()
+    solver.add(value == -1, term.value != 255)
+
+    assert solver.check() == z3.unsat
+
+
+def test_parametric_encoder_rejects_target_dependent_index_cast():
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_parametric_shapes.json")
+    expression = Expr(
+        "index_cast",
+        args=(Expr("var", data="cast_value", sort=Sort.INT),),
+        data=("i32", "index"),
+        sort=Sort.INT,
+    )
+
+    with pytest.raises(ParametricFailure) as error:
+        SMTContext(spec, {}).term(expression, {"cast_value": z3.Int("cast_value")})
+    assert error.value.reason == "SYMBOLIC_INTEGER_CAST_UNSUPPORTED"
 
 
 def test_all_admitted_rules_enter_the_unified_egglog_ruleset():
