@@ -8,17 +8,25 @@ from etv.schema import load_pair_spec, load_program
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests/fixtures/semantic"
 
 
 def test_loads_example_program_and_spec():
-    program = load_program(ROOT / "examples/programs/add_ntops_2d.json")
-    spec = load_pair_spec(ROOT / "examples/specs/add_proved.json")
+    program = load_program(FIXTURES / "programs/add_ntops_2d.json")
+    spec = load_pair_spec(FIXTURES / "specs/add_proved.json")
 
     assert program.name == "ntops_add_2d"
     assert program.lanes == 128
     assert len(program.stores) == 1
     assert spec.pair_id == "add_ntops_2d_vs_inductor_linear"
     assert spec.facts.bindings["X"] == 128
+
+
+def test_loads_side_specific_bindings_from_real_pair():
+    spec = load_pair_spec(ROOT / "examples/add/pair.json")
+
+    assert spec.facts.for_side("lhs").bindings["arg4"] == 8
+    assert spec.facts.for_side("rhs").bindings["arg4"] == 128
 
 
 def test_unknown_schema_key_is_rejected(tmp_path):
@@ -41,7 +49,7 @@ def test_unknown_schema_key_is_rejected(tmp_path):
 
 
 def test_unmapped_contract_role_is_rejected(tmp_path):
-    source = json.loads((ROOT / "examples/specs/add_proved.json").read_text(encoding="utf-8"))
+    source = json.loads((FIXTURES / "specs/add_proved.json").read_text(encoding="utf-8"))
     source["contract"]["output_role"] = "Missing"
     path = tmp_path / "bad-spec.json"
     path.write_text(json.dumps(source), encoding="utf-8")
@@ -51,7 +59,7 @@ def test_unmapped_contract_role_is_rejected(tmp_path):
 
 
 def test_loads_fact_gated_rewrite_with_llm_provenance(tmp_path):
-    source = json.loads((ROOT / "examples/specs/add_bad_compute.json").read_text(encoding="utf-8"))
+    source = json.loads((FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8"))
     source["facts"]["assumptions"].append("subtraction is equivalent to addition for this specialization")
     source["rewrite_rules"] = [
         {
@@ -84,7 +92,7 @@ def test_loads_fact_gated_rewrite_with_llm_provenance(tmp_path):
 
 
 def test_trusted_rewrite_without_fact_gate_is_rejected(tmp_path):
-    source = json.loads((ROOT / "examples/specs/add_bad_compute.json").read_text(encoding="utf-8"))
+    source = json.loads((FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8"))
     source["rewrite_rules"] = [
         {
             "id": "unconditional_trusted_rule",

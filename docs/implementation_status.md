@@ -4,22 +4,26 @@
 
 | 用例 | 预期 | 已实现结果 |
 | --- | --- | --- |
-| 二维连续 add 与线性 add | 证明等价 | `PROVED` |
-| `ABSTRACT_FLOAT` 下 mul+add 与 FMA | 使用已准入的桥接规则证明 | `PROVED`，`fma_def` 已由 Z3 验证 |
+| 上游 ntops 二维 Add 与实际 TorchInductor Add | 证明等价 | `PROVED`；真实生成 TTIR，左/右分别枚举 256/128 lane，128 个有效输出 |
+| `ABSTRACT_FLOAT` 下 mul+add 与 FMA（内部夹具） | 使用已准入的桥接规则证明 | `PROVED`，`fma_def` 已由 Z3 验证 |
 | `output_stride0 = N + 1` | 地址反例 | `DISPROVED(OUTPUT_ADDRESS_MISMATCH)` |
 | rhs 掩码为 `k < X - 1` | 掩码反例 | `DISPROVED(MASK_MISMATCH)` |
 | rhs 的 add 改为 sub | 值反例 | `DISPROVED(COMPUTE_MISMATCH)` |
 | 缺少 no-alias 声明 | 无法得出结论 | `UNKNOWN(MISSING_ALIAS_FACT)` |
-| raw TTIR mul+add 与 raw TTIR FMA | libtriton 解析后证明 | `PROVED`，两侧分别解析为 25/24 个操作 |
+| 合成 raw TTIR mul+add 与 FMA（内部夹具） | libtriton 解析后证明 | `PROVED`，用于前端与规则回归，不再作为用户示例 |
 | 含 `scf.for` 的 raw TTIR | 完整解析但不提升 | parser/verifier 通过；验证阶段为 `UNKNOWN(TTIR_REGION_SEMANTICS_UNSUPPORTED)` |
 
-当前测试套件包含 36 项测试。完整的 Python 3.12 + libtriton + egglog 环境中 36 项全部通过；不安装可选 TTIR 依赖时，31 项通过、5 项真实 libtriton 测试按条件跳过。覆盖范围包括 schema 拒绝、有符号除法/取余、i32 溢出、基于性质的扁平化验证、egglog 统一饱和/同余/资源预算、Z3 规则准入/拒绝、fact gate 与可信规则审计、确定性报告、CLI 退出码、libtriton 快照稳定性、region 解析以及 raw TTIR 端到端证明。
+当前测试套件共 38 项，在完整 Python 3.12 + libtriton + egglog 环境中全部通过。
+测试覆盖 schema 拒绝、有符号除法/取余、i32 溢出、基于性质的扁平化
+验证、egglog 统一饱和/同余/资源预算、Z3 规则准入/拒绝、fact gate 与可信规则
+审计、确定性报告、CLI 退出码、libtriton 快照稳定性、region 解析以及真实 Add
+raw TTIR 端到端证明，以及真实 artifact/provenance 哈希一致性。
 
 ## 组件矩阵
 
 | 组件 | 状态 | 说明 |
 | --- | --- | --- |
-| 严格的 PairSpec/结果契约 | 已完成 | JSON v1，拒绝未知字段 |
+| 严格的 PairSpec/结果契约 | 已完成 | JSON v1，拒绝未知字段，支持共享及左右单侧整数绑定 |
 | 逻辑 ABI/角色对齐 | MVP 范围内已完成 | block、scalar、scalar-block |
 | 事实/no-alias 上下文 | MVP 范围内已完成 | 固定绑定与成对不相交分组 |
 | Semantic TTIR 类型化表达式 | 逐点子集已完成 | 整数、掩码、load、抽象计算、store |
@@ -49,7 +53,10 @@ MVP 范围内已完成。PairSpec、结果 schema、Semantic TTIR JSON、锁定�
 
 ### M1：add 端到端验证
 
-已从 raw TTIR 边界端到端完成。索引、掩码、地址、标量 ABI、load、计算、store、Z3 规则准入、负向变异、报告和测试均已可用。
+已从真实上游代码到 raw TTIR 边界端到端完成。ntops 侧经 ninetoothed，参考侧
+经 PyTorch FakeTensor/FX/TorchInductor，两侧 TTIR 再由 libtriton 解析和提升。
+索引、掩码、地址、scalar 对 scalar-block ABI、load、计算、store、报告和测试均
+已可用。详细记录见[真实 Add 验证](add_validation.md)。
 
 ### M2：逐点算子扩展与候选生成
 
@@ -65,9 +72,14 @@ MVP 范围内已完成。PairSpec、结果 schema、Semantic TTIR JSON、锁定�
 
 ## 后续工程步骤
 
-1. 把压缩包所描述但未附带的 ntops/Inductor 完整 add TTIR 纳入语料，并生成稳定快照与 Semantic IR golden。
-2. 为非线性 launch/store 域增加显式逻辑 frontier 标注，移除当前 `pid * lanes + lane` 的逐点约定。
-3. 使用并行的 Z3 位向量证明义务替代具体整数枚举，以支持参数化索引/掩码规则，同时保留有界回归测试。
+1. 增加 CUDA 主机上的实际 runtime/TTIR dump 交叉检查，比较离线 sm80 codegen 与
+   真实 launch 选择；该步骤不应替代形式验证，但可缩小提取链风险。
+2. 为非线性 launch/store 域增加显式逻辑 frontier 标注，移除当前
+   `pid * lanes + lane` 的逐点约定。
+3. 使用并行的 Z3 位向量证明义务替代具体整数枚举，以支持参数化索引/掩码规则，
+   同时保留有界回归测试。
 4. 增加带机器可读谓词的条件规则，从 `sqrt/rsqrt/div` 的正值/非零定义域开始。
-5. 只有同时实现覆盖性、唯一性、单位元、地址和归约顺序证明义务后，才为 `scf.for`、`tt.reduce` 引入 `Theta/Reduce/Tile` 摘要。
-6. 为 egglog 等价结果增加可独立检查的 proof certificate 或解释导出，缩小当前可信计算基。
+5. 只有同时实现覆盖性、唯一性、单位元、地址和归约顺序证明义务后，才为
+   `scf.for`、`tt.reduce` 引入 `Theta/Reduce/Tile` 摘要。
+6. 为 egglog 等价结果增加可独立检查的 proof certificate 或解释导出，缩小当前
+   可信计算基。

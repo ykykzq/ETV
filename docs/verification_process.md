@@ -90,11 +90,11 @@ module {
 常用命令：
 
 ```bash
-python -m etv parse examples/ttir/add_mul.ttir \
-  --out build/add_mul.snapshot.json
+python -m etv parse examples/add/ttir/torch_inductor_add.ttir \
+  --out build/torch_inductor_add.snapshot.json
 python -m etv parse input.ttir --no-assembly
 python -m etv inspect input.ttir
-python -m etv check examples/specs/add_raw_ttir_proved.json
+python -m etv check examples/add/pair.json
 ```
 
 当前提升范围：
@@ -168,6 +168,7 @@ PairSpec 使用严格 JSON 格式 `etv-pair-v1`，主要字段如下：
 - `semantic_mode`：当前仅支持 `abstract_float`；
 - `roles`：两个物理 ABI 的逻辑角色对应关系；
 - `facts.bindings`：固定的整数形状、步长和启动配置；
+- `facts.side_bindings.lhs/rhs`：只对单侧生效的整数 ABI 绑定；
 - `facts.assumptions`：报告中的可信前提，也可供 `trusted_fact` gate 精确匹配；
 - `facts.disjoint`：成对不相交的逻辑 block 分组；
 - `contract`：可观察输出、大小、覆盖性和所需 no-alias 角色；
@@ -186,16 +187,22 @@ PairSpec 使用严格 JSON 格式 `etv-pair-v1`，主要字段如下：
 
 ```json
 {
-  "lhs": "../ttir/add_mul.ttir",
-  "rhs": "../ttir/add_fma.ttir",
+  "lhs": "ttir/ntops_add.ttir",
+  "rhs": "ttir/torch_inductor_add.ttir",
   "frontends": {
-    "lhs": {"kind": "ttir", "function": "add_mul", "programs": 1},
-    "rhs": {"kind": "ttir", "function": "add_fma", "programs": 1}
+    "lhs": {"kind": "ttir", "function": "ntops_add_kernel", "programs": 1},
+    "rhs": {"kind": "ttir", "function": "triton_poi_fused_0", "programs": 1}
   }
 }
 ```
 
 raw TTIR 参数按稳定位置命名为 `arg0`、`arg1` 等。PairSpec 的角色映射与绑定使用这些名称，而不依赖原始 SSA 拼写。当前逐点提升以 store tensor 的静态元素数作为 `lanes`，逻辑输出索引为 `pid * lanes + lane`；非线性域尚需显式 frontier 支持。
+
+共享 `facts.bindings` 会同时进入两侧求值环境；`facts.side_bindings.lhs` 和
+`facts.side_bindings.rhs` 分别只进入对应一侧，适合两个 ABI 在相同参数位置承载
+不同整数含义的情况。同一个名称不能同时出现在共享绑定和单侧绑定中。当前
+`trusted_fact` 的 `binding_equals` gate 只读取共享绑定，避免把单侧事实误当成关系
+事实。
 
 ## 语义模型
 
@@ -371,4 +378,8 @@ egglog 按 `max_iterations`、`max_enodes` 和 `timeout_ms` 逐轮运行。报�
 
 ETV 当前不保证：IEEE-754 或 GPU 位级等价、容差等价、buffer 边界安全、动态 shape、循环/归约、原子或共享内存语义、多 kernel 行为，以及超出固定 specialization 的参数化正确性。每份报告都会列出适用假设和相应限制。
 
-完整 Semantic JSON 示例见 `examples/specs/add_proved.json`，raw TTIR 示例见 `examples/specs/add_raw_ttir_proved.json`。安装与锁定依赖见 [依赖与环境](dependencies.md)，组件实现见 [架构](architecture.md)，当前覆盖范围见 [实现状态](implementation_status.md)。
+面向用户的完整 raw TTIR 示例见 `examples/add/pair.json`，其真实来源、生成步骤和
+逐项证明结果见[真实 Add 验证](add_validation.md)。旧的 Semantic JSON 和故障
+变体只保留在 `tests/fixtures/semantic` 中作为验证器单元测试输入，不作为真实程序
+来源声明。安装与锁定依赖见[依赖与环境](dependencies.md)，组件实现见
+[架构](architecture.md)，当前覆盖范围见[实现状态](implementation_status.md)。

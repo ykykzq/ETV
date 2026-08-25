@@ -1,0 +1,3353 @@
+{
+  "backend": "triton",
+  "kernel_name": "ntops_add",
+  "lowering_ir": "ssa.Program",
+  "source_route": "ssa-unified-triton-emitter",
+  "shape_params": [
+    "ninetoothed_ninetoothed_tensor_0_size_0",
+    "ninetoothed_ninetoothed_tensor_0_size_1",
+    "ninetoothed_ninetoothed_tensor_0_stride_0",
+    "ninetoothed_ninetoothed_tensor_0_stride_1",
+    "ninetoothed_ninetoothed_tensor_1_size_0",
+    "ninetoothed_ninetoothed_tensor_1_size_1",
+    "ninetoothed_ninetoothed_tensor_1_stride_0",
+    "ninetoothed_ninetoothed_tensor_1_stride_1",
+    "ninetoothed_ninetoothed_tensor_3_size_0",
+    "ninetoothed_ninetoothed_tensor_3_size_1",
+    "ninetoothed_ninetoothed_tensor_3_stride_0",
+    "ninetoothed_ninetoothed_tensor_3_stride_1"
+  ],
+  "variables": [
+    "input",
+    "other",
+    "alpha"
+  ],
+  "outputs": [
+    "output"
+  ],
+  "auxiliary_bindings": [],
+  "ssa": {
+    "kind": "ntops_add",
+    "inputs": [
+      {
+        "name": "input",
+        "type": {
+          "kind": "tensor",
+          "shape": [
+            "128"
+          ],
+          "dtype": "fp32",
+          "attrs": {
+            "ndim": 1,
+            "constexpr": false,
+            "jagged_dim": null,
+            "dtype_level": 0,
+            "source_name": "ninetoothed_tensor_0",
+            "source_ndim": 2,
+            "source_shape": [
+              "ninetoothed_ninetoothed_tensor_0_size_0",
+              "ninetoothed_ninetoothed_tensor_0_size_1"
+            ],
+            "source_dtype": "fp32",
+            "other": null,
+            "source_strides": [
+              "ninetoothed_ninetoothed_tensor_0_stride_0",
+              "ninetoothed_ninetoothed_tensor_0_stride_1"
+            ],
+            "target_dims": [
+              "0"
+            ],
+            "view_ndim": 1,
+            "view_shape": [
+              "(ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+            ],
+            "application_shape": [
+              "128"
+            ],
+            "application_ndim": 1,
+            "dtype_shapes": [
+              [
+                "128"
+              ]
+            ],
+            "dtype_target_dims": [
+              [
+                "0"
+              ]
+            ],
+            "access_templates": [
+              {
+                "level": 0,
+                "shape": [
+                  "128"
+                ],
+                "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_ninetoothed_tensor_0_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_ninetoothed_tensor_0_stride_1",
+                "offsets": [
+                  "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1",
+                  "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1"
+                ],
+                "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 < ninetoothed_ninetoothed_tensor_0_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 < ninetoothed_ninetoothed_tensor_0_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 >= 0)"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "other",
+        "type": {
+          "kind": "tensor",
+          "shape": [
+            "128"
+          ],
+          "dtype": "fp32",
+          "attrs": {
+            "ndim": 1,
+            "constexpr": false,
+            "jagged_dim": null,
+            "dtype_level": 0,
+            "source_name": "ninetoothed_tensor_1",
+            "source_ndim": 2,
+            "source_shape": [
+              "ninetoothed_ninetoothed_tensor_1_size_0",
+              "ninetoothed_ninetoothed_tensor_1_size_1"
+            ],
+            "source_dtype": "fp32",
+            "other": null,
+            "source_strides": [
+              "ninetoothed_ninetoothed_tensor_1_stride_0",
+              "ninetoothed_ninetoothed_tensor_1_stride_1"
+            ],
+            "target_dims": [
+              "0"
+            ],
+            "view_ndim": 1,
+            "view_shape": [
+              "(ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+            ],
+            "application_shape": [
+              "128"
+            ],
+            "application_ndim": 1,
+            "dtype_shapes": [
+              [
+                "128"
+              ]
+            ],
+            "dtype_target_dims": [
+              [
+                "0"
+              ]
+            ],
+            "access_templates": [
+              {
+                "level": 0,
+                "shape": [
+                  "128"
+                ],
+                "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_ninetoothed_tensor_1_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_ninetoothed_tensor_1_stride_1",
+                "offsets": [
+                  "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1",
+                  "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1"
+                ],
+                "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 < ninetoothed_ninetoothed_tensor_1_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 < ninetoothed_ninetoothed_tensor_1_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 >= 0)"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "alpha",
+        "type": {
+          "kind": "scalar",
+          "shape": [],
+          "dtype": "fp64",
+          "attrs": {
+            "ndim": 0,
+            "constexpr": false,
+            "jagged_dim": null,
+            "dtype_level": 0,
+            "source_name": "ninetoothed_tensor_2",
+            "source_ndim": 0,
+            "source_shape": [],
+            "source_dtype": "fp64",
+            "other": null,
+            "source_strides": [],
+            "target_dims": [],
+            "view_ndim": 0,
+            "view_shape": [],
+            "application_shape": [],
+            "application_ndim": 0,
+            "dtype_shapes": [],
+            "dtype_target_dims": [],
+            "access_templates": []
+          }
+        }
+      },
+      {
+        "name": "output",
+        "type": {
+          "kind": "tensor",
+          "shape": [
+            "128"
+          ],
+          "dtype": "fp32",
+          "attrs": {
+            "ndim": 1,
+            "constexpr": false,
+            "jagged_dim": null,
+            "dtype_level": 0,
+            "source_name": "ninetoothed_tensor_3",
+            "source_ndim": 2,
+            "source_shape": [
+              "ninetoothed_ninetoothed_tensor_3_size_0",
+              "ninetoothed_ninetoothed_tensor_3_size_1"
+            ],
+            "source_dtype": "fp32",
+            "other": null,
+            "source_strides": [
+              "ninetoothed_ninetoothed_tensor_3_stride_0",
+              "ninetoothed_ninetoothed_tensor_3_stride_1"
+            ],
+            "target_dims": [
+              "0"
+            ],
+            "view_ndim": 1,
+            "view_shape": [
+              "(ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+            ],
+            "application_shape": [
+              "128"
+            ],
+            "application_ndim": 1,
+            "dtype_shapes": [
+              [
+                "128"
+              ]
+            ],
+            "dtype_target_dims": [
+              [
+                "0"
+              ]
+            ],
+            "access_templates": [
+              {
+                "level": 0,
+                "shape": [
+                  "128"
+                ],
+                "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 * ninetoothed_ninetoothed_tensor_3_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 * ninetoothed_ninetoothed_tensor_3_stride_1",
+                "offsets": [
+                  "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1",
+                  "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1"
+                ],
+                "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 < ninetoothed_ninetoothed_tensor_3_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 < ninetoothed_ninetoothed_tensor_3_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 >= 0)"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "name": "output",
+        "type": {
+          "kind": "tensor",
+          "shape": [
+            "128"
+          ],
+          "dtype": "fp32",
+          "attrs": {
+            "ndim": 1,
+            "constexpr": false,
+            "jagged_dim": null,
+            "dtype_level": 0,
+            "source_name": "ninetoothed_tensor_3",
+            "source_ndim": 2,
+            "source_shape": [
+              "ninetoothed_ninetoothed_tensor_3_size_0",
+              "ninetoothed_ninetoothed_tensor_3_size_1"
+            ],
+            "source_dtype": "fp32",
+            "other": null,
+            "source_strides": [
+              "ninetoothed_ninetoothed_tensor_3_stride_0",
+              "ninetoothed_ninetoothed_tensor_3_stride_1"
+            ],
+            "target_dims": [
+              "0"
+            ],
+            "view_ndim": 1,
+            "view_shape": [
+              "(ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+            ],
+            "application_shape": [
+              "128"
+            ],
+            "application_ndim": 1,
+            "dtype_shapes": [
+              [
+                "128"
+              ]
+            ],
+            "dtype_target_dims": [
+              [
+                "0"
+              ]
+            ],
+            "access_templates": [
+              {
+                "level": 0,
+                "shape": [
+                  "128"
+                ],
+                "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 * ninetoothed_ninetoothed_tensor_3_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 * ninetoothed_ninetoothed_tensor_3_stride_1",
+                "offsets": [
+                  "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1",
+                  "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1"
+                ],
+                "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 < ninetoothed_ninetoothed_tensor_3_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 < ninetoothed_ninetoothed_tensor_3_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 >= 0)"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "blocks": [
+      {
+        "name": "entry",
+        "args": [],
+        "operations": [
+          {
+            "opcode": "arith.mul",
+            "operands": [
+              "alpha",
+              "other"
+            ],
+            "results": [
+              {
+                "name": "%0",
+                "type": {
+                  "kind": "tensor",
+                  "shape": [
+                    "128"
+                  ],
+                  "dtype": "float64",
+                  "attrs": {
+                    "ndim": 1,
+                    "constexpr": false,
+                    "jagged_dim": null,
+                    "dtype_level": 0,
+                    "source_name": "ninetoothed_tensor_1",
+                    "source_ndim": 2,
+                    "source_shape": [
+                      "ninetoothed_ninetoothed_tensor_1_size_0",
+                      "ninetoothed_ninetoothed_tensor_1_size_1"
+                    ],
+                    "source_dtype": "fp32",
+                    "other": null,
+                    "source_strides": [
+                      "ninetoothed_ninetoothed_tensor_1_stride_0",
+                      "ninetoothed_ninetoothed_tensor_1_stride_1"
+                    ],
+                    "target_dims": [
+                      "0"
+                    ],
+                    "view_ndim": 1,
+                    "view_shape": [
+                      "(ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+                    ],
+                    "application_shape": [
+                      "128"
+                    ],
+                    "application_ndim": 1,
+                    "dtype_shapes": [
+                      [
+                        "128"
+                      ]
+                    ],
+                    "dtype_target_dims": [
+                      [
+                        "0"
+                      ]
+                    ],
+                    "access_templates": [
+                      {
+                        "level": 0,
+                        "shape": [
+                          "128"
+                        ],
+                        "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_ninetoothed_tensor_1_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_ninetoothed_tensor_1_stride_1",
+                        "offsets": [
+                          "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1",
+                          "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1"
+                        ],
+                        "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 < ninetoothed_ninetoothed_tensor_1_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 < ninetoothed_ninetoothed_tensor_1_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 >= 0)"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "attrs": {},
+            "regions": []
+          },
+          {
+            "opcode": "arith.add",
+            "operands": [
+              "input",
+              "%0"
+            ],
+            "results": [
+              {
+                "name": "%1",
+                "type": {
+                  "kind": "tensor",
+                  "shape": [
+                    "128"
+                  ],
+                  "dtype": "float64",
+                  "attrs": {
+                    "ndim": 1,
+                    "constexpr": false,
+                    "jagged_dim": null,
+                    "dtype_level": 0,
+                    "source_name": "ninetoothed_tensor_0",
+                    "source_ndim": 2,
+                    "source_shape": [
+                      "ninetoothed_ninetoothed_tensor_0_size_0",
+                      "ninetoothed_ninetoothed_tensor_0_size_1"
+                    ],
+                    "source_dtype": "fp32",
+                    "other": null,
+                    "source_strides": [
+                      "ninetoothed_ninetoothed_tensor_0_stride_0",
+                      "ninetoothed_ninetoothed_tensor_0_stride_1"
+                    ],
+                    "target_dims": [
+                      "0"
+                    ],
+                    "view_ndim": 1,
+                    "view_shape": [
+                      "(ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+                    ],
+                    "application_shape": [
+                      "128"
+                    ],
+                    "application_ndim": 1,
+                    "dtype_shapes": [
+                      [
+                        "128"
+                      ]
+                    ],
+                    "dtype_target_dims": [
+                      [
+                        "0"
+                      ]
+                    ],
+                    "access_templates": [
+                      {
+                        "level": 0,
+                        "shape": [
+                          "128"
+                        ],
+                        "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_ninetoothed_tensor_0_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_ninetoothed_tensor_0_stride_1",
+                        "offsets": [
+                          "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1",
+                          "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1"
+                        ],
+                        "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 < ninetoothed_ninetoothed_tensor_0_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 < ninetoothed_ninetoothed_tensor_0_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 >= 0)"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "attrs": {},
+            "regions": []
+          },
+          {
+            "opcode": "mem.store",
+            "operands": [
+              "%1",
+              "output"
+            ],
+            "results": [],
+            "attrs": {
+              "target": "output"
+            },
+            "regions": []
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "source": "application_ast",
+      "function": "application",
+      "coarse_operator_nodes": false,
+      "ssa_operation_count": 3,
+      "symbols": [
+        "ninetoothed_ninetoothed_tensor_0_size_0",
+        "ninetoothed_ninetoothed_tensor_0_size_1",
+        "ninetoothed_ninetoothed_tensor_1_size_0",
+        "ninetoothed_ninetoothed_tensor_1_size_1",
+        "ninetoothed_ninetoothed_tensor_3_size_0",
+        "ninetoothed_ninetoothed_tensor_3_size_1"
+      ],
+      "pipeline_selection": {
+        "mode": "default",
+        "selected_passes": [
+          "ssa.canonicalize",
+          "ssa.analyze_effects",
+          "ssa.select_schedule",
+          "ssa.triton.optimize_schedule",
+          "ssa.decompose_linalg"
+        ],
+        "reason": "default backend pipeline",
+        "categories": {
+          "hardware_independent": [
+            "ssa.canonicalize",
+            "ssa.analyze_effects",
+            "ssa.select_schedule",
+            "ssa.decompose_linalg"
+          ],
+          "backend_specific": [
+            "ssa.triton.optimize_schedule"
+          ]
+        }
+      },
+      "dialect": "generic-ssa",
+      "canonical": true,
+      "pass_trace": [
+        "ssa.canonicalize",
+        "ssa.analyze_effects",
+        "ssa.select_schedule",
+        "ssa.triton.optimize_schedule",
+        "ssa.decompose_linalg"
+      ],
+      "analysis": {
+        "operation_count": 3,
+        "store_count": 1,
+        "reduction_count": 0,
+        "loop_count": 0,
+        "has_dot": false,
+        "dot_input_dtypes": [],
+        "dot_supports_low_precision_intrinsic": false,
+        "has_exp_reduction_dot_pattern": false
+      },
+      "schedule": {
+        "granularity": "elementwise-grid",
+        "indexing": "flat-contiguous",
+        "parallelism": "program-blocks",
+        "num_warps": 4
+      },
+      "optimization": {
+        "schedule": {
+          "num_warps": 4
+        }
+      },
+      "schedule_candidates": [],
+      "rejected_schedule_candidates": [],
+      "selected_schedule_candidate": null,
+      "linalg_decomposed": true,
+      "target_backend": "triton",
+      "lowering_stage": "scheduled-ssa"
+    }
+  },
+  "kernel_metadata": {
+    "caller": "torch",
+    "ssa_ir_source": "application_ast",
+    "ssa_tensor_ir_source": "arrangement_views",
+    "runtime_shape_params": [
+      "ninetoothed_ninetoothed_tensor_0_size_0",
+      "ninetoothed_ninetoothed_tensor_0_size_1",
+      "ninetoothed_ninetoothed_tensor_0_stride_0",
+      "ninetoothed_ninetoothed_tensor_0_stride_1",
+      "ninetoothed_ninetoothed_tensor_1_size_0",
+      "ninetoothed_ninetoothed_tensor_1_size_1",
+      "ninetoothed_ninetoothed_tensor_1_stride_0",
+      "ninetoothed_ninetoothed_tensor_1_stride_1",
+      "ninetoothed_ninetoothed_tensor_3_size_0",
+      "ninetoothed_ninetoothed_tensor_3_size_1",
+      "ninetoothed_ninetoothed_tensor_3_stride_0",
+      "ninetoothed_ninetoothed_tensor_3_stride_1"
+    ],
+    "generation_py_fallback": false,
+    "meta_defaults": {},
+    "ssa_pipeline": [
+      "ssa.canonicalize",
+      "ssa.analyze_effects",
+      "ssa.select_schedule",
+      "ssa.triton.optimize_schedule",
+      "ssa.decompose_linalg"
+    ],
+    "ssa_target_backend": "triton"
+  },
+  "ssa_metadata": {
+    "source": "application_ast",
+    "function": "application",
+    "coarse_operator_nodes": false,
+    "ssa_operation_count": 3,
+    "symbols": [
+      "ninetoothed_ninetoothed_tensor_0_size_0",
+      "ninetoothed_ninetoothed_tensor_0_size_1",
+      "ninetoothed_ninetoothed_tensor_1_size_0",
+      "ninetoothed_ninetoothed_tensor_1_size_1",
+      "ninetoothed_ninetoothed_tensor_3_size_0",
+      "ninetoothed_ninetoothed_tensor_3_size_1"
+    ],
+    "pipeline_selection": {
+      "mode": "default",
+      "selected_passes": [
+        "ssa.canonicalize",
+        "ssa.analyze_effects",
+        "ssa.select_schedule",
+        "ssa.triton.optimize_schedule",
+        "ssa.decompose_linalg"
+      ],
+      "reason": "default backend pipeline",
+      "categories": {
+        "hardware_independent": [
+          "ssa.canonicalize",
+          "ssa.analyze_effects",
+          "ssa.select_schedule",
+          "ssa.decompose_linalg"
+        ],
+        "backend_specific": [
+          "ssa.triton.optimize_schedule"
+        ]
+      }
+    },
+    "dialect": "generic-ssa",
+    "canonical": true,
+    "pass_trace": [
+      "ssa.canonicalize",
+      "ssa.analyze_effects",
+      "ssa.select_schedule",
+      "ssa.triton.optimize_schedule",
+      "ssa.decompose_linalg"
+    ],
+    "analysis": {
+      "operation_count": 3,
+      "store_count": 1,
+      "reduction_count": 0,
+      "loop_count": 0,
+      "has_dot": false,
+      "dot_input_dtypes": [],
+      "dot_supports_low_precision_intrinsic": false,
+      "has_exp_reduction_dot_pattern": false
+    },
+    "schedule": {
+      "granularity": "elementwise-grid",
+      "indexing": "flat-contiguous",
+      "parallelism": "program-blocks",
+      "num_warps": 4
+    },
+    "optimization": {
+      "schedule": {
+        "num_warps": 4
+      }
+    },
+    "schedule_candidates": [],
+    "rejected_schedule_candidates": [],
+    "selected_schedule_candidate": null,
+    "linalg_decomposed": true,
+    "target_backend": "triton",
+    "lowering_stage": "scheduled-ssa"
+  },
+  "ssa_pass_trace": [
+    "ssa.canonicalize",
+    "ssa.analyze_effects",
+    "ssa.select_schedule",
+    "ssa.triton.optimize_schedule",
+    "ssa.decompose_linalg"
+  ],
+  "ssa_schedule": {
+    "granularity": "elementwise-grid",
+    "indexing": "flat-contiguous",
+    "parallelism": "program-blocks",
+    "num_warps": 4
+  },
+  "ssa_pipeline_selection": {
+    "mode": "default",
+    "selected_passes": [
+      "ssa.canonicalize",
+      "ssa.analyze_effects",
+      "ssa.select_schedule",
+      "ssa.triton.optimize_schedule",
+      "ssa.decompose_linalg"
+    ],
+    "reason": "default backend pipeline",
+    "categories": {
+      "hardware_independent": [
+        "ssa.canonicalize",
+        "ssa.analyze_effects",
+        "ssa.select_schedule",
+        "ssa.decompose_linalg"
+      ],
+      "backend_specific": [
+        "ssa.triton.optimize_schedule"
+      ]
+    }
+  },
+  "ssa_optimization": {
+    "schedule": {
+      "num_warps": 4
+    }
+  },
+  "tensors": [
+    {
+      "ndim": 1,
+      "shape": [
+        "(ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+      ],
+      "dtype": "fp32",
+      "jagged_dim": null,
+      "constexpr": false,
+      "name": "input",
+      "layout": {
+        "source_shape": [
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_0_size_0"
+          },
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+          }
+        ],
+        "source_strides": [
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_0_stride_0"
+          },
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_0_stride_1"
+          }
+        ],
+        "view_shape": [
+          {
+            "op": "add",
+            "operands": [
+              {
+                "op": "floordiv",
+                "operands": [
+                  {
+                    "op": "sub",
+                    "operands": [
+                      {
+                        "op": "add",
+                        "operands": [
+                          {
+                            "op": "sub",
+                            "operands": [
+                              {
+                                "op": "sub",
+                                "operands": [
+                                  {
+                                    "op": "mul",
+                                    "operands": [
+                                      {
+                                        "op": "symbol",
+                                        "operands": [],
+                                        "value": "ninetoothed_ninetoothed_tensor_0_size_0"
+                                      },
+                                      {
+                                        "op": "symbol",
+                                        "operands": [],
+                                        "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                                      }
+                                    ],
+                                    "value": null
+                                  },
+                                  {
+                                    "op": "constant",
+                                    "operands": [],
+                                    "value": 127
+                                  }
+                                ],
+                                "value": null
+                              },
+                              {
+                                "op": "constant",
+                                "operands": [],
+                                "value": 1
+                              }
+                            ],
+                            "value": null
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "constant",
+                        "operands": [],
+                        "value": 1
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "constant",
+                    "operands": [],
+                    "value": 128
+                  }
+                ],
+                "value": null
+              },
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 1
+              }
+            ],
+            "value": null
+          }
+        ],
+        "application_shape": [
+          {
+            "op": "constant",
+            "operands": [],
+            "value": 128
+          }
+        ],
+        "levels": [
+          {
+            "shape": [
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 128
+              }
+            ],
+            "target_dims": [
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 0
+              }
+            ]
+          }
+        ],
+        "view_access": null,
+        "value_accesses": [
+          {
+            "source_indices": [
+              {
+                "op": "floordiv",
+                "operands": [
+                  {
+                    "op": "add",
+                    "operands": [
+                      {
+                        "op": "mul",
+                        "operands": [
+                          {
+                            "op": "symbol",
+                            "operands": [],
+                            "value": "outer_index"
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "symbol",
+                        "operands": [],
+                        "value": "value_0"
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "symbol",
+                    "operands": [],
+                    "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                  }
+                ],
+                "value": null
+              },
+              {
+                "op": "mod",
+                "operands": [
+                  {
+                    "op": "add",
+                    "operands": [
+                      {
+                        "op": "mul",
+                        "operands": [
+                          {
+                            "op": "symbol",
+                            "operands": [],
+                            "value": "outer_index"
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "symbol",
+                        "operands": [],
+                        "value": "value_0"
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "symbol",
+                    "operands": [],
+                    "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                  }
+                ],
+                "value": null
+              }
+            ],
+            "linear_index": {
+              "op": "add",
+              "operands": [
+                {
+                  "op": "mul",
+                  "operands": [
+                    {
+                      "op": "floordiv",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "symbol",
+                      "operands": [],
+                      "value": "ninetoothed_ninetoothed_tensor_0_stride_0"
+                    }
+                  ],
+                  "value": null
+                },
+                {
+                  "op": "mul",
+                  "operands": [
+                    {
+                      "op": "mod",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "symbol",
+                      "operands": [],
+                      "value": "ninetoothed_ninetoothed_tensor_0_stride_1"
+                    }
+                  ],
+                  "value": null
+                }
+              ],
+              "value": null
+            },
+            "predicate": {
+              "op": "bitand",
+              "operands": [
+                {
+                  "op": "bitand",
+                  "operands": [
+                    {
+                      "op": "bitand",
+                      "operands": [
+                        {
+                          "op": "bitand",
+                          "operands": [
+                            {
+                              "op": "bitand",
+                              "operands": [
+                                {
+                                  "op": "bitand",
+                                  "operands": [
+                                    {
+                                      "op": "bitand",
+                                      "operands": [
+                                        {
+                                          "op": "bitand",
+                                          "operands": [
+                                            {
+                                              "op": "bitand",
+                                              "operands": [
+                                                {
+                                                  "op": "bitand",
+                                                  "operands": [
+                                                    {
+                                                      "op": "constant",
+                                                      "operands": [],
+                                                      "value": true
+                                                    },
+                                                    {
+                                                      "op": "lt",
+                                                      "operands": [
+                                                        {
+                                                          "op": "symbol",
+                                                          "operands": [],
+                                                          "value": "outer_index"
+                                                        },
+                                                        {
+                                                          "op": "add",
+                                                          "operands": [
+                                                            {
+                                                              "op": "floordiv",
+                                                              "operands": [
+                                                                {
+                                                                  "op": "sub",
+                                                                  "operands": [
+                                                                    {
+                                                                      "op": "add",
+                                                                      "operands": [
+                                                                        {
+                                                                          "op": "sub",
+                                                                          "operands": [
+                                                                            {
+                                                                              "op": "sub",
+                                                                              "operands": [
+                                                                                {
+                                                                                  "op": "mul",
+                                                                                  "operands": [
+                                                                                    {
+                                                                                      "op": "symbol",
+                                                                                      "operands": [],
+                                                                                      "value": "ninetoothed_ninetoothed_tensor_0_size_0"
+                                                                                    },
+                                                                                    {
+                                                                                      "op": "symbol",
+                                                                                      "operands": [],
+                                                                                      "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                                                                                    }
+                                                                                  ],
+                                                                                  "value": null
+                                                                                },
+                                                                                {
+                                                                                  "op": "constant",
+                                                                                  "operands": [],
+                                                                                  "value": 127
+                                                                                }
+                                                                              ],
+                                                                              "value": null
+                                                                            },
+                                                                            {
+                                                                              "op": "constant",
+                                                                              "operands": [],
+                                                                              "value": 1
+                                                                            }
+                                                                          ],
+                                                                          "value": null
+                                                                        },
+                                                                        {
+                                                                          "op": "constant",
+                                                                          "operands": [],
+                                                                          "value": 128
+                                                                        }
+                                                                      ],
+                                                                      "value": null
+                                                                    },
+                                                                    {
+                                                                      "op": "constant",
+                                                                      "operands": [],
+                                                                      "value": 1
+                                                                    }
+                                                                  ],
+                                                                  "value": null
+                                                                },
+                                                                {
+                                                                  "op": "constant",
+                                                                  "operands": [],
+                                                                  "value": 128
+                                                                }
+                                                              ],
+                                                              "value": null
+                                                            },
+                                                            {
+                                                              "op": "constant",
+                                                              "operands": [],
+                                                              "value": 1
+                                                            }
+                                                          ],
+                                                          "value": null
+                                                        }
+                                                      ],
+                                                      "value": null
+                                                    }
+                                                  ],
+                                                  "value": null
+                                                },
+                                                {
+                                                  "op": "ge",
+                                                  "operands": [
+                                                    {
+                                                      "op": "symbol",
+                                                      "operands": [],
+                                                      "value": "outer_index"
+                                                    },
+                                                    {
+                                                      "op": "constant",
+                                                      "operands": [],
+                                                      "value": 0
+                                                    }
+                                                  ],
+                                                  "value": null
+                                                }
+                                              ],
+                                              "value": null
+                                            },
+                                            {
+                                              "op": "lt",
+                                              "operands": [
+                                                {
+                                                  "op": "symbol",
+                                                  "operands": [],
+                                                  "value": "value_0"
+                                                },
+                                                {
+                                                  "op": "constant",
+                                                  "operands": [],
+                                                  "value": 128
+                                                }
+                                              ],
+                                              "value": null
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "ge",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "value_0"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 0
+                                            }
+                                          ],
+                                          "value": null
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "lt",
+                                      "operands": [
+                                        {
+                                          "op": "add",
+                                          "operands": [
+                                            {
+                                              "op": "mul",
+                                              "operands": [
+                                                {
+                                                  "op": "symbol",
+                                                  "operands": [],
+                                                  "value": "outer_index"
+                                                },
+                                                {
+                                                  "op": "constant",
+                                                  "operands": [],
+                                                  "value": 128
+                                                }
+                                              ],
+                                              "value": null
+                                            },
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "value_0"
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "ninetoothed_ninetoothed_tensor_0_size_0"
+                                            },
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                                            }
+                                          ],
+                                          "value": null
+                                        }
+                                      ],
+                                      "value": null
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "ge",
+                                  "operands": [
+                                    {
+                                      "op": "add",
+                                      "operands": [
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "outer_index"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 128
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "value_0"
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "constant",
+                                      "operands": [],
+                                      "value": 0
+                                    }
+                                  ],
+                                  "value": null
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "lt",
+                              "operands": [
+                                {
+                                  "op": "floordiv",
+                                  "operands": [
+                                    {
+                                      "op": "add",
+                                      "operands": [
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "outer_index"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 128
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "value_0"
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "ninetoothed_ninetoothed_tensor_0_size_0"
+                                }
+                              ],
+                              "value": null
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "ge",
+                          "operands": [
+                            {
+                              "op": "floordiv",
+                              "operands": [
+                                {
+                                  "op": "add",
+                                  "operands": [
+                                    {
+                                      "op": "mul",
+                                      "operands": [
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "outer_index"
+                                        },
+                                        {
+                                          "op": "constant",
+                                          "operands": [],
+                                          "value": 128
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "value_0"
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "constant",
+                              "operands": [],
+                              "value": 0
+                            }
+                          ],
+                          "value": null
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "lt",
+                      "operands": [
+                        {
+                          "op": "mod",
+                          "operands": [
+                            {
+                              "op": "add",
+                              "operands": [
+                                {
+                                  "op": "mul",
+                                  "operands": [
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "outer_index"
+                                    },
+                                    {
+                                      "op": "constant",
+                                      "operands": [],
+                                      "value": 128
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "value_0"
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                        }
+                      ],
+                      "value": null
+                    }
+                  ],
+                  "value": null
+                },
+                {
+                  "op": "ge",
+                  "operands": [
+                    {
+                      "op": "mod",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_0_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "constant",
+                      "operands": [],
+                      "value": 0
+                    }
+                  ],
+                  "value": null
+                }
+              ],
+              "value": null
+            }
+          }
+        ]
+      },
+      "attrs": {
+        "source_name": "ninetoothed_tensor_0",
+        "source_ndim": 2,
+        "source_shape": [
+          "ninetoothed_ninetoothed_tensor_0_size_0",
+          "ninetoothed_ninetoothed_tensor_0_size_1"
+        ],
+        "source_dtype": "fp32",
+        "other": null,
+        "source_strides": [
+          "ninetoothed_ninetoothed_tensor_0_stride_0",
+          "ninetoothed_ninetoothed_tensor_0_stride_1"
+        ],
+        "target_dims": [
+          "0"
+        ],
+        "view_ndim": 1,
+        "view_shape": [
+          "(ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+        ],
+        "application_shape": [
+          "128"
+        ],
+        "application_ndim": 1,
+        "dtype_shapes": [
+          [
+            "128"
+          ]
+        ],
+        "dtype_target_dims": [
+          [
+            "0"
+          ]
+        ],
+        "access_templates": [
+          {
+            "level": 0,
+            "shape": [
+              "128"
+            ],
+            "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_ninetoothed_tensor_0_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_ninetoothed_tensor_0_stride_1",
+            "offsets": [
+              "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1",
+              "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1"
+            ],
+            "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_0_size_0 * ninetoothed_ninetoothed_tensor_0_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 < ninetoothed_ninetoothed_tensor_0_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_0_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 < ninetoothed_ninetoothed_tensor_0_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_0_size_1 >= 0)"
+          }
+        ]
+      }
+    },
+    {
+      "ndim": 1,
+      "shape": [
+        "(ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+      ],
+      "dtype": "fp32",
+      "jagged_dim": null,
+      "constexpr": false,
+      "name": "other",
+      "layout": {
+        "source_shape": [
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_1_size_0"
+          },
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+          }
+        ],
+        "source_strides": [
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_1_stride_0"
+          },
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_1_stride_1"
+          }
+        ],
+        "view_shape": [
+          {
+            "op": "add",
+            "operands": [
+              {
+                "op": "floordiv",
+                "operands": [
+                  {
+                    "op": "sub",
+                    "operands": [
+                      {
+                        "op": "add",
+                        "operands": [
+                          {
+                            "op": "sub",
+                            "operands": [
+                              {
+                                "op": "sub",
+                                "operands": [
+                                  {
+                                    "op": "mul",
+                                    "operands": [
+                                      {
+                                        "op": "symbol",
+                                        "operands": [],
+                                        "value": "ninetoothed_ninetoothed_tensor_1_size_0"
+                                      },
+                                      {
+                                        "op": "symbol",
+                                        "operands": [],
+                                        "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                                      }
+                                    ],
+                                    "value": null
+                                  },
+                                  {
+                                    "op": "constant",
+                                    "operands": [],
+                                    "value": 127
+                                  }
+                                ],
+                                "value": null
+                              },
+                              {
+                                "op": "constant",
+                                "operands": [],
+                                "value": 1
+                              }
+                            ],
+                            "value": null
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "constant",
+                        "operands": [],
+                        "value": 1
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "constant",
+                    "operands": [],
+                    "value": 128
+                  }
+                ],
+                "value": null
+              },
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 1
+              }
+            ],
+            "value": null
+          }
+        ],
+        "application_shape": [
+          {
+            "op": "constant",
+            "operands": [],
+            "value": 128
+          }
+        ],
+        "levels": [
+          {
+            "shape": [
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 128
+              }
+            ],
+            "target_dims": [
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 0
+              }
+            ]
+          }
+        ],
+        "view_access": null,
+        "value_accesses": [
+          {
+            "source_indices": [
+              {
+                "op": "floordiv",
+                "operands": [
+                  {
+                    "op": "add",
+                    "operands": [
+                      {
+                        "op": "mul",
+                        "operands": [
+                          {
+                            "op": "symbol",
+                            "operands": [],
+                            "value": "outer_index"
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "symbol",
+                        "operands": [],
+                        "value": "value_0"
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "symbol",
+                    "operands": [],
+                    "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                  }
+                ],
+                "value": null
+              },
+              {
+                "op": "mod",
+                "operands": [
+                  {
+                    "op": "add",
+                    "operands": [
+                      {
+                        "op": "mul",
+                        "operands": [
+                          {
+                            "op": "symbol",
+                            "operands": [],
+                            "value": "outer_index"
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "symbol",
+                        "operands": [],
+                        "value": "value_0"
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "symbol",
+                    "operands": [],
+                    "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                  }
+                ],
+                "value": null
+              }
+            ],
+            "linear_index": {
+              "op": "add",
+              "operands": [
+                {
+                  "op": "mul",
+                  "operands": [
+                    {
+                      "op": "floordiv",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "symbol",
+                      "operands": [],
+                      "value": "ninetoothed_ninetoothed_tensor_1_stride_0"
+                    }
+                  ],
+                  "value": null
+                },
+                {
+                  "op": "mul",
+                  "operands": [
+                    {
+                      "op": "mod",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "symbol",
+                      "operands": [],
+                      "value": "ninetoothed_ninetoothed_tensor_1_stride_1"
+                    }
+                  ],
+                  "value": null
+                }
+              ],
+              "value": null
+            },
+            "predicate": {
+              "op": "bitand",
+              "operands": [
+                {
+                  "op": "bitand",
+                  "operands": [
+                    {
+                      "op": "bitand",
+                      "operands": [
+                        {
+                          "op": "bitand",
+                          "operands": [
+                            {
+                              "op": "bitand",
+                              "operands": [
+                                {
+                                  "op": "bitand",
+                                  "operands": [
+                                    {
+                                      "op": "bitand",
+                                      "operands": [
+                                        {
+                                          "op": "bitand",
+                                          "operands": [
+                                            {
+                                              "op": "bitand",
+                                              "operands": [
+                                                {
+                                                  "op": "bitand",
+                                                  "operands": [
+                                                    {
+                                                      "op": "constant",
+                                                      "operands": [],
+                                                      "value": true
+                                                    },
+                                                    {
+                                                      "op": "lt",
+                                                      "operands": [
+                                                        {
+                                                          "op": "symbol",
+                                                          "operands": [],
+                                                          "value": "outer_index"
+                                                        },
+                                                        {
+                                                          "op": "add",
+                                                          "operands": [
+                                                            {
+                                                              "op": "floordiv",
+                                                              "operands": [
+                                                                {
+                                                                  "op": "sub",
+                                                                  "operands": [
+                                                                    {
+                                                                      "op": "add",
+                                                                      "operands": [
+                                                                        {
+                                                                          "op": "sub",
+                                                                          "operands": [
+                                                                            {
+                                                                              "op": "sub",
+                                                                              "operands": [
+                                                                                {
+                                                                                  "op": "mul",
+                                                                                  "operands": [
+                                                                                    {
+                                                                                      "op": "symbol",
+                                                                                      "operands": [],
+                                                                                      "value": "ninetoothed_ninetoothed_tensor_1_size_0"
+                                                                                    },
+                                                                                    {
+                                                                                      "op": "symbol",
+                                                                                      "operands": [],
+                                                                                      "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                                                                                    }
+                                                                                  ],
+                                                                                  "value": null
+                                                                                },
+                                                                                {
+                                                                                  "op": "constant",
+                                                                                  "operands": [],
+                                                                                  "value": 127
+                                                                                }
+                                                                              ],
+                                                                              "value": null
+                                                                            },
+                                                                            {
+                                                                              "op": "constant",
+                                                                              "operands": [],
+                                                                              "value": 1
+                                                                            }
+                                                                          ],
+                                                                          "value": null
+                                                                        },
+                                                                        {
+                                                                          "op": "constant",
+                                                                          "operands": [],
+                                                                          "value": 128
+                                                                        }
+                                                                      ],
+                                                                      "value": null
+                                                                    },
+                                                                    {
+                                                                      "op": "constant",
+                                                                      "operands": [],
+                                                                      "value": 1
+                                                                    }
+                                                                  ],
+                                                                  "value": null
+                                                                },
+                                                                {
+                                                                  "op": "constant",
+                                                                  "operands": [],
+                                                                  "value": 128
+                                                                }
+                                                              ],
+                                                              "value": null
+                                                            },
+                                                            {
+                                                              "op": "constant",
+                                                              "operands": [],
+                                                              "value": 1
+                                                            }
+                                                          ],
+                                                          "value": null
+                                                        }
+                                                      ],
+                                                      "value": null
+                                                    }
+                                                  ],
+                                                  "value": null
+                                                },
+                                                {
+                                                  "op": "ge",
+                                                  "operands": [
+                                                    {
+                                                      "op": "symbol",
+                                                      "operands": [],
+                                                      "value": "outer_index"
+                                                    },
+                                                    {
+                                                      "op": "constant",
+                                                      "operands": [],
+                                                      "value": 0
+                                                    }
+                                                  ],
+                                                  "value": null
+                                                }
+                                              ],
+                                              "value": null
+                                            },
+                                            {
+                                              "op": "lt",
+                                              "operands": [
+                                                {
+                                                  "op": "symbol",
+                                                  "operands": [],
+                                                  "value": "value_0"
+                                                },
+                                                {
+                                                  "op": "constant",
+                                                  "operands": [],
+                                                  "value": 128
+                                                }
+                                              ],
+                                              "value": null
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "ge",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "value_0"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 0
+                                            }
+                                          ],
+                                          "value": null
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "lt",
+                                      "operands": [
+                                        {
+                                          "op": "add",
+                                          "operands": [
+                                            {
+                                              "op": "mul",
+                                              "operands": [
+                                                {
+                                                  "op": "symbol",
+                                                  "operands": [],
+                                                  "value": "outer_index"
+                                                },
+                                                {
+                                                  "op": "constant",
+                                                  "operands": [],
+                                                  "value": 128
+                                                }
+                                              ],
+                                              "value": null
+                                            },
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "value_0"
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "ninetoothed_ninetoothed_tensor_1_size_0"
+                                            },
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                                            }
+                                          ],
+                                          "value": null
+                                        }
+                                      ],
+                                      "value": null
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "ge",
+                                  "operands": [
+                                    {
+                                      "op": "add",
+                                      "operands": [
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "outer_index"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 128
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "value_0"
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "constant",
+                                      "operands": [],
+                                      "value": 0
+                                    }
+                                  ],
+                                  "value": null
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "lt",
+                              "operands": [
+                                {
+                                  "op": "floordiv",
+                                  "operands": [
+                                    {
+                                      "op": "add",
+                                      "operands": [
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "outer_index"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 128
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "value_0"
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "ninetoothed_ninetoothed_tensor_1_size_0"
+                                }
+                              ],
+                              "value": null
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "ge",
+                          "operands": [
+                            {
+                              "op": "floordiv",
+                              "operands": [
+                                {
+                                  "op": "add",
+                                  "operands": [
+                                    {
+                                      "op": "mul",
+                                      "operands": [
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "outer_index"
+                                        },
+                                        {
+                                          "op": "constant",
+                                          "operands": [],
+                                          "value": 128
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "value_0"
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "constant",
+                              "operands": [],
+                              "value": 0
+                            }
+                          ],
+                          "value": null
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "lt",
+                      "operands": [
+                        {
+                          "op": "mod",
+                          "operands": [
+                            {
+                              "op": "add",
+                              "operands": [
+                                {
+                                  "op": "mul",
+                                  "operands": [
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "outer_index"
+                                    },
+                                    {
+                                      "op": "constant",
+                                      "operands": [],
+                                      "value": 128
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "value_0"
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                        }
+                      ],
+                      "value": null
+                    }
+                  ],
+                  "value": null
+                },
+                {
+                  "op": "ge",
+                  "operands": [
+                    {
+                      "op": "mod",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_1_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "constant",
+                      "operands": [],
+                      "value": 0
+                    }
+                  ],
+                  "value": null
+                }
+              ],
+              "value": null
+            }
+          }
+        ]
+      },
+      "attrs": {
+        "source_name": "ninetoothed_tensor_1",
+        "source_ndim": 2,
+        "source_shape": [
+          "ninetoothed_ninetoothed_tensor_1_size_0",
+          "ninetoothed_ninetoothed_tensor_1_size_1"
+        ],
+        "source_dtype": "fp32",
+        "other": null,
+        "source_strides": [
+          "ninetoothed_ninetoothed_tensor_1_stride_0",
+          "ninetoothed_ninetoothed_tensor_1_stride_1"
+        ],
+        "target_dims": [
+          "0"
+        ],
+        "view_ndim": 1,
+        "view_shape": [
+          "(ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+        ],
+        "application_shape": [
+          "128"
+        ],
+        "application_ndim": 1,
+        "dtype_shapes": [
+          [
+            "128"
+          ]
+        ],
+        "dtype_target_dims": [
+          [
+            "0"
+          ]
+        ],
+        "access_templates": [
+          {
+            "level": 0,
+            "shape": [
+              "128"
+            ],
+            "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_ninetoothed_tensor_1_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_ninetoothed_tensor_1_stride_1",
+            "offsets": [
+              "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1",
+              "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1"
+            ],
+            "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_1_size_0 * ninetoothed_ninetoothed_tensor_1_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 < ninetoothed_ninetoothed_tensor_1_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_1_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 < ninetoothed_ninetoothed_tensor_1_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_1_size_1 >= 0)"
+          }
+        ]
+      }
+    },
+    {
+      "ndim": 0,
+      "shape": [],
+      "dtype": "fp64",
+      "jagged_dim": null,
+      "constexpr": false,
+      "name": "alpha",
+      "layout": {
+        "source_shape": [],
+        "source_strides": [],
+        "view_shape": [],
+        "application_shape": [],
+        "levels": [],
+        "view_access": null,
+        "value_accesses": []
+      },
+      "attrs": {
+        "source_name": "ninetoothed_tensor_2",
+        "source_ndim": 0,
+        "source_shape": [],
+        "source_dtype": "fp64",
+        "other": null,
+        "source_strides": [],
+        "target_dims": [],
+        "view_ndim": 0,
+        "view_shape": [],
+        "application_shape": [],
+        "application_ndim": 0,
+        "dtype_shapes": [],
+        "dtype_target_dims": [],
+        "access_templates": []
+      }
+    },
+    {
+      "ndim": 1,
+      "shape": [
+        "(ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+      ],
+      "dtype": "fp32",
+      "jagged_dim": null,
+      "constexpr": false,
+      "name": "output",
+      "layout": {
+        "source_shape": [
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_3_size_0"
+          },
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+          }
+        ],
+        "source_strides": [
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_3_stride_0"
+          },
+          {
+            "op": "symbol",
+            "operands": [],
+            "value": "ninetoothed_ninetoothed_tensor_3_stride_1"
+          }
+        ],
+        "view_shape": [
+          {
+            "op": "add",
+            "operands": [
+              {
+                "op": "floordiv",
+                "operands": [
+                  {
+                    "op": "sub",
+                    "operands": [
+                      {
+                        "op": "add",
+                        "operands": [
+                          {
+                            "op": "sub",
+                            "operands": [
+                              {
+                                "op": "sub",
+                                "operands": [
+                                  {
+                                    "op": "mul",
+                                    "operands": [
+                                      {
+                                        "op": "symbol",
+                                        "operands": [],
+                                        "value": "ninetoothed_ninetoothed_tensor_3_size_0"
+                                      },
+                                      {
+                                        "op": "symbol",
+                                        "operands": [],
+                                        "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                                      }
+                                    ],
+                                    "value": null
+                                  },
+                                  {
+                                    "op": "constant",
+                                    "operands": [],
+                                    "value": 127
+                                  }
+                                ],
+                                "value": null
+                              },
+                              {
+                                "op": "constant",
+                                "operands": [],
+                                "value": 1
+                              }
+                            ],
+                            "value": null
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "constant",
+                        "operands": [],
+                        "value": 1
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "constant",
+                    "operands": [],
+                    "value": 128
+                  }
+                ],
+                "value": null
+              },
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 1
+              }
+            ],
+            "value": null
+          }
+        ],
+        "application_shape": [
+          {
+            "op": "constant",
+            "operands": [],
+            "value": 128
+          }
+        ],
+        "levels": [
+          {
+            "shape": [
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 128
+              }
+            ],
+            "target_dims": [
+              {
+                "op": "constant",
+                "operands": [],
+                "value": 0
+              }
+            ]
+          }
+        ],
+        "view_access": null,
+        "value_accesses": [
+          {
+            "source_indices": [
+              {
+                "op": "floordiv",
+                "operands": [
+                  {
+                    "op": "add",
+                    "operands": [
+                      {
+                        "op": "mul",
+                        "operands": [
+                          {
+                            "op": "symbol",
+                            "operands": [],
+                            "value": "outer_index"
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "symbol",
+                        "operands": [],
+                        "value": "value_0"
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "symbol",
+                    "operands": [],
+                    "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                  }
+                ],
+                "value": null
+              },
+              {
+                "op": "mod",
+                "operands": [
+                  {
+                    "op": "add",
+                    "operands": [
+                      {
+                        "op": "mul",
+                        "operands": [
+                          {
+                            "op": "symbol",
+                            "operands": [],
+                            "value": "outer_index"
+                          },
+                          {
+                            "op": "constant",
+                            "operands": [],
+                            "value": 128
+                          }
+                        ],
+                        "value": null
+                      },
+                      {
+                        "op": "symbol",
+                        "operands": [],
+                        "value": "value_0"
+                      }
+                    ],
+                    "value": null
+                  },
+                  {
+                    "op": "symbol",
+                    "operands": [],
+                    "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                  }
+                ],
+                "value": null
+              }
+            ],
+            "linear_index": {
+              "op": "add",
+              "operands": [
+                {
+                  "op": "mul",
+                  "operands": [
+                    {
+                      "op": "floordiv",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "symbol",
+                      "operands": [],
+                      "value": "ninetoothed_ninetoothed_tensor_3_stride_0"
+                    }
+                  ],
+                  "value": null
+                },
+                {
+                  "op": "mul",
+                  "operands": [
+                    {
+                      "op": "mod",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "symbol",
+                      "operands": [],
+                      "value": "ninetoothed_ninetoothed_tensor_3_stride_1"
+                    }
+                  ],
+                  "value": null
+                }
+              ],
+              "value": null
+            },
+            "predicate": {
+              "op": "bitand",
+              "operands": [
+                {
+                  "op": "bitand",
+                  "operands": [
+                    {
+                      "op": "bitand",
+                      "operands": [
+                        {
+                          "op": "bitand",
+                          "operands": [
+                            {
+                              "op": "bitand",
+                              "operands": [
+                                {
+                                  "op": "bitand",
+                                  "operands": [
+                                    {
+                                      "op": "bitand",
+                                      "operands": [
+                                        {
+                                          "op": "bitand",
+                                          "operands": [
+                                            {
+                                              "op": "bitand",
+                                              "operands": [
+                                                {
+                                                  "op": "bitand",
+                                                  "operands": [
+                                                    {
+                                                      "op": "constant",
+                                                      "operands": [],
+                                                      "value": true
+                                                    },
+                                                    {
+                                                      "op": "lt",
+                                                      "operands": [
+                                                        {
+                                                          "op": "symbol",
+                                                          "operands": [],
+                                                          "value": "outer_index"
+                                                        },
+                                                        {
+                                                          "op": "add",
+                                                          "operands": [
+                                                            {
+                                                              "op": "floordiv",
+                                                              "operands": [
+                                                                {
+                                                                  "op": "sub",
+                                                                  "operands": [
+                                                                    {
+                                                                      "op": "add",
+                                                                      "operands": [
+                                                                        {
+                                                                          "op": "sub",
+                                                                          "operands": [
+                                                                            {
+                                                                              "op": "sub",
+                                                                              "operands": [
+                                                                                {
+                                                                                  "op": "mul",
+                                                                                  "operands": [
+                                                                                    {
+                                                                                      "op": "symbol",
+                                                                                      "operands": [],
+                                                                                      "value": "ninetoothed_ninetoothed_tensor_3_size_0"
+                                                                                    },
+                                                                                    {
+                                                                                      "op": "symbol",
+                                                                                      "operands": [],
+                                                                                      "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                                                                                    }
+                                                                                  ],
+                                                                                  "value": null
+                                                                                },
+                                                                                {
+                                                                                  "op": "constant",
+                                                                                  "operands": [],
+                                                                                  "value": 127
+                                                                                }
+                                                                              ],
+                                                                              "value": null
+                                                                            },
+                                                                            {
+                                                                              "op": "constant",
+                                                                              "operands": [],
+                                                                              "value": 1
+                                                                            }
+                                                                          ],
+                                                                          "value": null
+                                                                        },
+                                                                        {
+                                                                          "op": "constant",
+                                                                          "operands": [],
+                                                                          "value": 128
+                                                                        }
+                                                                      ],
+                                                                      "value": null
+                                                                    },
+                                                                    {
+                                                                      "op": "constant",
+                                                                      "operands": [],
+                                                                      "value": 1
+                                                                    }
+                                                                  ],
+                                                                  "value": null
+                                                                },
+                                                                {
+                                                                  "op": "constant",
+                                                                  "operands": [],
+                                                                  "value": 128
+                                                                }
+                                                              ],
+                                                              "value": null
+                                                            },
+                                                            {
+                                                              "op": "constant",
+                                                              "operands": [],
+                                                              "value": 1
+                                                            }
+                                                          ],
+                                                          "value": null
+                                                        }
+                                                      ],
+                                                      "value": null
+                                                    }
+                                                  ],
+                                                  "value": null
+                                                },
+                                                {
+                                                  "op": "ge",
+                                                  "operands": [
+                                                    {
+                                                      "op": "symbol",
+                                                      "operands": [],
+                                                      "value": "outer_index"
+                                                    },
+                                                    {
+                                                      "op": "constant",
+                                                      "operands": [],
+                                                      "value": 0
+                                                    }
+                                                  ],
+                                                  "value": null
+                                                }
+                                              ],
+                                              "value": null
+                                            },
+                                            {
+                                              "op": "lt",
+                                              "operands": [
+                                                {
+                                                  "op": "symbol",
+                                                  "operands": [],
+                                                  "value": "value_0"
+                                                },
+                                                {
+                                                  "op": "constant",
+                                                  "operands": [],
+                                                  "value": 128
+                                                }
+                                              ],
+                                              "value": null
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "ge",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "value_0"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 0
+                                            }
+                                          ],
+                                          "value": null
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "lt",
+                                      "operands": [
+                                        {
+                                          "op": "add",
+                                          "operands": [
+                                            {
+                                              "op": "mul",
+                                              "operands": [
+                                                {
+                                                  "op": "symbol",
+                                                  "operands": [],
+                                                  "value": "outer_index"
+                                                },
+                                                {
+                                                  "op": "constant",
+                                                  "operands": [],
+                                                  "value": 128
+                                                }
+                                              ],
+                                              "value": null
+                                            },
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "value_0"
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "ninetoothed_ninetoothed_tensor_3_size_0"
+                                            },
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                                            }
+                                          ],
+                                          "value": null
+                                        }
+                                      ],
+                                      "value": null
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "ge",
+                                  "operands": [
+                                    {
+                                      "op": "add",
+                                      "operands": [
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "outer_index"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 128
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "value_0"
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "constant",
+                                      "operands": [],
+                                      "value": 0
+                                    }
+                                  ],
+                                  "value": null
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "lt",
+                              "operands": [
+                                {
+                                  "op": "floordiv",
+                                  "operands": [
+                                    {
+                                      "op": "add",
+                                      "operands": [
+                                        {
+                                          "op": "mul",
+                                          "operands": [
+                                            {
+                                              "op": "symbol",
+                                              "operands": [],
+                                              "value": "outer_index"
+                                            },
+                                            {
+                                              "op": "constant",
+                                              "operands": [],
+                                              "value": 128
+                                            }
+                                          ],
+                                          "value": null
+                                        },
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "value_0"
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "ninetoothed_ninetoothed_tensor_3_size_0"
+                                }
+                              ],
+                              "value": null
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "ge",
+                          "operands": [
+                            {
+                              "op": "floordiv",
+                              "operands": [
+                                {
+                                  "op": "add",
+                                  "operands": [
+                                    {
+                                      "op": "mul",
+                                      "operands": [
+                                        {
+                                          "op": "symbol",
+                                          "operands": [],
+                                          "value": "outer_index"
+                                        },
+                                        {
+                                          "op": "constant",
+                                          "operands": [],
+                                          "value": 128
+                                        }
+                                      ],
+                                      "value": null
+                                    },
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "value_0"
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "constant",
+                              "operands": [],
+                              "value": 0
+                            }
+                          ],
+                          "value": null
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "lt",
+                      "operands": [
+                        {
+                          "op": "mod",
+                          "operands": [
+                            {
+                              "op": "add",
+                              "operands": [
+                                {
+                                  "op": "mul",
+                                  "operands": [
+                                    {
+                                      "op": "symbol",
+                                      "operands": [],
+                                      "value": "outer_index"
+                                    },
+                                    {
+                                      "op": "constant",
+                                      "operands": [],
+                                      "value": 128
+                                    }
+                                  ],
+                                  "value": null
+                                },
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "value_0"
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                        }
+                      ],
+                      "value": null
+                    }
+                  ],
+                  "value": null
+                },
+                {
+                  "op": "ge",
+                  "operands": [
+                    {
+                      "op": "mod",
+                      "operands": [
+                        {
+                          "op": "add",
+                          "operands": [
+                            {
+                              "op": "mul",
+                              "operands": [
+                                {
+                                  "op": "symbol",
+                                  "operands": [],
+                                  "value": "outer_index"
+                                },
+                                {
+                                  "op": "constant",
+                                  "operands": [],
+                                  "value": 128
+                                }
+                              ],
+                              "value": null
+                            },
+                            {
+                              "op": "symbol",
+                              "operands": [],
+                              "value": "value_0"
+                            }
+                          ],
+                          "value": null
+                        },
+                        {
+                          "op": "symbol",
+                          "operands": [],
+                          "value": "ninetoothed_ninetoothed_tensor_3_size_1"
+                        }
+                      ],
+                      "value": null
+                    },
+                    {
+                      "op": "constant",
+                      "operands": [],
+                      "value": 0
+                    }
+                  ],
+                  "value": null
+                }
+              ],
+              "value": null
+            }
+          }
+        ]
+      },
+      "attrs": {
+        "source_name": "ninetoothed_tensor_3",
+        "source_ndim": 2,
+        "source_shape": [
+          "ninetoothed_ninetoothed_tensor_3_size_0",
+          "ninetoothed_ninetoothed_tensor_3_size_1"
+        ],
+        "source_dtype": "fp32",
+        "other": null,
+        "source_strides": [
+          "ninetoothed_ninetoothed_tensor_3_stride_0",
+          "ninetoothed_ninetoothed_tensor_3_stride_1"
+        ],
+        "target_dims": [
+          "0"
+        ],
+        "view_ndim": 1,
+        "view_shape": [
+          "(ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1"
+        ],
+        "application_shape": [
+          "128"
+        ],
+        "application_ndim": 1,
+        "dtype_shapes": [
+          [
+            "128"
+          ]
+        ],
+        "dtype_target_dims": [
+          [
+            "0"
+          ]
+        ],
+        "access_templates": [
+          {
+            "level": 0,
+            "shape": [
+              "128"
+            ],
+            "linear_offset": "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 * ninetoothed_ninetoothed_tensor_3_stride_0 + (outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 * ninetoothed_ninetoothed_tensor_3_stride_1",
+            "offsets": [
+              "(outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1",
+              "(outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1"
+            ],
+            "mask": "True & (outer_index < (ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1) & (outer_index >= 0) & (value_0 < 128) & (value_0 >= 0) & (outer_index * 128 + value_0 < ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1) & (outer_index * 128 + value_0 >= 0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 < ninetoothed_ninetoothed_tensor_3_size_0) & ((outer_index * 128 + value_0) // ninetoothed_ninetoothed_tensor_3_size_1 >= 0) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 < ninetoothed_ninetoothed_tensor_3_size_1) & ((outer_index * 128 + value_0) % ninetoothed_ninetoothed_tensor_3_size_1 >= 0)"
+          }
+        ]
+      }
+    }
+  ],
+  "launch_grid": [
+    "(((ninetoothed_ninetoothed_tensor_3_size_0 * ninetoothed_ninetoothed_tensor_3_size_1 - 127 - 1 + 128 - 1) // 128 + 1)) * (128)"
+  ],
+  "launch_block": [
+    "256"
+  ],
+  "program_mode": {
+    "block": false,
+    "scalar": false,
+    "vector": false
+  }
+}

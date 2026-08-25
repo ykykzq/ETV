@@ -4,19 +4,20 @@ from etv.cli import main
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests/fixtures/semantic/specs"
 
 
 def test_cli_exit_codes_and_artifacts(tmp_path, capsys):
     proved = main(
         [
             "check",
-            str(ROOT / "examples/specs/add_proved.json"),
+            str(FIXTURES / "add_proved.json"),
             "--out",
             str(tmp_path / "proof"),
         ]
     )
-    disproved = main(["check", str(ROOT / "examples/specs/add_bad_mask.json")])
-    unknown = main(["check", str(ROOT / "examples/specs/add_missing_alias.json")])
+    disproved = main(["check", str(FIXTURES / "add_bad_mask.json")])
+    unknown = main(["check", str(FIXTURES / "add_missing_alias.json")])
 
     assert proved == 0
     assert disproved == 1

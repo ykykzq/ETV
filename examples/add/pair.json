@@ -1,0 +1,111 @@
+{
+  "contract": {
+    "output_numel": {
+      "var": "X"
+    },
+    "output_role": "Output",
+    "require_disjoint": [
+      "Input",
+      "Other",
+      "Output"
+    ],
+    "require_full_coverage": true
+  },
+  "facts": {
+    "assumptions": [],
+    "bindings": {
+      "X": 128
+    },
+    "disjoint": [
+      [
+        "Input",
+        "Other",
+        "Output"
+      ]
+    ],
+    "side_bindings": {
+      "lhs": {
+        "arg10": 16,
+        "arg11": 1,
+        "arg12": 8,
+        "arg13": 16,
+        "arg14": 16,
+        "arg15": 1,
+        "arg4": 8,
+        "arg5": 16,
+        "arg6": 16,
+        "arg7": 1,
+        "arg8": 8,
+        "arg9": 16
+      },
+      "rhs": {
+        "arg4": 128
+      }
+    }
+  },
+  "format": "etv-pair-v1",
+  "frontends": {
+    "lhs": {
+      "function": "ntops_add_kernel",
+      "kind": "ttir",
+      "programs": 1
+    },
+    "rhs": {
+      "function": "triton_poi_fused_0",
+      "kind": "ttir",
+      "programs": 1
+    }
+  },
+  "lhs": "ttir/ntops_add.ttir",
+  "limits": {
+    "max_enodes": 20000,
+    "max_iterations": 8,
+    "timeout_ms": 10000
+  },
+  "pair_id": "ntops_add_vs_torch_inductor_add",
+  "rhs": "ttir/torch_inductor_add.ttir",
+  "roles": {
+    "Alpha": {
+      "lhs": {
+        "kind": "scalar",
+        "name": "arg2"
+      },
+      "rhs": {
+        "index": 0,
+        "kind": "scalar_block",
+        "name": "arg1"
+      }
+    },
+    "Input": {
+      "lhs": {
+        "kind": "block",
+        "name": "arg0"
+      },
+      "rhs": {
+        "kind": "block",
+        "name": "arg0"
+      }
+    },
+    "Other": {
+      "lhs": {
+        "kind": "block",
+        "name": "arg1"
+      },
+      "rhs": {
+        "kind": "block",
+        "name": "arg2"
+      }
+    },
+    "Output": {
+      "lhs": {
+        "kind": "block",
+        "name": "arg3"
+      },
+      "rhs": {
+        "kind": "block",
+        "name": "arg3"
+      }
+    }
+  },
+  "semantic_mode": "abstract_float"
+}

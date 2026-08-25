@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -26,22 +27,35 @@ def _has_pinned_libtriton() -> bool:
 HAS_LIBTRITON = _has_pinned_libtriton()
 
 
+def test_real_add_artifacts_match_provenance():
+    root = ROOT / "examples/add"
+    provenance = json.loads((root / "provenance.json").read_text(encoding="utf-8"))
+
+    assert provenance["upstreams"]["ntops"]["commit"] == (
+        "9ae4166ad342e4745f0eed13a5a20d069e994fc0"
+    )
+    for relative, expected in provenance["artifacts"].items():
+        assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == expected
+    assert "/private/tmp" not in (root / "ttir/ntops_add.ttir").read_text(encoding="utf-8")
+    assert "/private/tmp" not in (root / "ttir/torch_inductor_add.ttir").read_text(encoding="utf-8")
+
+
 def test_pair_spec_accepts_explicit_ttir_frontends():
-    spec = load_pair_spec(ROOT / "examples/specs/add_raw_ttir_proved.json")
+    spec = load_pair_spec(ROOT / "examples/add/pair.json")
 
     assert spec.lhs_frontend.kind == "ttir"
-    assert spec.lhs_frontend.function == "add_mul"
+    assert spec.lhs_frontend.function == "ntops_add_kernel"
     assert spec.lhs_frontend.programs.data == 1
 
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
 def test_libtriton_snapshot_is_complete_and_stable():
-    path = ROOT / "examples/ttir/add_mul.ttir"
+    path = ROOT / "examples/add/ttir/torch_inductor_add.ttir"
 
     first = parse_ttir(path)
     second = parse_ttir(path)
 
-    assert first.function == "add_mul"
+    assert first.function == "triton_poi_fused_0"
     assert first.parser_version == REQUIRED_TRITON_VERSION
     assert len(first.arguments) == 5
     assert {"tt.get_program_id", "tt.load", "tt.store", "arith.mulf"} <= {
@@ -98,7 +112,7 @@ def test_libtriton_parses_region_operations_outside_lifting_subset(tmp_path):
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
 def test_raw_ttir_pair_is_lifted_and_proved():
-    report = verify_spec(ROOT / "examples/specs/add_raw_ttir_proved.json")
+    report = verify_spec(ROOT / "examples/add/pair.json")
 
     assert report["status"] == Status.PROVED.value
     assert report["reason"] == "OBSERVABLE_MEMORY_EQUIVALENT"
@@ -116,7 +130,7 @@ def test_parse_cli_writes_snapshot(tmp_path):
     result = main(
         [
             "parse",
-            str(ROOT / "examples/ttir/add_mul.ttir"),
+            str(ROOT / "examples/add/ttir/torch_inductor_add.ttir"),
             "--out",
             str(output),
             "--no-assembly",

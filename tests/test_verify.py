@@ -9,6 +9,7 @@ from etv.verify import _definedness_issue, verify_spec
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests/fixtures/semantic"
 
 
 @pytest.mark.parametrize(
@@ -23,14 +24,14 @@ ROOT = Path(__file__).resolve().parents[1]
     ],
 )
 def test_end_to_end_verdicts(name, status, reason):
-    report = verify_spec(ROOT / "examples/specs" / name)
+    report = verify_spec(FIXTURES / "specs" / name)
 
     assert report["status"] == status.value
     assert report["reason"] == reason
 
 
 def test_compute_counterexample_is_replayable():
-    report = verify_spec(ROOT / "examples/specs/add_bad_compute.json")
+    report = verify_spec(FIXTURES / "specs/add_bad_compute.json")
     witness = report["counterexample"]
 
     assert witness["kind"] == "ABSTRACT_VALUE_MODEL"
@@ -39,13 +40,13 @@ def test_compute_counterexample_is_replayable():
 
 
 def test_machine_report_is_deterministic():
-    path = ROOT / "examples/specs/add_fma_proved.json"
+    path = FIXTURES / "specs/add_fma_proved.json"
 
     assert verify_spec(path) == verify_spec(path)
 
 
 def test_all_admitted_rules_enter_the_unified_egglog_ruleset():
-    report = verify_spec(ROOT / "examples/specs/add_fma_proved.json")
+    report = verify_spec(FIXTURES / "specs/add_fma_proved.json")
     egraph = report["proof"]["egraph"]
 
     assert egraph["stats"]["backend"] == {"name": "egglog", "version": "13.2.0"}
@@ -56,7 +57,7 @@ def test_all_admitted_rules_enter_the_unified_egglog_ruleset():
 
 
 def test_writes_json_and_markdown_artifacts(tmp_path):
-    report = verify_spec(ROOT / "examples/specs/add_proved.json")
+    report = verify_spec(FIXTURES / "specs/add_proved.json")
 
     write_report(report, tmp_path)
 
@@ -74,9 +75,9 @@ def test_partial_float_operations_require_proved_domains(tmp_path):
     assert _definedness_issue(Expr("fdiv", args=(one, value), sort=Sort.FLOAT))["operation"] == "fdiv"
     assert _definedness_issue(Expr("fsqrt", args=(value,), sort=Sort.FLOAT))["operation"] == "fsqrt"
 
-    spec = json.loads((ROOT / "examples/specs/add_proved.json").read_text(encoding="utf-8"))
-    lhs = json.loads((ROOT / "examples/programs/add_ntops_2d.json").read_text(encoding="utf-8"))
-    rhs = json.loads((ROOT / "examples/programs/add_inductor_linear.json").read_text(encoding="utf-8"))
+    spec = json.loads((FIXTURES / "specs/add_proved.json").read_text(encoding="utf-8"))
+    lhs = json.loads((FIXTURES / "programs/add_ntops_2d.json").read_text(encoding="utf-8"))
+    rhs = json.loads((FIXTURES / "programs/add_inductor_linear.json").read_text(encoding="utf-8"))
     lhs["stores"][0]["value"] = {
         "op": "fdiv",
         "args": [lhs["stores"][0]["value"], {"scalar": "nt_alpha"}],
@@ -107,9 +108,9 @@ def test_partial_float_operations_require_proved_domains(tmp_path):
 
 
 def _write_trusted_rewrite_spec(tmp_path, include_fact):
-    source = json.loads((ROOT / "examples/specs/add_bad_compute.json").read_text(encoding="utf-8"))
-    source["lhs"] = str(ROOT / "examples/programs/add_ntops_2d.json")
-    source["rhs"] = str(ROOT / "examples/programs/add_inductor_bad_compute.json")
+    source = json.loads((FIXTURES / "specs/add_bad_compute.json").read_text(encoding="utf-8"))
+    source["lhs"] = str(FIXTURES / "programs/add_ntops_2d.json")
+    source["rhs"] = str(FIXTURES / "programs/add_inductor_bad_compute.json")
     fact = "subtraction is equivalent to addition for this specialization"
     if include_fact:
         source["facts"]["assumptions"].append(fact)

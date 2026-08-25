@@ -68,6 +68,15 @@ def _base_report(spec: PairSpec) -> dict:
     ]
     assumptions.extend(
         {
+            "text": f"{side}.{name} = {value}",
+            "evidence": ProofLevel.TRUSTED_AXIOM.value,
+            "source": f"PairSpec.facts.side_bindings.{side}",
+        }
+        for side in ("lhs", "rhs")
+        for name, value in sorted(spec.facts.side_bindings.get(side, {}).items())
+    )
+    assumptions.extend(
+        {
             "text": text,
             "evidence": ProofLevel.TRUSTED_AXIOM.value,
             "source": "PairSpec.facts.assumptions",

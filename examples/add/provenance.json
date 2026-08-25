@@ -1,0 +1,59 @@
+{
+  "artifacts": {
+    "pair.json": "f69a3ee73427540d41174dd111b630cfddd3bb4fb35c950e26d6be72b3d8d172",
+    "sources/ntops_add.triton.json": "5b8201e4d228db28af228f4adf086e93213109c071db957b03fe3ae5f9d480e5",
+    "sources/ntops_add.triton.py": "4e689f604518de9763ec48280af43cc0075247efabb20ec3bd8181bc8271c851",
+    "sources/torch_inductor_add.fx.txt": "baba66a1e72e1aa8bdce2262c32fef8245f3f07c61c3653f74bd8f4e0cd93cbb",
+    "sources/torch_inductor_add.generated.py": "de25c035aee3da58ef6159b8fc72679ad53843a0e8ee38fdd080b448c796179d",
+    "sources/torch_inductor_add.triton.py": "485a42c59f5fbda6b1f7ddfb7d50f249c47daa3aaeb5032ae1e593ad68ab7943",
+    "ttir/ntops_add.ttir": "44190e7a1b363bacdd9cbf8eb0179b24436edc3715238cd912971d5be49fdcd1",
+    "ttir/torch_inductor_add.ttir": "598d56f8b1c03d61125f7f5ddbb78ecb9055298908d43faf59004f42f4f444e6"
+  },
+  "format": "etv-extracted-pair-provenance-v1",
+  "generation": {
+    "compatibility_shims": [
+      "Expose triton_key() so PyTorch 2.8 recognizes the separately pinned Triton 3.7.1 package.",
+      "Return an offline backend hash instead of initializing the CUDA runtime driver.",
+      "Provide fixed A100/sm80 device properties to TorchInductor scheduling."
+    ],
+    "cuda_execution": false,
+    "inductor_adapter": "Removed only the pointwise launch decorator and retained the exact @triton.jit function text for offline AST compilation.",
+    "lhs": "ntops Add -> ninetoothed SSA lowering -> Triton AST -> optimized TTIR",
+    "ntops_test_reference": "torch.add(input, other, alpha=python_scalar)",
+    "rhs": "PyTorch tensor expression -> FakeTensor FX -> TorchInductor Triton -> Triton AST -> optimized TTIR",
+    "rhs_fx_expression": "input_tensor + alpha_tensor * other",
+    "source_normalization": "Removed trailing whitespace from TorchInductor source lines."
+  },
+  "operator": "add(input, other, alpha) = input + alpha * other",
+  "pair_id": "ntops_add_vs_torch_inductor_add",
+  "specialization": {
+    "dtype": "float32",
+    "ntops_block": 256,
+    "numel": 128,
+    "shape": [
+      8,
+      16
+    ],
+    "target": "cuda:sm80",
+    "torch_inductor_xblock": 128
+  },
+  "toolchain": {
+    "ninetoothed": "0.26.0",
+    "torch": "2.8.0",
+    "triton": "3.7.1+gitf797708c"
+  },
+  "upstreams": {
+    "ninetoothed": {
+      "commit": "efe519d1b12a820e7aa605d775af3d52c8b0d605",
+      "url": "https://github.com/InfiniTensor/ninetoothed"
+    },
+    "ntops": {
+      "commit": "9ae4166ad342e4745f0eed13a5a20d069e994fc0",
+      "files": {
+        "src/ntops/kernels/add.py": "a8f938399835b59385fb3142c7f96382e7855cc6afc7025ccfaa495dd2422d50",
+        "src/ntops/kernels/element_wise.py": "a3f2d7a1bac443bf256e591c8910b125ebc994b97da7c5b8b60d66ac31284d72"
+      },
+      "url": "https://github.com/InfiniTensor/ntops"
+    }
+  }
+}

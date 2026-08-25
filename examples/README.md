@@ -1,33 +1,33 @@
 # 示例
 
-这些示例以机器方式检查压缩包中的 add 前沿证明及其必要负例。
+`examples/` 只包含一个面向用户的验证样例：从真实上游代码重新生成的 Add
+程序对。旧的手写 Semantic JSON、故障变体和小型 FMA TTIR 已移到
+`tests/fixtures/semantic/`，它们只用于验证 ETV 自身行为，不再作为工程能力展示。
 
-| Spec | 结果 | 用途 |
-| --- | --- | --- |
-| `specs/add_proved.json` | `PROVED` | 二维步长感知 ntops 与线性 Inductor |
-| `specs/add_fma_proved.json` | `PROVED` | `ABSTRACT_FLOAT` 下经 Z3 准入的 `fma == mul+add` |
-| `specs/add_raw_ttir_proved.json` | `PROVED` | 两个由 libtriton 解析和验证的原始 TTIR 文件 |
-| `specs/add_bad_stride.json` | `DISPROVED` | 后续行的首个 output 地址不同 |
-| `specs/add_bad_mask.json` | `DISPROVED` | rhs 漏掉逻辑元素 127 |
-| `specs/add_bad_compute.json` | `DISPROVED` | 精确值模型区分 add 与 sub |
-| `specs/add_missing_alias.json` | `UNKNOWN` | 缺少所需 no-alias 前提 |
+## 内容
 
-运行所有 Semantic JSON 用例：
+| 路径 | 内容 |
+| --- | --- |
+| `add/pair.json` | `[8,16]`、连续布局、单 program 的实际 PairSpec |
+| `add/provenance.json` | 上游提交、源码与 artifact 哈希、工具链和适配声明 |
+| `add/sources/ntops_add.triton.py` | ninetoothed 从 ntops Add 生成的 Triton 源码 |
+| `add/sources/ntops_add.triton.json` | ninetoothed 生成的 SSA/布局元数据 |
+| `add/sources/torch_inductor_add.fx.txt` | PyTorch FakeTensor 捕获的 FX 图 |
+| `add/sources/torch_inductor_add.generated.py` | TorchInductor 原样生成的内核源码 |
+| `add/sources/torch_inductor_add.triton.py` | 仅移除 launch decorator 的离线 TTIR 编译适配源码 |
+| `add/ttir/*.ttir` | Triton 3.7.1 为 CUDA sm80 生成并优化的两侧 TTIR |
 
-```bash
-.venv/bin/python -m etv check examples/specs/add_proved.json
-.venv/bin/python -m etv check examples/specs/add_fma_proved.json
-.venv/bin/python -m etv check examples/specs/add_bad_stride.json
-.venv/bin/python -m etv check examples/specs/add_bad_mask.json
-.venv/bin/python -m etv check examples/specs/add_bad_compute.json
-.venv/bin/python -m etv check examples/specs/add_missing_alias.json
-```
-
-在安装 Triton 3.7.1 后运行 raw TTIR 用例：
+## 验证
 
 ```bash
-.venv/bin/python -m etv parse examples/ttir/add_mul.ttir
-.venv/bin/python -m etv check examples/specs/add_raw_ttir_proved.json
+.venv/bin/python -m etv check examples/add/pair.json \
+  --out build/add_upstream
 ```
 
-负例命令退出码为 1，UNKNOWN 为 2，适用于 CI。添加 `--out build/<case>` 可保留 `report.json` 与 `report.md`。
+结果应为：
+
+```text
+PROVED ntops_add_vs_torch_inductor_add: OBSERVABLE_MEMORY_EQUIVALENT
+```
+
+复现提取过程和结果解释见[真实 Add 验证](../docs/add_validation.md)。

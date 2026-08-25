@@ -169,11 +169,23 @@ class FactContext:
     bindings: Mapping[str, int]
     assumptions: Tuple[str, ...]
     disjoint_groups: Tuple[frozenset, ...]
+    side_bindings: Mapping[str, Mapping[str, int]] = field(default_factory=dict)
 
     def disjoint(self, lhs: str, rhs: str) -> bool:
         if lhs == rhs:
             return False
         return any(lhs in group and rhs in group for group in self.disjoint_groups)
+
+    def for_side(self, side: str) -> "FactContext":
+        if side not in {"lhs", "rhs"}:
+            raise ValueError(f"invalid pair side {side!r}")
+        merged = dict(self.bindings)
+        merged.update(self.side_bindings.get(side, {}))
+        return FactContext(
+            bindings=merged,
+            assumptions=self.assumptions,
+            disjoint_groups=self.disjoint_groups,
+        )
 
 
 @dataclass(frozen=True)

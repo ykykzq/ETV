@@ -40,6 +40,15 @@ PROVED / DISPROVED / UNKNOWN + JSON/Markdown 报告
 
 ## 组件
 
+### `tools/extract_add_pair.py`
+
+该工具位于验证器输入边界之前，负责从固定提交的 ntops Add 与 ninetoothed 生成
+左侧 Triton 源码，并通过 PyTorch FakeTensor/FX/TorchInductor 生成右侧 Triton
+源码，再调用 Triton 3.7.1 的 AST 前端和 TTIR pass 得到两侧 raw TTIR。工具检查
+上游 Git HEAD、关键源码哈希和包版本，并生成 `provenance.json`。它不执行 GPU
+kernel；TorchInductor launch decorator 的离线适配和 debug location 规范化都被
+显式记录。详见[真实 Add 验证](add_validation.md)。
+
 ### `etv/schema.py`
 
 读取 `etv-semantic-program-v1` 和 `etv-pair-v1`。未知字段、错误元数、缺失的角色端点、重复物理映射和无效资源限制都会被拒绝。变量绑定在成对求值阶段解析。这样可避免因拼写错误而在无提示的情况下证明一个更弱的契约。

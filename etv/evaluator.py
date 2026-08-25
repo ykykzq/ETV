@@ -192,7 +192,8 @@ def evaluate_program(program: Program, spec: PairSpec, side: str) -> Evaluation:
             "MULTIPLE_STORES_UNSUPPORTED",
         )
     roles = build_side_roles(spec, side)
-    count_value = eval_expr(program.programs, {}, spec.facts, roles)
+    facts = spec.facts.for_side(side)
+    count_value = eval_expr(program.programs, {}, facts, roles)
     program_count = _as_int(count_value, "launch.programs")
     if program_count <= 0:
         raise InputError("launch.programs must evaluate to a positive integer")
@@ -215,13 +216,13 @@ def evaluate_program(program: Program, spec: PairSpec, side: str) -> Evaluation:
         for lane in range(program.lanes):
             env = {"pid": pid, "lane": lane}
             logical_index = _as_int(
-                eval_expr(store.logical_index, env, spec.facts, roles),
+                eval_expr(store.logical_index, env, facts, roles),
                 "store.logical_index",
             )
-            active = _as_bool(eval_expr(store.mask, env, spec.facts, roles), "store.mask")
+            active = _as_bool(eval_expr(store.mask, env, facts, roles), "store.mask")
             if active:
-                offset = _as_int(eval_expr(store.offset, env, spec.facts, roles), "store.offset")
-                value = _as_float(eval_expr(store.value, env, spec.facts, roles), "store.value")
+                offset = _as_int(eval_expr(store.offset, env, facts, roles), "store.offset")
+                value = _as_float(eval_expr(store.value, env, facts, roles), "store.value")
             else:
                 offset = None
                 value = None

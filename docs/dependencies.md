@@ -35,6 +35,28 @@ python3.12 -m venv .venv
 
 实现时使用的环境是 macOS Darwin arm64。本地虚拟环境已被 git 忽略。
 
+## 真实 Add 提取依赖
+
+`examples/add` 的日常验证只需要 ETV 和 libtriton；只有重新生成该目录时才需要
+以下额外依赖。它们记录在 `requirements-extraction.txt`，不进入 ETV 运行时依赖：
+
+| 依赖 | 固定版本/提交 | 用途 |
+| --- | --- | --- |
+| `InfiniTensor/ntops` | `9ae4166ad342e4745f0eed13a5a20d069e994fc0` | 被验证 Add 的上游实现和布局 arrangement |
+| `InfiniTensor/ninetoothed` | `efe519d1b12a820e7aa605d775af3d52c8b0d605`，0.26.0 | 从 ntops DSL/SSA 生成 Triton 源码 |
+| PyTorch | `2.8.0` | FakeTensor、FX、TorchInductor 调度和 Triton codegen |
+| Triton/libtriton | `3.7.1` | 两侧 AST 前端、TTIR pass 和最终 parser/verifier |
+
+实现期间隔离环境中由 PyTorch/ninetoothed 解析出的主要传递依赖包括
+`numpy==2.3.4`、`sympy==1.14.0`、`mpmath==1.3.0`、`filelock==3.32.2`、
+`fsspec==2026.7.0`、`jinja2==3.1.6`、`MarkupSafe==3.0.3` 和
+`networkx==3.6.1`。这些库不由 ETV 直接调用，未来重新安装时应以固定直接依赖
+解析和 `pip check` 为准。
+
+提取工具要求 ninetoothed 以 editable 模式指向固定 checkout，并检查 ntops/
+ninetoothed 的 Git HEAD、两个 ntops 源文件哈希以及 Python 包版本。详细命令见
+[真实 Add 验证](add_validation.md)。
+
 Linux 上启用 raw TTIR：
 
 ```bash
@@ -67,6 +89,8 @@ TRITON_BUILD_PROTON=OFF MAX_JOBS=4 \
 ```
 
 构建过程会下载 Triton 锁定的 LLVM，并需要数 GB 临时空间。运行时会检查 `triton.__version__ == "3.7.1"`。
+本次使用的 v3.7.1 提交为
+`f797708c0626e5f9840ca5b0a98790e2c7cb09ad`。
 
 ## 实现过程中安装的构建依赖
 
@@ -88,14 +112,12 @@ TRITON_BUILD_PROTON=OFF MAX_JOBS=4 \
 - macOS 26 arm64；
 - Python 3.12.13；
 - 从官方 `v3.7.1` 标签构建的 libtriton；
-- `add_mul.ttir` 与 `add_fma.ttir` 均通过解析、IR 验证、提升和等价性证明；
+- 真实生成的 ntops Add 与 TorchInductor Add TTIR 均通过解析、IR 验证和提升，
+  程序对得到 `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`；
 - 包含 `scf.for`/`scf.yield` 的测试模块通过完整解析，并正确保持在语义提升边界之外。
 
-## 有意未安装的依赖
-
-### SymPy
-
-Z3 已直接证明当前所有代数规则，因此第二个简化器不会增强证明。对于规模更大的带条件代数规则注册表，SymPy 仍可用作可读性和回归测试辅助工具。
+SymPy 由 PyTorch 提取环境传递安装，但 ETV 不使用它进行规则准入。当前所有
+代数规则仍由 Z3 直接证明，避免出现两个准入语义不一致的简化器。
 
 ## 依赖信任
 

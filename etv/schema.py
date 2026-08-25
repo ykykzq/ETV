@@ -449,7 +449,11 @@ def load_pair_spec(path: Path) -> PairSpec:
     facts_raw = raw.get("facts")
     if not isinstance(facts_raw, dict):
         raise InputError(f"{path}.facts must be an object")
-    _only_keys(facts_raw, {"bindings", "assumptions", "disjoint"}, f"{path}.facts")
+    _only_keys(
+        facts_raw,
+        {"bindings", "side_bindings", "assumptions", "disjoint"},
+        f"{path}.facts",
+    )
     bindings_raw = facts_raw.get("bindings", {})
     if not isinstance(bindings_raw, dict):
         raise InputError(f"{path}.facts.bindings must be an object")
@@ -460,6 +464,25 @@ def load_pair_spec(path: Path) -> PairSpec:
         if not isinstance(value, int) or isinstance(value, bool):
             raise InputError(f"fact binding {key!r} must be an integer")
         bindings[key] = value
+    side_bindings_raw = facts_raw.get("side_bindings", {})
+    if not isinstance(side_bindings_raw, dict):
+        raise InputError(f"{path}.facts.side_bindings must be an object")
+    _only_keys(side_bindings_raw, {"lhs", "rhs"}, f"{path}.facts.side_bindings")
+    side_bindings: Dict[str, Dict[str, int]] = {}
+    for side, values in side_bindings_raw.items():
+        where = f"{path}.facts.side_bindings.{side}"
+        if not isinstance(values, dict):
+            raise InputError(f"{where} must be an object")
+        parsed: Dict[str, int] = {}
+        for key, value in values.items():
+            if not isinstance(key, str) or not key:
+                raise InputError(f"{where} binding names must be non-empty strings")
+            if key in bindings:
+                raise InputError(f"{where}.{key} duplicates a shared fact binding")
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise InputError(f"{where}.{key} must be an integer")
+            parsed[key] = value
+        side_bindings[side] = parsed
     assumptions = _strings(facts_raw.get("assumptions", []), f"{path}.facts.assumptions")
     disjoint_raw = facts_raw.get("disjoint", [])
     if not isinstance(disjoint_raw, list):
@@ -559,6 +582,7 @@ def load_pair_spec(path: Path) -> PairSpec:
             bindings=bindings,
             assumptions=assumptions,
             disjoint_groups=tuple(disjoint_groups),
+            side_bindings=side_bindings,
         ),
         contract=Contract(
             output_role=output_role,
