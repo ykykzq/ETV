@@ -1,0 +1,230 @@
+{
+  "best_configs": [
+    {
+      "content": {
+        "XBLOCK": 1,
+        "configs_hash": "f849fcc782714e089c2941c87eabe9da77149c6e30b6840a529a907bbe18c3c2",
+        "found_by_coordesc": false,
+        "num_stages": 1,
+        "num_warps": 2,
+        "time_taken_ms": 18,
+        "triton_cache_hash": "SZO2S6IK5CZRKWPFMDUDSSRYVSJVMVN6NINUZH7DOLD2BCPQLPDQ"
+      },
+      "path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/torchinductor-cache/j2/b1d02e11096319a79744c8688410232915300ff66c753f3439747db3c93a6b12.best_config"
+    }
+  ],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      11,
+      4,
+      21
+    ],
+    "storage_offset": 0,
+    "stride": [
+      84,
+      21,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 1,
+  "expression": "torch.nn.functional.instance_norm(input, running_mean=reference_running_mean, running_var=reference_running_var, weight=weight, bias=bias, use_input_stats=use_input_stats, eps=eps)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/inductor-source/000-cajjmx5li6gsagbadmniqmnmullekizx7l7ntyprby3dxafaz4m5.py",
+      "sha256": "67f6613a45dca8bef0c64b20d5e30d9a30b6196f6dec674c3c7ed1c3a93afb1b"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/inductor-source/001-cj2yjgzedf3ixty4fbwyutoc4zoz6amxspe3nkbbsy3223tw6weq.py",
+      "sha256": "341c28b54a8cc77c2d8221b4bfb0e28669b0d9e7a8e2840daa3c518ce8131d19"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        11,
+        4,
+        21
+      ],
+      "storage_offset": 0,
+      "stride": [
+        84,
+        21,
+        1
+      ]
+    },
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        4
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input[0]",
+    "weight[0]"
+  ],
+  "line": 68,
+  "runtime_launches": [
+    {
+      "cache_hash": "SZO2S6IK5CZRKWPFMDUDSSRYVSJVMVN6NINUZH7DOLD2BCPQLPDQ",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 1
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 2
+      },
+      "grid": [
+        44,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_per_fused__native_batch_norm_legit_0",
+      "programs": 44,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              11,
+              4,
+              21
+            ],
+            "storage_offset": 0,
+            "stride": [
+              84,
+              21,
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              4
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              1,
+              44,
+              21
+            ],
+            "storage_offset": 0,
+            "stride": [
+              924,
+              21,
+              1
+            ]
+          }
+        },
+        {
+          "position": 3,
+          "value": 44
+        },
+        {
+          "position": 4,
+          "value": 21
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 14446,
+      "path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/selected-000.ttir",
+      "sha256": "bad8661d9a61462e424ef139eb91f38ce97e66622995a8c09db81b79dd08ddf1",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/triton-cache/SZO2S6IK5CZRKWPFMDUDSSRYVSJVMVN6NINUZH7DOLD2BCPQLPDQ/triton_per_fused__native_batch_norm_legit_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 16028,
+      "path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/triton-cache/KZRQSDRPUNUX4GCVRTKQSI5YRWPOE4ZDKAIXHUPYO55C3VBN4AXQ/triton_per_fused__native_batch_norm_legit_0.ttir",
+      "sha256": "01e08ffa59dadc4aed6e182d17b09b476192900247d3a9010235c15246e4caf6"
+    },
+    {
+      "bytes": 14446,
+      "path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/triton-cache/SZO2S6IK5CZRKWPFMDUDSSRYVSJVMVN6NINUZH7DOLD2BCPQLPDQ/triton_per_fused__native_batch_norm_legit_0.ttir",
+      "sha256": "bad8661d9a61462e424ef139eb91f38ce97e66622995a8c09db81b79dd08ddf1"
+    },
+    {
+      "bytes": 15758,
+      "path": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape5-dtype5-cuda-0.01-0.01-False-True-False-True-0.001--7cf9fe7c4b/rhs/reference-000-001/triton-cache/YPVP2TL5RLN7FEPKN7TPWUXRCECEYALB4JKFK7E5PRBY6KC2ND5A/triton_per_fused__native_batch_norm_legit_0.ttir",
+      "sha256": "26b4c21ddff3828e5c48f0a12caa574875fc9200639ec5ff1998234da997ec3d"
+    }
+  ],
+  "ttir_status": "captured"
+}

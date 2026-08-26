@@ -1,0 +1,164 @@
+{
+  "best_configs": [],
+  "capture_origin": "line_trace",
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float32",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [],
+    "storage_offset": 0,
+    "stride": []
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": false,
+          "max_abs_error": 1.3969838619232178e-09
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": false,
+          "max_abs_error": 1.3969838619232178e-09
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.mean(input_tensor)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/mean/test_mean_global-shape6-dtype6-cuda-0.001-0.001--eca1c1266b/rhs/reference-000-000/inductor-source/000-cmmhwh62kgwfsqei7jh4mcylx6txjinhid3kcomtynuk2krirj2n.py",
+      "sha256": "d1a3c6f3392148d3c789ca97507c3620323e085dc4d5810f93cb851d2489a270"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/mean/test_mean_global-shape6-dtype6-cuda-0.001-0.001--eca1c1266b/rhs/reference-000-000/inductor-source/001-csxwyngmobzsobekldwonr6sy4scskczongyr7suzysajj2shobl.py",
+      "sha256": "7ec38c38e41c1b00d502ce9b775630f9e34c73334c742ee65489108fed024afd"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float32",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        12,
+        3,
+        10,
+        2
+      ],
+      "storage_offset": 0,
+      "stride": [
+        60,
+        20,
+        2,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input_tensor[0]"
+  ],
+  "line": 41,
+  "runtime_launches": [
+    {
+      "cache_hash": "BR4SUI76EU4UTTKOTNZ7HJ2NJMSRLQWFRQCVWOI3JGEAI6WBUG3A",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {},
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 8
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_per_fused_mean_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [],
+            "storage_offset": 0,
+            "stride": []
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              12,
+              3,
+              10,
+              2
+            ],
+            "storage_offset": 0,
+            "stride": [
+              60,
+              20,
+              2,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 1
+        },
+        {
+          "position": 3,
+          "value": 720
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 5567,
+      "path": "/data3/yelv.lh/ETV/benchmark/mean/test_mean_global-shape6-dtype6-cuda-0.001-0.001--eca1c1266b/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "23bd311e56cf66d3c9e821b638fd932ed4e0447deaf4839bfc33a015cb545c06",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/mean/test_mean_global-shape6-dtype6-cuda-0.001-0.001--eca1c1266b/rhs/reference-000-000/triton-cache/BR4SUI76EU4UTTKOTNZ7HJ2NJMSRLQWFRQCVWOI3JGEAI6WBUG3A/triton_per_fused_mean_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_value"
+  ],
+  "ttir": [
+    {
+      "bytes": 5567,
+      "path": "/data3/yelv.lh/ETV/benchmark/mean/test_mean_global-shape6-dtype6-cuda-0.001-0.001--eca1c1266b/rhs/reference-000-000/triton-cache/BR4SUI76EU4UTTKOTNZ7HJ2NJMSRLQWFRQCVWOI3JGEAI6WBUG3A/triton_per_fused_mean_0.ttir",
+      "sha256": "23bd311e56cf66d3c9e821b638fd932ed4e0447deaf4839bfc33a015cb545c06"
+    }
+  ],
+  "ttir_status": "captured"
+}

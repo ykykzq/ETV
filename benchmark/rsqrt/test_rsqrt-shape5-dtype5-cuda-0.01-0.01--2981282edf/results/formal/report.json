@@ -1,0 +1,198 @@
+{
+  "assumptions": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.bindings",
+      "text": "X = 840"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg1 = 30"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg2 = 28"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg3 = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg5 = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg6 = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.rhs",
+      "text": "rhs.arg2 = 840"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    }
+  ],
+  "blocks": [
+    {
+      "kind": "FRONTEND",
+      "proof_levels": [],
+      "reason": "TTIR_UNDEFINED_LOAD_LANE",
+      "required_for_final": true,
+      "status": "UNKNOWN",
+      "summary": "a masked tt.load without 'other' is not guarded by the identical store mask"
+    }
+  ],
+  "counterexample": null,
+  "formal_predicates": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Input0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Output",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.X",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg3",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg5",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg6",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.rhs.arg2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    }
+  ],
+  "guarantees": {
+    "does_not_prove": [
+      "IEEE-754 or bitwise GPU equality",
+      "formal correctness of the raw-TTIR-to-ETV-IR lifting implementation",
+      "parametric shapes or unbounded loops",
+      "concurrent/shared-memory semantics",
+      "allocated-buffer bounds or GPU memory safety"
+    ],
+    "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+  },
+  "inputs": {
+    "lhs": "/data3/yelv.lh/ETV/benchmark/rsqrt/test_rsqrt-shape5-dtype5-cuda-0.01-0.01--2981282edf/lhs/launch-000.ttir",
+    "rhs": "/data3/yelv.lh/ETV/benchmark/rsqrt/test_rsqrt-shape5-dtype5-cuda-0.01-0.01--2981282edf/rhs/reference-000-000/selected-000.ttir",
+    "sha256": {
+      "lhs": "0b410c7fb431cdd736b6f4e10f02d66132b9655225117e8489d6fa7bff383791",
+      "rhs": "0ea1a4af0feb9d2d853d80c48fdc2d33146d62734c280d0d6ccb80a141cc45f7",
+      "spec": "41359ca575ba4c33dc2e189fc33991a349414e0b83ff5bf0dad4f1f7917bd883"
+    },
+    "spec": "/data3/yelv.lh/ETV/benchmark/rsqrt/test_rsqrt-shape5-dtype5-cuda-0.01-0.01--2981282edf/pairspec/pair.json"
+  },
+  "llm_context": {
+    "assumptions": [
+      "This pair was captured from the same specialized ntops pytest node; pointer roles are mapped by one-store dataflow and remaining ABI order."
+    ],
+    "proof_relevance": "informational_only",
+    "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
+  },
+  "pair_id": "build/upstream/ntops/tests/test_rsqrt.py::test_rsqrt[shape5-dtype5-cuda-0.01-0.01]",
+  "proof": {},
+  "reason": "TTIR_UNDEFINED_LOAD_LANE",
+  "rewrite_registry": {
+    "builtin": "validated_builtin_rules",
+    "inline_legacy_rules": [],
+    "user_sources": []
+  },
+  "schema_version": 5,
+  "scope": "fixed-specialization single-store bounded translation validation",
+  "semantic_mode": "abstract_float",
+  "soundness": {
+    "conditional_on": [
+      "declared predicate: abi.Input0",
+      "declared predicate: abi.Output",
+      "declared predicate: binding.X",
+      "declared predicate: binding.lhs.arg1",
+      "declared predicate: binding.lhs.arg2",
+      "declared predicate: binding.lhs.arg3",
+      "declared predicate: binding.lhs.arg5",
+      "declared predicate: binding.lhs.arg6",
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
+    ],
+    "level": "formal_under_declared_predicates",
+    "non_formal_assistance": [
+      "PairSpec.assumptions"
+    ]
+  },
+  "status": "UNKNOWN",
+  "tool": {
+    "name": "ETV",
+    "version": "0.6.1"
+  },
+  "trusted_axioms": [
+    "PairSpec role correspondence",
+    "PairSpec fixed shape/stride/launch bindings",
+    "PairSpec no-alias declarations",
+    "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
+    "ETV IR evaluator and memory-token model"
+  ],
+  "unsupported": [
+    "a masked tt.load without 'other' is not guarded by the identical store mask"
+  ]
+}

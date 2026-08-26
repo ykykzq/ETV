@@ -1,0 +1,10 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %arg1_1 : [num_users=1] = placeholder[target=arg1_1]
+    %expand : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%arg0_1, [2, 355, 810]), kwargs = {})
+    %view : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%expand, [2, 355, 810]), kwargs = {})
+    %expand_1 : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%arg1_1, [2, 810, 768]), kwargs = {})
+    %view_1 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%expand_1, [2, 810, 768]), kwargs = {})
+    %bmm : [num_users=1] = call_function[target=torch.ops.aten.bmm.default](args = (%view, %view_1), kwargs = {})
+    %_unsafe_view : [num_users=1] = call_function[target=torch.ops.aten._unsafe_view.default](args = (%bmm, [2, 355, 768]), kwargs = {})
+    return _unsafe_view

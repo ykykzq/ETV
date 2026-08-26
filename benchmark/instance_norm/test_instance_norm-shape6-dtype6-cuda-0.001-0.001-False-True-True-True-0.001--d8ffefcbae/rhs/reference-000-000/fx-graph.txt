@@ -1,0 +1,10 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %view : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%arg0_1, [1, 174, 3, 1]), kwargs = {})
+    %empty : [num_users=0] = call_function[target=torch.ops.aten.empty.memory_format](args = ([0],), kwargs = {dtype: torch.uint8, layout: torch.strided, device: cuda:0})
+    %_native_batch_norm_legit : [num_users=3] = call_function[target=torch.ops.aten._native_batch_norm_legit.no_stats](args = (%view, None, None, True, 0.1, 0.001), kwargs = {})
+    %getitem : [num_users=1] = call_function[target=operator.getitem](args = (%_native_batch_norm_legit, 0), kwargs = {})
+    %getitem_1 : [num_users=0] = call_function[target=operator.getitem](args = (%_native_batch_norm_legit, 1), kwargs = {})
+    %getitem_2 : [num_users=0] = call_function[target=operator.getitem](args = (%_native_batch_norm_legit, 2), kwargs = {})
+    %view_1 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%getitem, [6, 29, 3, 1]), kwargs = {})
+    return view_1

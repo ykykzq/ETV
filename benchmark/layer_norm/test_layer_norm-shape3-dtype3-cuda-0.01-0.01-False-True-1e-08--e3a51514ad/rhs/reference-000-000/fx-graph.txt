@@ -1,0 +1,8 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %arg1_1 : [num_users=1] = placeholder[target=arg1_1]
+    %native_layer_norm : [num_users=3] = call_function[target=torch.ops.aten.native_layer_norm.default](args = (%arg0_1, [13], %arg1_1, None, 1e-08), kwargs = {})
+    %getitem : [num_users=1] = call_function[target=operator.getitem](args = (%native_layer_norm, 0), kwargs = {})
+    %getitem_1 : [num_users=0] = call_function[target=operator.getitem](args = (%native_layer_norm, 1), kwargs = {})
+    %getitem_2 : [num_users=0] = call_function[target=operator.getitem](args = (%native_layer_norm, 2), kwargs = {})
+    return getitem

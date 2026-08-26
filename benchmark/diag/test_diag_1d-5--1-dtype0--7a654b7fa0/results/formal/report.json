@@ -1,0 +1,314 @@
+{
+  "assumptions": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.bindings",
+      "text": "X = 36"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg1 = 5"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.rhs",
+      "text": "rhs.arg2 = 36"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    }
+  ],
+  "blocks": [
+    {
+      "details": {
+        "lhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        },
+        "rhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        }
+      },
+      "kind": "FRONTEND",
+      "proof_levels": [
+        "STRUCTURAL"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR"
+    },
+    {
+      "details": {
+        "roles": [
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0"
+            },
+            "logical": "Input0",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0"
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg2"
+            },
+            "logical": "Output",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg1"
+            }
+          }
+        ]
+      },
+      "kind": "ABI",
+      "proof_levels": [
+        "TRUSTED_AXIOM"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "physical parameters are aligned to explicit logical roles"
+    },
+    {
+      "details": {
+        "casts": {
+          "lhs": [],
+          "rhs": [
+            "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))",
+            "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))"
+          ]
+        },
+        "rule_admission": [],
+        "rule_matches": {},
+        "stats": {
+          "backend": {
+            "name": "egglog",
+            "version": "13.2.0"
+          },
+          "eclasses": 10,
+          "enodes": 10,
+          "iteration_trace": [
+            {
+              "after": {
+                "eclasses": 10,
+                "enodes": 10
+              },
+              "before": {
+                "eclasses": 10,
+                "enodes": 10
+              },
+              "iteration": 1,
+              "rule_matches": {},
+              "updated": false
+            }
+          ],
+          "iterations": 1,
+          "rule_applications": {},
+          "rule_matches": {},
+          "stop_reason": "SATURATED"
+        },
+        "status": "unresolved",
+        "unresolved": [
+          {
+            "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))",
+            "side": "rhs"
+          },
+          {
+            "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))",
+            "side": "rhs"
+          }
+        ],
+        "unverified_rule_uses": []
+      },
+      "kind": "CAST",
+      "proof_levels": [],
+      "reason": "CAST_EQUIVALENCE_NOT_REWRITTEN",
+      "required_for_final": true,
+      "status": "UNKNOWN",
+      "summary": "integer cast differences were preserved but no admitted rewrite established their equivalence"
+    }
+  ],
+  "counterexample": null,
+  "formal_predicates": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Input0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Output",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.X",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.rhs.arg2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    }
+  ],
+  "guarantees": {
+    "does_not_prove": [
+      "IEEE-754 or bitwise GPU equality",
+      "formal correctness of the raw-TTIR-to-ETV-IR lifting implementation",
+      "parametric shapes or unbounded loops",
+      "concurrent/shared-memory semantics",
+      "allocated-buffer bounds or GPU memory safety"
+    ],
+    "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+  },
+  "inputs": {
+    "frontends": {
+      "lhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      },
+      "rhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      }
+    },
+    "lhs": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-5--1-dtype0--7a654b7fa0/lhs/launch-000.ttir",
+    "rhs": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-5--1-dtype0--7a654b7fa0/rhs/reference-000-000/selected-000.ttir",
+    "sha256": {
+      "lhs": "2388a875c230bfb824ea151e6a59168f1c96cefb6946cafeb36396647e587cdf",
+      "rhs": "50a8d84c27398989fe21313a2868d43df8050e40488f99f49e4e2d08881b7f98",
+      "spec": "6d79d0cbe1e2dc77f3df6d77f1f2085514dcec1e2034b4c4ca6cf99641e523fc"
+    },
+    "spec": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-5--1-dtype0--7a654b7fa0/pairspec/pair.json"
+  },
+  "llm_context": {
+    "assumptions": [
+      "This pair was captured from the same specialized ntops pytest node; pointer roles are mapped by one-store dataflow and remaining ABI order."
+    ],
+    "proof_relevance": "informational_only",
+    "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
+  },
+  "pair_id": "build/upstream/ntops/tests/test_diag.py::test_diag_1d[5--1-dtype0]",
+  "proof": {
+    "cast_rewrites": {
+      "casts": {
+        "lhs": [],
+        "rhs": [
+          "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))",
+          "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))"
+        ]
+      },
+      "rule_admission": [],
+      "rule_matches": {},
+      "stats": {
+        "backend": {
+          "name": "egglog",
+          "version": "13.2.0"
+        },
+        "eclasses": 10,
+        "enodes": 10,
+        "iteration_trace": [
+          {
+            "after": {
+              "eclasses": 10,
+              "enodes": 10
+            },
+            "before": {
+              "eclasses": 10,
+              "enodes": 10
+            },
+            "iteration": 1,
+            "rule_matches": {},
+            "updated": false
+          }
+        ],
+        "iterations": 1,
+        "rule_applications": {},
+        "rule_matches": {},
+        "stop_reason": "SATURATED"
+      },
+      "status": "unresolved",
+      "unresolved": [
+        {
+          "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))",
+          "side": "rhs"
+        },
+        {
+          "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 64), iadd(0, var(lane))), 6))",
+          "side": "rhs"
+        }
+      ],
+      "unverified_rule_uses": []
+    }
+  },
+  "reason": "CAST_EQUIVALENCE_NOT_REWRITTEN",
+  "rewrite_registry": {
+    "builtin": "validated_builtin_rules",
+    "inline_legacy_rules": [],
+    "user_sources": []
+  },
+  "schema_version": 5,
+  "scope": "fixed-specialization single-store bounded translation validation",
+  "semantic_mode": "abstract_float",
+  "soundness": {
+    "conditional_on": [
+      "declared predicate: abi.Input0",
+      "declared predicate: abi.Output",
+      "declared predicate: binding.X",
+      "declared predicate: binding.lhs.arg1",
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
+    ],
+    "level": "formal_under_declared_predicates",
+    "non_formal_assistance": [
+      "PairSpec.assumptions"
+    ]
+  },
+  "status": "UNKNOWN",
+  "tool": {
+    "name": "ETV",
+    "version": "0.6.1"
+  },
+  "trusted_axioms": [
+    "PairSpec role correspondence",
+    "PairSpec fixed shape/stride/launch bindings",
+    "PairSpec no-alias declarations",
+    "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
+    "ETV IR evaluator and memory-token model",
+    "ETV TTIR-to-semantic-IR lifting implementation"
+  ],
+  "unsupported": []
+}

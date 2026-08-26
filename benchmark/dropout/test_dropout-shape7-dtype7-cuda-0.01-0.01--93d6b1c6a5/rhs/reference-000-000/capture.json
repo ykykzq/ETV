@@ -1,0 +1,219 @@
+{
+  "best_configs": [
+    {
+      "content": {
+        "XBLOCK": 256,
+        "configs_hash": "1b2cc4dbebb9680d3ce31843331593b159e4046c056f195ca1ccf2464d5b37d1",
+        "found_by_coordesc": false,
+        "num_stages": 1,
+        "num_warps": 4,
+        "time_taken_ms": 12,
+        "triton_cache_hash": "NQ6B4NTKCPDPWSXRISOVXG7LPIPHB4SNGHTRHB5JDDS37D3LI5ZA"
+      },
+      "path": "/data3/yelv.lh/ETV/benchmark/dropout/test_dropout-shape7-dtype7-cuda-0.01-0.01--93d6b1c6a5/rhs/reference-000-000/torchinductor-cache/es/6cab8031dfdda631362c69458cfc85072f7696280937fc6ce3be5502b635f1ff.best_config"
+    }
+  ],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      1,
+      6,
+      5,
+      31
+    ],
+    "storage_offset": 0,
+    "stride": [
+      930,
+      155,
+      31,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": false,
+          "equal": false,
+          "max_abs_error": 4.0234375
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": false,
+          "equal": false,
+          "max_abs_error": 4.0234375
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "F.dropout(input, p=p)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/dropout/test_dropout-shape7-dtype7-cuda-0.01-0.01--93d6b1c6a5/rhs/reference-000-000/inductor-source/000-cesxzirosejk3hfhbcecpgejeootqcljuuecp76625wxrsl2rk7c.py",
+      "sha256": "dacbe50439fe522330b004cc43426631c8ad88b4eab924787eb8566b0440701d"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/dropout/test_dropout-shape7-dtype7-cuda-0.01-0.01--93d6b1c6a5/rhs/reference-000-000/inductor-source/001-cgydfbceqkkpeli5ixnmbounw57wte57cbh2ieucbblfyfwbxpnu.py",
+      "sha256": "4f894f9b65105e20a8bf6fb2f9d6c280df6efe80c79e207c19408407c46821cb"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        1,
+        6,
+        5,
+        31
+      ],
+      "storage_offset": 0,
+      "stride": [
+        930,
+        155,
+        31,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input[0]"
+  ],
+  "line": 20,
+  "runtime_launches": [
+    {
+      "cache_hash": "NQ6B4NTKCPDPWSXRISOVXG7LPIPHB4SNGHTRHB5JDDS37D3LI5ZA",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 256
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 4
+      },
+      "grid": [
+        4,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_native_dropout_0",
+      "programs": 4,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.int64",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              1
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              1,
+              6,
+              5,
+              31
+            ],
+            "storage_offset": 0,
+            "stride": [
+              930,
+              155,
+              31,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              1,
+              6,
+              5,
+              31
+            ],
+            "storage_offset": 0,
+            "stride": [
+              930,
+              155,
+              31,
+              1
+            ]
+          }
+        },
+        {
+          "position": 3,
+          "value": 0
+        },
+        {
+          "position": 4,
+          "value": 930
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 19590,
+      "path": "/data3/yelv.lh/ETV/benchmark/dropout/test_dropout-shape7-dtype7-cuda-0.01-0.01--93d6b1c6a5/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "c655859f1159762c969fbe37589ce51c013cb634ceade5cc1a793a87e288dec3",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/dropout/test_dropout-shape7-dtype7-cuda-0.01-0.01--93d6b1c6a5/rhs/reference-000-000/triton-cache/NQ6B4NTKCPDPWSXRISOVXG7LPIPHB4SNGHTRHB5JDDS37D3LI5ZA/triton_poi_fused_native_dropout_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 19590,
+      "path": "/data3/yelv.lh/ETV/benchmark/dropout/test_dropout-shape7-dtype7-cuda-0.01-0.01--93d6b1c6a5/rhs/reference-000-000/triton-cache/NQ6B4NTKCPDPWSXRISOVXG7LPIPHB4SNGHTRHB5JDDS37D3LI5ZA/triton_poi_fused_native_dropout_0.ttir",
+      "sha256": "c655859f1159762c969fbe37589ce51c013cb634ceade5cc1a793a87e288dec3"
+    },
+    {
+      "bytes": 19590,
+      "path": "/data3/yelv.lh/ETV/benchmark/dropout/test_dropout-shape7-dtype7-cuda-0.01-0.01--93d6b1c6a5/rhs/reference-000-000/triton-cache/UR62PDMDXSIU5ZJ73KMTWEIOAX5Z342OBT7YDXFVDFOPLPSMOASQ/triton_poi_fused_native_dropout_0.ttir",
+      "sha256": "1ca277efbf91a298adf5727132b5d090274e516c53a810fea6bb26d7c4286fe4"
+    }
+  ],
+  "ttir_status": "captured"
+}

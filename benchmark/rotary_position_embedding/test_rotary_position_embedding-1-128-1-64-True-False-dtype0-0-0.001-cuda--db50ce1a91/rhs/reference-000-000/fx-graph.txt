@@ -1,0 +1,24 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %arg1_1 : [num_users=1] = placeholder[target=arg1_1]
+    %arg2_1 : [num_users=1] = placeholder[target=arg2_1]
+    %unsqueeze : [num_users=1] = call_function[target=torch.ops.aten.unsqueeze.default](args = (%arg2_1, 0), kwargs = {})
+    %slice_1 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%unsqueeze, 1, 0, 9223372036854775807), kwargs = {})
+    %unsqueeze_1 : [num_users=1] = call_function[target=torch.ops.aten.unsqueeze.default](args = (%slice_1, 2), kwargs = {})
+    %slice_2 : [num_users=2] = call_function[target=torch.ops.aten.slice.Tensor](args = (%unsqueeze_1, 3, 0, 9223372036854775807), kwargs = {})
+    %unsqueeze_2 : [num_users=1] = call_function[target=torch.ops.aten.unsqueeze.default](args = (%arg0_1, 0), kwargs = {})
+    %slice_3 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%unsqueeze_2, 1, 0, 9223372036854775807), kwargs = {})
+    %unsqueeze_3 : [num_users=1] = call_function[target=torch.ops.aten.unsqueeze.default](args = (%slice_3, 2), kwargs = {})
+    %slice_4 : [num_users=2] = call_function[target=torch.ops.aten.slice.Tensor](args = (%unsqueeze_3, 3, 0, 9223372036854775807), kwargs = {})
+    %view : [num_users=2] = call_function[target=torch.ops.aten.view.default](args = (%arg1_1, [1, 128, 1, 32, 2]), kwargs = {})
+    %select : [num_users=2] = call_function[target=torch.ops.aten.select.int](args = (%view, 4, 0), kwargs = {})
+    %select_1 : [num_users=2] = call_function[target=torch.ops.aten.select.int](args = (%view, 4, 1), kwargs = {})
+    %mul : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%select, %slice_4), kwargs = {})
+    %mul_1 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%select_1, %slice_2), kwargs = {})
+    %sub : [num_users=1] = call_function[target=torch.ops.aten.sub.Tensor](args = (%mul, %mul_1), kwargs = {})
+    %mul_2 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%select, %slice_2), kwargs = {})
+    %mul_3 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%select_1, %slice_4), kwargs = {})
+    %add : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%mul_2, %mul_3), kwargs = {})
+    %stack : [num_users=1] = call_function[target=torch.ops.aten.stack.default](args = ([%sub, %add], -1), kwargs = {})
+    %view_1 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%stack, [1, 128, 1, 64]), kwargs = {})
+    return view_1

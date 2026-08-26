@@ -1,0 +1,12 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %arg1_1 : [num_users=1] = placeholder[target=arg1_1]
+    %arg2_1 : [num_users=1] = placeholder[target=arg2_1]
+    %arg3_1 : [num_users=1] = placeholder[target=arg3_1]
+    %expand : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%arg0_1, [3, 2, 388, 416]), kwargs = {})
+    %_scaled_dot_product_efficient_attention : [num_users=4] = call_function[target=torch.ops.aten._scaled_dot_product_efficient_attention.default](args = (%arg2_1, %arg1_1, %arg3_1, %expand, False), kwargs = {scale: 0.23980596605894045})
+    %getitem : [num_users=1] = call_function[target=operator.getitem](args = (%_scaled_dot_product_efficient_attention, 0), kwargs = {})
+    %getitem_1 : [num_users=0] = call_function[target=operator.getitem](args = (%_scaled_dot_product_efficient_attention, 1), kwargs = {})
+    %getitem_2 : [num_users=0] = call_function[target=operator.getitem](args = (%_scaled_dot_product_efficient_attention, 2), kwargs = {})
+    %getitem_3 : [num_users=0] = call_function[target=operator.getitem](args = (%_scaled_dot_product_efficient_attention, 3), kwargs = {})
+    return getitem

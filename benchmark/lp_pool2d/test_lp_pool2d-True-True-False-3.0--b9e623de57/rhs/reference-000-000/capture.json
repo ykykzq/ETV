@@ -1,0 +1,182 @@
+{
+  "best_configs": [],
+  "capture_origin": "line_trace",
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float32",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      3,
+      4,
+      3,
+      2
+    ],
+    "storage_offset": 0,
+    "stride": [
+      24,
+      6,
+      2,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": false,
+          "max_abs_error": NaN
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": false,
+          "max_abs_error": NaN
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.nn.functional.lp_pool2d(input_tensor, norm_type, kernel_size, stride=stride, ceil_mode=ceil_mode)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/lp_pool2d/test_lp_pool2d-True-True-False-3.0--b9e623de57/rhs/reference-000-000/inductor-source/000-ccp6kian22qkaezj5vxcjloslv34uqmqi4tcdqlibkdqhtbpmuk3.py",
+      "sha256": "271e6707830f1a7071c00adae83811f050cc7f85c8ae82f41b89c1fa225fa7ac"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/lp_pool2d/test_lp_pool2d-True-True-False-3.0--b9e623de57/rhs/reference-000-000/inductor-source/001-chu4er55jeradhrigjqjjoarpv6j7d3daquuz2hyh73kcjwbbyoj.py",
+      "sha256": "b48c5f6e1190925beb7aa9d7a638a09d1175c0c0d06ccec33f40306c42cf3931"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float32",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        3,
+        4,
+        6,
+        10
+      ],
+      "storage_offset": 0,
+      "stride": [
+        240,
+        60,
+        10,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input_tensor[0]"
+  ],
+  "line": 51,
+  "runtime_launches": [
+    {
+      "cache_hash": "BMCAYX7RNNZRCWYMWP243CW3LWS64VESBMUE43M4ACJFRBKC6OZQ",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 128
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 4
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_abs_avg_pool2d_mul_pow_relu_sign_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              3,
+              4,
+              3,
+              2
+            ],
+            "storage_offset": 0,
+            "stride": [
+              24,
+              6,
+              2,
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              3,
+              4,
+              6,
+              10
+            ],
+            "storage_offset": 0,
+            "stride": [
+              240,
+              60,
+              10,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 72
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 28377,
+      "path": "/data3/yelv.lh/ETV/benchmark/lp_pool2d/test_lp_pool2d-True-True-False-3.0--b9e623de57/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "68d5fa0e56bdfcc2c012c199ddb3ec75148e11ce25f95bd0e6b5d89ffe9f32ac",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/lp_pool2d/test_lp_pool2d-True-True-False-3.0--b9e623de57/rhs/reference-000-000/triton-cache/BMCAYX7RNNZRCWYMWP243CW3LWS64VESBMUE43M4ACJFRBKC6OZQ/triton_poi_fused_abs_avg_pool2d_mul_pow_relu_sign_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 28377,
+      "path": "/data3/yelv.lh/ETV/benchmark/lp_pool2d/test_lp_pool2d-True-True-False-3.0--b9e623de57/rhs/reference-000-000/triton-cache/BMCAYX7RNNZRCWYMWP243CW3LWS64VESBMUE43M4ACJFRBKC6OZQ/triton_poi_fused_abs_avg_pool2d_mul_pow_relu_sign_0.ttir",
+      "sha256": "68d5fa0e56bdfcc2c012c199ddb3ec75148e11ce25f95bd0e6b5d89ffe9f32ac"
+    }
+  ],
+  "ttir_status": "captured"
+}

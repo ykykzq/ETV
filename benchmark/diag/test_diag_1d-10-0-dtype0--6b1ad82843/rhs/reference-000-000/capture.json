@@ -1,0 +1,161 @@
+{
+  "best_configs": [],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float32",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      10,
+      10
+    ],
+    "storage_offset": 0,
+    "stride": [
+      10,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.diag(input, diagonal)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10-0-dtype0--6b1ad82843/rhs/reference-000-000/inductor-source/000-cgjxfd5b4yqshwfrslcxlq4ktwqmk34bumgk3wylafmwrdbf4mne.py",
+      "sha256": "ef26d57ccf17ab960be3ccbd7180e4f695214572ba03e82ea5c54cda88c656ee"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10-0-dtype0--6b1ad82843/rhs/reference-000-000/inductor-source/001-cwveot24yq7timu4srn2nuagy6rn4oii23au53hjiby6ou6rv6dy.py",
+      "sha256": "8608a4cee6e87d4d21cadf4b9883823e9a0149c7c254f485812a83ad20177d10"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float32",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        10
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input[0]"
+  ],
+  "line": 29,
+  "runtime_launches": [
+    {
+      "cache_hash": "RUMT4N3LB3YZ3K4LD6WM5XNKXUDJQIFIWVP5OX44RKYE25APSVQQ",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 128
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 4
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_diag_embed_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              10
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              10,
+              10
+            ],
+            "storage_offset": 0,
+            "stride": [
+              10,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 100
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 5096,
+      "path": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10-0-dtype0--6b1ad82843/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "c832ffa288a9183948eddcda42c67aa860f993ebe831af2b693da80b3c719057",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10-0-dtype0--6b1ad82843/rhs/reference-000-000/triton-cache/RUMT4N3LB3YZ3K4LD6WM5XNKXUDJQIFIWVP5OX44RKYE25APSVQQ/triton_poi_fused_diag_embed_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 5096,
+      "path": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10-0-dtype0--6b1ad82843/rhs/reference-000-000/triton-cache/RUMT4N3LB3YZ3K4LD6WM5XNKXUDJQIFIWVP5OX44RKYE25APSVQQ/triton_poi_fused_diag_embed_0.ttir",
+      "sha256": "c832ffa288a9183948eddcda42c67aa860f993ebe831af2b693da80b3c719057"
+    }
+  ],
+  "ttir_status": "captured"
+}

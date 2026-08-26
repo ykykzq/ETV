@@ -1,0 +1,91 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "This pair was captured from the same specialized ntops pytest node; pointer roles are mapped by one-store dataflow and remaining ABI order."
+    ]
+  },
+  "format": "etv-pair-v2",
+  "metadata": {
+    "frontends": {
+      "lhs": {
+        "function": "application",
+        "kind": "ttir",
+        "programs": 6
+      },
+      "rhs": {
+        "function": "triton_poi_fused_atan_0",
+        "kind": "ttir",
+        "programs": 6
+      }
+    },
+    "lhs": "../lhs/launch-000.ttir",
+    "limits": {
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "timeout_ms": 10000
+    },
+    "pair_id": "build/upstream/ntops/tests/test_atan.py::test_atan_basic[shape2-dtype2-cuda-0.001-0.001]",
+    "rhs": "../rhs/reference-000-000/selected-000.ttir",
+    "semantic_mode": "abstract_float"
+  },
+  "observation": {
+    "output_numel": {
+      "var": "X"
+    },
+    "output_role": "Output",
+    "require_disjoint": [
+      "Input0",
+      "Output"
+    ],
+    "require_full_coverage": true
+  },
+  "predicates": {
+    "abi": {
+      "Input0": {
+        "lhs": {
+          "kind": "block",
+          "name": "arg0"
+        },
+        "rhs": {
+          "kind": "block",
+          "name": "arg0"
+        }
+      },
+      "Output": {
+        "lhs": {
+          "kind": "block",
+          "name": "arg4"
+        },
+        "rhs": {
+          "kind": "block",
+          "name": "arg1"
+        }
+      }
+    },
+    "bindings": {
+      "X": 750
+    },
+    "constraints": [],
+    "custom": [],
+    "disjoint": [
+      [
+        "Input0",
+        "Output"
+      ]
+    ],
+    "parameters": {},
+    "side_bindings": {
+      "lhs": {
+        "arg1": 125,
+        "arg2": 6,
+        "arg3": 6,
+        "arg6": 125,
+        "arg7": 6
+      },
+      "rhs": {
+        "arg2": 750
+      }
+    }
+  },
+  "rewrites": []
+}

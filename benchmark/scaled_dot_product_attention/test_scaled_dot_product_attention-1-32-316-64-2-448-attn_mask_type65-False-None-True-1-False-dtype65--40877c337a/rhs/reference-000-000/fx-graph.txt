@@ -1,0 +1,36 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %arg1_1 : [num_users=1] = placeholder[target=arg1_1]
+    %arg2_1 : [num_users=1] = placeholder[target=arg2_1]
+    %arg3_1 : [num_users=1] = placeholder[target=arg3_1]
+    %_to_copy : [num_users=1] = call_function[target=torch.ops.aten._to_copy.default](args = (%arg2_1,), kwargs = {dtype: torch.float32})
+    %_to_copy_1 : [num_users=1] = call_function[target=torch.ops.aten._to_copy.default](args = (%arg1_1,), kwargs = {dtype: torch.float32})
+    %_to_copy_2 : [num_users=1] = call_function[target=torch.ops.aten._to_copy.default](args = (%arg3_1,), kwargs = {dtype: torch.float32})
+    %mul : [num_users=1] = call_function[target=torch.ops.aten.mul.Scalar](args = (%_to_copy, 0.3535533905932738), kwargs = {})
+    %unsqueeze : [num_users=1] = call_function[target=torch.ops.aten.unsqueeze.default](args = (%_to_copy_1, 2), kwargs = {})
+    %expand : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%unsqueeze, [1, 2, 16, 448, 64]), kwargs = {})
+    %clone : [num_users=1] = call_function[target=torch.ops.aten.clone.default](args = (%expand,), kwargs = {memory_format: torch.contiguous_format})
+    %view : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%clone, [1, 32, 448, 64]), kwargs = {})
+    %unsqueeze_1 : [num_users=1] = call_function[target=torch.ops.aten.unsqueeze.default](args = (%_to_copy_2, 2), kwargs = {})
+    %expand_1 : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%unsqueeze_1, [1, 2, 16, 448, 64]), kwargs = {})
+    %clone_1 : [num_users=1] = call_function[target=torch.ops.aten.clone.default](args = (%expand_1,), kwargs = {memory_format: torch.contiguous_format})
+    %view_1 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%clone_1, [1, 32, 448, 64]), kwargs = {})
+    %transpose : [num_users=1] = call_function[target=torch.ops.aten.transpose.int](args = (%view, -2, -1), kwargs = {})
+    %mul_1 : [num_users=1] = call_function[target=torch.ops.aten.mul.Scalar](args = (%transpose, 0.3535533905932738), kwargs = {})
+    %expand_2 : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%mul, [1, 32, 316, 64]), kwargs = {})
+    %view_2 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%expand_2, [32, 316, 64]), kwargs = {})
+    %expand_3 : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%mul_1, [1, 32, 64, 448]), kwargs = {})
+    %view_3 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%expand_3, [32, 64, 448]), kwargs = {})
+    %bmm : [num_users=1] = call_function[target=torch.ops.aten.bmm.default](args = (%view_2, %view_3), kwargs = {})
+    %_unsafe_view : [num_users=1] = call_function[target=torch.ops.aten._unsafe_view.default](args = (%bmm, [1, 32, 316, 448]), kwargs = {})
+    %add : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%_unsafe_view, %arg0_1), kwargs = {})
+    %_safe_softmax : [num_users=2] = call_function[target=torch.ops.aten._safe_softmax.default](args = (%add, -1), kwargs = {})
+    %_to_copy_3 : [num_users=0] = call_function[target=torch.ops.aten._to_copy.default](args = (%_safe_softmax,), kwargs = {dtype: torch.float16})
+    %expand_4 : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%_safe_softmax, [1, 32, 316, 448]), kwargs = {})
+    %view_4 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%expand_4, [32, 316, 448]), kwargs = {})
+    %expand_5 : [num_users=1] = call_function[target=torch.ops.aten.expand.default](args = (%view_1, [1, 32, 448, 64]), kwargs = {})
+    %view_5 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%expand_5, [32, 448, 64]), kwargs = {})
+    %bmm_1 : [num_users=1] = call_function[target=torch.ops.aten.bmm.default](args = (%view_4, %view_5), kwargs = {})
+    %_unsafe_view_1 : [num_users=1] = call_function[target=torch.ops.aten._unsafe_view.default](args = (%bmm_1, [1, 32, 316, 64]), kwargs = {})
+    %_to_copy_4 : [num_users=1] = call_function[target=torch.ops.aten._to_copy.default](args = (%_unsafe_view_1,), kwargs = {dtype: torch.float16})
+    return _to_copy_4

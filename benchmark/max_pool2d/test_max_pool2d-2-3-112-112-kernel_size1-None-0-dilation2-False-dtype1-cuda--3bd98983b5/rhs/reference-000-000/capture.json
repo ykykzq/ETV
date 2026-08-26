@@ -1,0 +1,200 @@
+{
+  "best_configs": [
+    {
+      "content": {
+        "XBLOCK": 128,
+        "configs_hash": "1b2cc4dbebb9680d3ce31843331593b159e4046c056f195ca1ccf2464d5b37d1",
+        "found_by_coordesc": false,
+        "num_stages": 1,
+        "num_warps": 4,
+        "time_taken_ms": 12,
+        "triton_cache_hash": "D2YK2TXZS65E43OO6WQOTQAKUZHL6GIRSLC2TDBTV7M5TQT3U4QQ"
+      },
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size1-None-0-dilation2-False-dtype1-cuda--3bd98983b5/rhs/reference-000-000/torchinductor-cache/z6/68db15d4804d31a67b8abb203024622523112879d6b779a73574608260122b04.best_config"
+    }
+  ],
+  "capture_origin": "line_trace",
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      2,
+      3,
+      36,
+      36
+    ],
+    "storage_offset": 0,
+    "stride": [
+      3888,
+      1296,
+      36,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "F.max_pool2d(input, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, ceil_mode=ceil_mode)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size1-None-0-dilation2-False-dtype1-cuda--3bd98983b5/rhs/reference-000-000/inductor-source/000-cengmohkniyownk3ncuanqjb3bqv4x5tdueek4czt7bdjx6srrit.py",
+      "sha256": "661274a6ec0a7e0581f5be3f2c166eb8e301cc0207b8bf4cf132464ec8ccea90"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size1-None-0-dilation2-False-dtype1-cuda--3bd98983b5/rhs/reference-000-000/inductor-source/001-cz6gp4kc7zgmbe6athzagimsdq2atcz7ba242axrlw4six3mvmyj.py",
+      "sha256": "cb87e5d9884fc89bcd83a6966bc5009695cf5913465d744b08b1a4f30fc7077a"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        2,
+        3,
+        112,
+        112
+      ],
+      "storage_offset": 0,
+      "stride": [
+        37632,
+        12544,
+        112,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input[0]"
+  ],
+  "line": 39,
+  "runtime_launches": [
+    {
+      "cache_hash": "D2YK2TXZS65E43OO6WQOTQAKUZHL6GIRSLC2TDBTV7M5TQT3U4QQ",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 128
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 4
+      },
+      "grid": [
+        61,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_max_pool2d_with_indices_0",
+      "programs": 61,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              2,
+              3,
+              112,
+              112
+            ],
+            "storage_offset": 0,
+            "stride": [
+              37632,
+              12544,
+              112,
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              2,
+              3,
+              36,
+              36
+            ],
+            "storage_offset": 0,
+            "stride": [
+              3888,
+              1296,
+              36,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 7776
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 43607,
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size1-None-0-dilation2-False-dtype1-cuda--3bd98983b5/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "f6e37decddab2ebd9fca38c05fbf477a1020631fb3ab3127206f164ae0b113c0",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size1-None-0-dilation2-False-dtype1-cuda--3bd98983b5/rhs/reference-000-000/triton-cache/D2YK2TXZS65E43OO6WQOTQAKUZHL6GIRSLC2TDBTV7M5TQT3U4QQ/triton_poi_fused_max_pool2d_with_indices_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 43607,
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size1-None-0-dilation2-False-dtype1-cuda--3bd98983b5/rhs/reference-000-000/triton-cache/D2YK2TXZS65E43OO6WQOTQAKUZHL6GIRSLC2TDBTV7M5TQT3U4QQ/triton_poi_fused_max_pool2d_with_indices_0.ttir",
+      "sha256": "f6e37decddab2ebd9fca38c05fbf477a1020631fb3ab3127206f164ae0b113c0"
+    },
+    {
+      "bytes": 43607,
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size1-None-0-dilation2-False-dtype1-cuda--3bd98983b5/rhs/reference-000-000/triton-cache/F3DT3KHVIN3C3GHU4WUEGAXLA4YRFNJTXVDDWXWRTHOZ72X4KXEQ/triton_poi_fused_max_pool2d_with_indices_0.ttir",
+      "sha256": "85bd92ad96ea98b776636feb8a2f26f0e6911f14c83b02036fdb63a1341c7e00"
+    }
+  ],
+  "ttir_status": "captured"
+}

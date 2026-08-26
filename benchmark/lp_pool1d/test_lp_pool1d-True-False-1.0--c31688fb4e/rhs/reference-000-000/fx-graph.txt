@@ -1,0 +1,13 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %pow_1 : [num_users=1] = call_function[target=torch.ops.aten.pow.Tensor_Scalar](args = (%arg0_1, 1.0), kwargs = {})
+    %unsqueeze : [num_users=1] = call_function[target=torch.ops.aten.unsqueeze.default](args = (%pow_1, -2), kwargs = {})
+    %avg_pool2d : [num_users=1] = call_function[target=torch.ops.aten.avg_pool2d.default](args = (%unsqueeze, [1, 4], [1, 1]), kwargs = {})
+    %squeeze : [num_users=2] = call_function[target=torch.ops.aten.squeeze.dim](args = (%avg_pool2d, -2), kwargs = {})
+    %sign : [num_users=1] = call_function[target=torch.ops.aten.sign.default](args = (%squeeze,), kwargs = {})
+    %abs_1 : [num_users=1] = call_function[target=torch.ops.aten.abs.default](args = (%squeeze,), kwargs = {})
+    %relu : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%abs_1,), kwargs = {})
+    %mul : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%sign, %relu), kwargs = {})
+    %mul_1 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%mul, 4), kwargs = {})
+    %pow_2 : [num_users=1] = call_function[target=torch.ops.aten.pow.Tensor_Scalar](args = (%mul_1, 1.0), kwargs = {})
+    return pow_2

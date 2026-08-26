@@ -1,0 +1,173 @@
+{
+  "best_configs": [],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      2,
+      4,
+      6
+    ],
+    "storage_offset": 0,
+    "stride": [
+      24,
+      6,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.acosh(input_tensor_adjusted)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/acosh/test_acosh_with_strided_slice_output-dtype0--5e811ee03f/rhs/reference-001-000/inductor-source/000-cccpq3nc5hx2h4pysqibevd3r7oet55bldiv6o6tjxl76ymzaxkt.py",
+      "sha256": "ef997d80adf8c5318c0dbd546907cbb806286dcc6b2bf6c62963af796c3f53e1"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/acosh/test_acosh_with_strided_slice_output-dtype0--5e811ee03f/rhs/reference-001-000/inductor-source/001-crguddhg4hlrua5dpai3gxkexw3arqttoug5n5wa3zj2alal5nws.py",
+      "sha256": "b1beb9d3dee8f9909338722d4358aee3251f10db85544f575384fca51508b69d"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        2,
+        4,
+        6
+      ],
+      "storage_offset": 0,
+      "stride": [
+        48,
+        12,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input_tensor_adjusted[0]"
+  ],
+  "line": 182,
+  "runtime_launches": [
+    {
+      "cache_hash": "K77MKPXDIPBVRFFNTOZLLMIDZ2P4GOKRNXV5GBFAQABLJL5KXIQQ",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 64
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 1
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_acosh_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              2,
+              4,
+              6
+            ],
+            "storage_offset": 0,
+            "stride": [
+              48,
+              12,
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              2,
+              4,
+              6
+            ],
+            "storage_offset": 0,
+            "stride": [
+              24,
+              6,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 48
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 6117,
+      "path": "/data3/yelv.lh/ETV/benchmark/acosh/test_acosh_with_strided_slice_output-dtype0--5e811ee03f/rhs/reference-001-000/selected-000.ttir",
+      "sha256": "39044ed0dcadb56dd425caa4bb9d509437af483e97deb924fca8cb64608b9255",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/acosh/test_acosh_with_strided_slice_output-dtype0--5e811ee03f/rhs/reference-001-000/triton-cache/K77MKPXDIPBVRFFNTOZLLMIDZ2P4GOKRNXV5GBFAQABLJL5KXIQQ/triton_poi_fused_acosh_0.ttir"
+    }
+  ],
+  "site_index": 1,
+  "status": "compiled",
+  "target_names": [
+    "reference_output_adjusted"
+  ],
+  "ttir": [
+    {
+      "bytes": 6117,
+      "path": "/data3/yelv.lh/ETV/benchmark/acosh/test_acosh_with_strided_slice_output-dtype0--5e811ee03f/rhs/reference-001-000/triton-cache/K77MKPXDIPBVRFFNTOZLLMIDZ2P4GOKRNXV5GBFAQABLJL5KXIQQ/triton_poi_fused_acosh_0.ttir",
+      "sha256": "39044ed0dcadb56dd425caa4bb9d509437af483e97deb924fca8cb64608b9255"
+    }
+  ],
+  "ttir_status": "captured"
+}

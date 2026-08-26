@@ -1,0 +1,317 @@
+{
+  "callspec": {
+    "atol": 0.01,
+    "device": "cuda",
+    "dtype": {
+      "kind": "torch.dtype",
+      "value": "torch.float16"
+    },
+    "k": 246,
+    "m": 809,
+    "n": 333,
+    "rtol": 0.01
+  },
+  "format": "etv-benchmark-test-capture-v1",
+  "lhs_launches": [
+    {
+      "error": "CompilationError(\"def application(ninetoothed_constexpr_prefix_ninetoothed_tensor_6: triton.language.constexpr, ninetoothed_ninetoothed_tensor_0_pointer, ninetoothed_ninetoothed_tensor_0_size_0, ninetoothed_ninetoothed_tensor_0_size_1, ninetoothed_ninetoothed_tensor_0_stride_0, ninetoothed_ninetoothed_tensor_0_stride_1, ninetoothed_ninetoothed_tensor_1_pointer, ninetoothed_ninetoothed_tensor_1_size_0, ninetoothed_ninetoothed_tensor_1_size_1, ninetoothed_ninetoothed_tensor_1_stride_0, ninetoothed_ninetoothed_tensor_1_stride_1, ninetoothed_ninetoothed_tensor_2_pointer, ninetoothed_ninetoothed_tensor_2_size_0, ninetoothed_ninetoothed_tensor_2_size_1, ninetoothed_ninetoothed_tensor_2_stride_0, ninetoothed_ninetoothed_tensor_2_stride_1, ninetoothed_ninetoothed_tensor_5_pointer, ninetoothed_ninetoothed_tensor_5_size_0, ninetoothed_ninetoothed_tensor_5_size_1, ninetoothed_ninetoothed_tensor_5_stride_0, ninetoothed_ninetoothed_tensor_5_stride_1, ninetoothed_tensor_3, ninetoothed_tensor_4, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0: triton.language.constexpr, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2: triton.language.constexpr):\\n    ninetoothed_pid = triton.language.program_id(0)\\n    ninetoothed_tensor_1_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_1_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_1_pointers = ninetoothed_ninetoothed_tensor_1_pointer\\n    ninetoothed_tensor_2_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_2_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_2_pointers = ninetoothed_ninetoothed_tensor_2_pointer\\n    ninetoothed_tensor_0_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_0_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_0_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_0_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_0_pointers = ninetoothed_ninetoothed_tensor_0_pointer\\n    ninetoothed_tensor_5_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_5_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_5_pointers = ninetoothed_ninetoothed_tensor_5_pointer\\n    mm_output = triton.language.zeros((ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0, 1), dtype=triton.language.float32)\\n    ninetoothed_temporary_0_accumulator = triton.language.zeros(mm_output.shape, dtype=triton.language.float32)\\n    if ninetoothed_constexpr_prefix_ninetoothed_tensor_6 == 2:\\n        ninetoothed_temporary_0_input_precision_: triton.language.constexpr = 'ieee'\\n    else:\\n        ninetoothed_temporary_0_input_precision_: triton.language.constexpr = 'tf32'\\n    for ninetoothed_temporary_0_k in range(((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1,)[0]):\\n        ninetoothed_temporary_0_accumulator += triton.language.dot(triton.language.load(ninetoothed_tensor_1_pointers + ((ninetoothed_tensor_1_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None]) * ninetoothed_ninetoothed_tensor_1_stride_0 + ((ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::]) * ninetoothed_ninetoothed_tensor_1_stride_1), mask=True & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_1_index_0 < (ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 < ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_1_index_1 >= 0) & (ninetoothed_tensor_1_index_0 < (ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 * 0 < ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - 1) - 1 + ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) - 1) // ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + 1) & (ninetoothed_tensor_1_index_1 * 0 >= 0) & (0 < 1) & (0 >= 0) & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_1_index_0 < (ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k < ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1)) & (ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] >= 0) & (ninetoothed_tensor_1_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_ninetoothed_tensor_1_size_0) & (ninetoothed_tensor_1_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & ((ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] < ninetoothed_ninetoothed_tensor_1_size_1) & ((ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] >= 0), other=None), triton.language.load(ninetoothed_tensor_2_pointers + (((ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None]) * ninetoothed_ninetoothed_tensor_2_stride_0 + (ninetoothed_tensor_2_index_1 + triton.language.arange(0, 1)[None, ::]) * ninetoothed_ninetoothed_tensor_2_stride_1), mask=True & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_2_index_0 < (ninetoothed_ninetoothed_tensor_5_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_2_index_0 >= 0) & (ninetoothed_tensor_2_index_1 < ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_2_index_1 >= 0) & (ninetoothed_tensor_2_index_0 * 0 < ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - 1) - 1 + ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) - 1) // ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + 1) & (ninetoothed_tensor_2_index_0 * 0 >= 0) & (ninetoothed_tensor_2_index_1 < ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_2_index_1 >= 0) & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (0 < 1) & (0 >= 0) & (ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k < ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1)) & (ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_2_index_1 < ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_2_index_1 >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] >= 0) & (triton.language.arange(0, 1)[None, ::] < 1) & (triton.language.arange(0, 1)[None, ::] >= 0) & ((ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] < ninetoothed_ninetoothed_tensor_2_size_0) & ((ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] >= 0) & (ninetoothed_tensor_2_index_1 + triton.language.arange(0, 1)[None, ::] < ninetoothed_ninetoothed_tensor_2_size_1) & (ninetoothed_tensor_2_index_1 + triton.language.arange(0, 1)[None, ::] >= 0), other=None), input_precision=ninetoothed_temporary_0_input_precision_)\\n    mm_output = ninetoothed_temporary_0_accumulator\\n    triton.language.store(ninetoothed_tensor_5_pointers + ((ninetoothed_tensor_5_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None]) * ninetoothed_ninetoothed_tensor_5_stride_0 + (ninetoothed_tensor_5_index_1 + triton.language.arange(0, 1)[None, ::]) * ninetoothed_ninetoothed_tensor_5_stride_1), ninetoothed_tensor_3 * triton.language.load(ninetoothed_tensor_0_pointers + ((ninetoothed_tensor_0_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None]) * ninetoothed_ninetoothed_tensor_0_stride_0 + (ninetoothed_tensor_0_index_1 + triton.language.arange(0, 1)[None, ::]) * ninetoothed_ninetoothed_tensor_0_stride_1), mask=True & (ninetoothed_tensor_0_index_0 < (ninetoothed_ninetoothed_tensor_0_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_0_index_0 >= 0) & (ninetoothed_tensor_0_index_1 < ninetoothed_ninetoothed_tensor_0_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_0_index_1 >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (triton.language.arange(0, 1)[None, ::] < 1) & (triton.language.arange(0, 1)[None, ::] >= 0) & (ninetoothed_tensor_0_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_ninetoothed_tensor_0_size_0) & (ninetoothed_tensor_0_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (ninetoothed_tensor_0_index_1 + triton.language.arange(0, 1)[None, ::] < ninetoothed_ninetoothed_tensor_0_size_1) & (ninetoothed_tensor_0_index_1 + triton.language.arange(0, 1)[None, ::] >= 0), other=None) + ninetoothed_tensor_4 * mm_output, mask=True & (ninetoothed_tensor_5_index_0 < (ninetoothed_ninetoothed_tensor_5_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_5_index_0 >= 0) & (ninetoothed_tensor_5_index_1 < ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_5_index_1 >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (triton.language.arange(0, 1)[None, ::] < 1) & (triton.language.arange(0, 1)[None, ::] >= 0) & (ninetoothed_tensor_5_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_ninetoothed_tensor_5_size_0) & (ninetoothed_tensor_5_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (ninetoothed_tensor_5_index_1 + triton.language.arange(0, 1)[None, ::] < ninetoothed_ninetoothed_tensor_5_size_1) & (ninetoothed_tensor_5_index_1 + triton.language.arange(0, 1)[None, ::] >= 0))\\n\", <ast.Call object at 0x7f065932f250>, None)",
+      "index": 0,
+      "status": "failed"
+    }
+  ],
+  "ninetoothed_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/addmv/test_addmv-809-333-246-dtype1-cuda-0.01-0.01--abae5db25f/lhs/ninetoothed-source/cb896c590a8d94d30e607d0f9f1eb653bd053d63fccc50bb089006ae59103e42.py",
+      "sha256": "cb896c590a8d94d30e607d0f9f1eb653bd053d63fccc50bb089006ae59103e42"
+    }
+  ],
+  "nodeid": "build/upstream/ntops/tests/test_addmv.py::test_addmv[809-333-246-dtype1-cuda-0.01-0.01]",
+  "pytest_exception": "CompilationError(\"def application(ninetoothed_constexpr_prefix_ninetoothed_tensor_6: triton.language.constexpr, ninetoothed_ninetoothed_tensor_0_pointer, ninetoothed_ninetoothed_tensor_0_size_0, ninetoothed_ninetoothed_tensor_0_size_1, ninetoothed_ninetoothed_tensor_0_stride_0, ninetoothed_ninetoothed_tensor_0_stride_1, ninetoothed_ninetoothed_tensor_1_pointer, ninetoothed_ninetoothed_tensor_1_size_0, ninetoothed_ninetoothed_tensor_1_size_1, ninetoothed_ninetoothed_tensor_1_stride_0, ninetoothed_ninetoothed_tensor_1_stride_1, ninetoothed_ninetoothed_tensor_2_pointer, ninetoothed_ninetoothed_tensor_2_size_0, ninetoothed_ninetoothed_tensor_2_size_1, ninetoothed_ninetoothed_tensor_2_stride_0, ninetoothed_ninetoothed_tensor_2_stride_1, ninetoothed_ninetoothed_tensor_5_pointer, ninetoothed_ninetoothed_tensor_5_size_0, ninetoothed_ninetoothed_tensor_5_size_1, ninetoothed_ninetoothed_tensor_5_stride_0, ninetoothed_ninetoothed_tensor_5_stride_1, ninetoothed_tensor_3, ninetoothed_tensor_4, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0: triton.language.constexpr, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2: triton.language.constexpr):\\n    ninetoothed_pid = triton.language.program_id(0)\\n    ninetoothed_tensor_1_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_1_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_1_pointers = ninetoothed_ninetoothed_tensor_1_pointer\\n    ninetoothed_tensor_2_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_2_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_2_pointers = ninetoothed_ninetoothed_tensor_2_pointer\\n    ninetoothed_tensor_0_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_0_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_0_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_0_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_0_pointers = ninetoothed_ninetoothed_tensor_0_pointer\\n    ninetoothed_tensor_5_index_0 = ninetoothed_pid // (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_5_index_1 = ninetoothed_pid % (ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1)\\n    ninetoothed_tensor_5_pointers = ninetoothed_ninetoothed_tensor_5_pointer\\n    mm_output = triton.language.zeros((ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0, 1), dtype=triton.language.float32)\\n    ninetoothed_temporary_0_accumulator = triton.language.zeros(mm_output.shape, dtype=triton.language.float32)\\n    if ninetoothed_constexpr_prefix_ninetoothed_tensor_6 == 2:\\n        ninetoothed_temporary_0_input_precision_: triton.language.constexpr = 'ieee'\\n    else:\\n        ninetoothed_temporary_0_input_precision_: triton.language.constexpr = 'tf32'\\n    for ninetoothed_temporary_0_k in range(((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1,)[0]):\\n        ninetoothed_temporary_0_accumulator += triton.language.dot(triton.language.load(ninetoothed_tensor_1_pointers + ((ninetoothed_tensor_1_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None]) * ninetoothed_ninetoothed_tensor_1_stride_0 + ((ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::]) * ninetoothed_ninetoothed_tensor_1_stride_1), mask=True & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_1_index_0 < (ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 < ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_1_index_1 >= 0) & (ninetoothed_tensor_1_index_0 < (ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 * 0 < ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - 1) - 1 + ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) - 1) // ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + 1) & (ninetoothed_tensor_1_index_1 * 0 >= 0) & (0 < 1) & (0 >= 0) & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_1_index_0 < (ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k < ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1)) & (ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] >= 0) & (ninetoothed_tensor_1_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_ninetoothed_tensor_1_size_0) & (ninetoothed_tensor_1_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & ((ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] < ninetoothed_ninetoothed_tensor_1_size_1) & ((ninetoothed_tensor_1_index_1 * 0 * ((ninetoothed_ninetoothed_tensor_1_size_1 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[None, ::] >= 0), other=None), triton.language.load(ninetoothed_tensor_2_pointers + (((ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None]) * ninetoothed_ninetoothed_tensor_2_stride_0 + (ninetoothed_tensor_2_index_1 + triton.language.arange(0, 1)[None, ::]) * ninetoothed_ninetoothed_tensor_2_stride_1), mask=True & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_2_index_0 < (ninetoothed_ninetoothed_tensor_5_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_2_index_0 >= 0) & (ninetoothed_tensor_2_index_1 < ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_2_index_1 >= 0) & (ninetoothed_tensor_2_index_0 * 0 < ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1 - 1) - 1 + ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) - 1) // ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + 1) & (ninetoothed_tensor_2_index_0 * 0 >= 0) & (ninetoothed_tensor_2_index_1 < ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_2_index_1 >= 0) & (ninetoothed_temporary_0_k < (ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) & (ninetoothed_temporary_0_k >= 0) & (0 < 1) & (0 >= 0) & (ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k < ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1)) & (ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k >= 0) & (ninetoothed_tensor_2_index_1 < ninetoothed_ninetoothed_tensor_2_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_2_index_1 >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] >= 0) & (triton.language.arange(0, 1)[None, ::] < 1) & (triton.language.arange(0, 1)[None, ::] >= 0) & ((ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] < ninetoothed_ninetoothed_tensor_2_size_0) & ((ninetoothed_tensor_2_index_0 * 0 * ((ninetoothed_ninetoothed_tensor_2_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + 1) + ninetoothed_temporary_0_k) * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_2)[::, None] >= 0) & (ninetoothed_tensor_2_index_1 + triton.language.arange(0, 1)[None, ::] < ninetoothed_ninetoothed_tensor_2_size_1) & (ninetoothed_tensor_2_index_1 + triton.language.arange(0, 1)[None, ::] >= 0), other=None), input_precision=ninetoothed_temporary_0_input_precision_)\\n    mm_output = ninetoothed_temporary_0_accumulator\\n    triton.language.store(ninetoothed_tensor_5_pointers + ((ninetoothed_tensor_5_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None]) * ninetoothed_ninetoothed_tensor_5_stride_0 + (ninetoothed_tensor_5_index_1 + triton.language.arange(0, 1)[None, ::]) * ninetoothed_ninetoothed_tensor_5_stride_1), ninetoothed_tensor_3 * triton.language.load(ninetoothed_tensor_0_pointers + ((ninetoothed_tensor_0_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None]) * ninetoothed_ninetoothed_tensor_0_stride_0 + (ninetoothed_tensor_0_index_1 + triton.language.arange(0, 1)[None, ::]) * ninetoothed_ninetoothed_tensor_0_stride_1), mask=True & (ninetoothed_tensor_0_index_0 < (ninetoothed_ninetoothed_tensor_0_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_0_index_0 >= 0) & (ninetoothed_tensor_0_index_1 < ninetoothed_ninetoothed_tensor_0_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_0_index_1 >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (triton.language.arange(0, 1)[None, ::] < 1) & (triton.language.arange(0, 1)[None, ::] >= 0) & (ninetoothed_tensor_0_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_ninetoothed_tensor_0_size_0) & (ninetoothed_tensor_0_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (ninetoothed_tensor_0_index_1 + triton.language.arange(0, 1)[None, ::] < ninetoothed_ninetoothed_tensor_0_size_1) & (ninetoothed_tensor_0_index_1 + triton.language.arange(0, 1)[None, ::] >= 0), other=None) + ninetoothed_tensor_4 * mm_output, mask=True & (ninetoothed_tensor_5_index_0 < (ninetoothed_ninetoothed_tensor_5_size_0 - (ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) - 1 + ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 - 1) // ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + 1) & (ninetoothed_tensor_5_index_0 >= 0) & (ninetoothed_tensor_5_index_1 < ninetoothed_ninetoothed_tensor_5_size_1 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_5_index_1 >= 0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0) & (triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (triton.language.arange(0, 1)[None, ::] < 1) & (triton.language.arange(0, 1)[None, ::] >= 0) & (ninetoothed_tensor_5_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] < ninetoothed_ninetoothed_tensor_5_size_0) & (ninetoothed_tensor_5_index_0 * ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0 + triton.language.arange(0, ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_0)[::, None] >= 0) & (ninetoothed_tensor_5_index_1 + triton.language.arange(0, 1)[None, ::] < ninetoothed_ninetoothed_tensor_5_size_1) & (ninetoothed_tensor_5_index_1 + triton.language.arange(0, 1)[None, ::] >= 0))\\n\", <ast.Call object at 0x7f065932f250>, None)",
+  "reference_executions": 1,
+  "reference_recovered_after_exception": 1,
+  "reference_sites": [
+    {
+      "end_line": 30,
+      "expression": "torch.addmv(input, mat, vec, beta=beta, alpha=alpha)",
+      "free_names": [
+        "alpha",
+        "beta",
+        "input",
+        "mat",
+        "torch",
+        "vec"
+      ],
+      "index": 0,
+      "line": 30,
+      "target_names": [
+        "reference_output"
+      ]
+    }
+  ],
+  "rhs_references": [
+    {
+      "best_configs": [],
+      "capture_origin": "exception_frame_recovery",
+      "captured_output": null,
+      "checks": {
+        "compiled_vs_captured_reference": null,
+        "compiled_vs_fx_eager": {
+          "leaf_count_actual": 1,
+          "leaf_count_expected": 1,
+          "structure_equal": true,
+          "tensor_leaves": [
+            {
+              "allclose_1e-3": true,
+              "equal": false,
+              "max_abs_error": 0.0625
+            }
+          ]
+        }
+      },
+      "execution": 0,
+      "expression": "torch.addmv(input, mat, vec, beta=beta, alpha=alpha)",
+      "inductor_sources": [
+        {
+          "path": "/data3/yelv.lh/ETV/benchmark/addmv/test_addmv-809-333-246-dtype1-cuda-0.01-0.01--abae5db25f/rhs/reference-000-000/inductor-source/000-c36mxe54x73lmfefybvdne4udlytwmkwg6azknzsr7qo7pxq7y5g.py",
+          "sha256": "450cdb290f9bae5dd1e1b955a828be23cd3ad8a586483a95729b99cfcdaf44b5"
+        },
+        {
+          "path": "/data3/yelv.lh/ETV/benchmark/addmv/test_addmv-809-333-246-dtype1-cuda-0.01-0.01--abae5db25f/rhs/reference-000-000/inductor-source/001-c6cwfmdgugtkitedmtvdhchjpbe556p7sjtzff7icfg44hvyxrkb.py",
+          "sha256": "7f25cd2fdc669294e5205b7d3bd16bb3205e9cfef5af9d946a7e8b9932b7552c"
+        }
+      ],
+      "input_descriptions": [
+        {
+          "device": "cuda:0",
+          "dtype": "torch.float16",
+          "kind": "tensor",
+          "requires_grad": false,
+          "shape": [
+            809
+          ],
+          "storage_offset": 0,
+          "stride": [
+            1
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.float16",
+          "kind": "tensor",
+          "requires_grad": false,
+          "shape": [
+            809,
+            246
+          ],
+          "storage_offset": 0,
+          "stride": [
+            246,
+            1
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.float16",
+          "kind": "tensor",
+          "requires_grad": false,
+          "shape": [
+            246
+          ],
+          "storage_offset": 0,
+          "stride": [
+            1
+          ]
+        }
+      ],
+      "input_names": [
+        "input[0]",
+        "mat[0]",
+        "vec[0]"
+      ],
+      "line": 30,
+      "runtime_launches": [
+        {
+          "cache_hash": "TTDJRHTPCCX7733DBUGX5ANVULYL3CRVNTYWQZR33FG2BNZZ4LBQ",
+          "config": {
+            "kind": "triton.Config",
+            "kwargs": {
+              "XBLOCK": 1
+            },
+            "maxnreg": null,
+            "num_ctas": 1,
+            "num_stages": 1,
+            "num_warps": 2
+          },
+          "grid": [
+            809,
+            1,
+            1
+          ],
+          "index": 0,
+          "kernel_name": "triton_per_fused_addmv_0",
+          "programs": 809,
+          "runtime_arguments": [
+            {
+              "position": 0,
+              "value": {
+                "device": "cuda:0",
+                "dtype": "torch.float16",
+                "kind": "tensor",
+                "requires_grad": false,
+                "shape": [
+                  809,
+                  246
+                ],
+                "storage_offset": 0,
+                "stride": [
+                  246,
+                  1
+                ]
+              }
+            },
+            {
+              "position": 1,
+              "value": {
+                "device": "cuda:0",
+                "dtype": "torch.float16",
+                "kind": "tensor",
+                "requires_grad": false,
+                "shape": [
+                  246
+                ],
+                "storage_offset": 0,
+                "stride": [
+                  1
+                ]
+              }
+            },
+            {
+              "position": 2,
+              "value": {
+                "device": "cuda:0",
+                "dtype": "torch.float16",
+                "kind": "tensor",
+                "requires_grad": false,
+                "shape": [
+                  809
+                ],
+                "storage_offset": 0,
+                "stride": [
+                  1
+                ]
+              }
+            },
+            {
+              "position": 3,
+              "value": {
+                "device": "cuda:0",
+                "dtype": "torch.float16",
+                "kind": "tensor",
+                "requires_grad": false,
+                "shape": [
+                  809
+                ],
+                "storage_offset": 0,
+                "stride": [
+                  1
+                ]
+              }
+            },
+            {
+              "position": 4,
+              "value": 809
+            },
+            {
+              "position": 5,
+              "value": 246
+            }
+          ],
+          "status": "cache_resolved"
+        }
+      ],
+      "selected_ttir": [
+        {
+          "bytes": 11195,
+          "path": "/data3/yelv.lh/ETV/benchmark/addmv/test_addmv-809-333-246-dtype1-cuda-0.01-0.01--abae5db25f/rhs/reference-000-000/selected-000.ttir",
+          "sha256": "d1c454fb7ba80a7806975d56443e1a609d4ba0441737ac59a3dcbb995a7f3063",
+          "source": "triton_cache",
+          "source_path": "/data3/yelv.lh/ETV/benchmark/addmv/test_addmv-809-333-246-dtype1-cuda-0.01-0.01--abae5db25f/rhs/reference-000-000/triton-cache/TTDJRHTPCCX7733DBUGX5ANVULYL3CRVNTYWQZR33FG2BNZZ4LBQ/triton_per_fused_addmv_0.ttir"
+        }
+      ],
+      "site_index": 0,
+      "status": "compiled",
+      "target_names": [
+        "reference_output"
+      ],
+      "ttir": [
+        {
+          "bytes": 11195,
+          "path": "/data3/yelv.lh/ETV/benchmark/addmv/test_addmv-809-333-246-dtype1-cuda-0.01-0.01--abae5db25f/rhs/reference-000-000/triton-cache/TTDJRHTPCCX7733DBUGX5ANVULYL3CRVNTYWQZR33FG2BNZZ4LBQ/triton_per_fused_addmv_0.ttir",
+          "sha256": "d1c454fb7ba80a7806975d56443e1a609d4ba0441737ac59a3dcbb995a7f3063"
+        }
+      ],
+      "ttir_status": "captured"
+    }
+  ],
+  "runtime_locals": {
+    "alpha": -1.7830420547213741,
+    "atol": 0.01,
+    "beta": 0.37707535476743975,
+    "device": "cuda",
+    "dtype": {
+      "kind": "torch.dtype",
+      "value": "torch.float16"
+    },
+    "input": {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        809
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    },
+    "k": 246,
+    "m": 809,
+    "mat": {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        809,
+        246
+      ],
+      "storage_offset": 0,
+      "stride": [
+        246,
+        1
+      ]
+    },
+    "n": 333,
+    "rtol": 0.01,
+    "vec": {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        246
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    }
+  },
+  "test_file": "/data3/yelv.lh/ETV/build/upstream/ntops/tests/test_addmv.py",
+  "test_function": "test_addmv",
+  "versions": {
+    "cuda_runtime": "12.8",
+    "torch": "2.8.0+cu128"
+  }
+}

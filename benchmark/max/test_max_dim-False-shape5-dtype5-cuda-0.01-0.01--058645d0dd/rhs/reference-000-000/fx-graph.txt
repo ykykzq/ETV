@@ -1,0 +1,6 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %max_1 : [num_users=2] = call_function[target=torch.ops.aten.max.dim](args = (%arg0_1, 2), kwargs = {})
+    %getitem : [num_users=1] = call_function[target=operator.getitem](args = (%max_1, 0), kwargs = {})
+    %getitem_1 : [num_users=1] = call_function[target=operator.getitem](args = (%max_1, 1), kwargs = {})
+    return (getitem, getitem_1)

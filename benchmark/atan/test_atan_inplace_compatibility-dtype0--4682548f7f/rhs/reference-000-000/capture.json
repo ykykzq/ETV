@@ -1,0 +1,165 @@
+{
+  "best_configs": [],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      10,
+      10
+    ],
+    "storage_offset": 0,
+    "stride": [
+      10,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.atan(input_copy)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_inplace_compatibility-dtype0--4682548f7f/rhs/reference-000-000/inductor-source/000-ca2gmfzwgxkeodowzeqtgiwpty26zefdi3q776mlxtr74q5cimcn.py",
+      "sha256": "543e00f302d7e2991cf21e7016423026711da18dfad7204060bdabe3b541d4e2"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_inplace_compatibility-dtype0--4682548f7f/rhs/reference-000-000/inductor-source/001-cxeprh6pntvhlkvj2ldp4xjcokf6vvqsmam3rm5xwvvybqn3idpd.py",
+      "sha256": "c41a760985beb44327722209e93931b95603efa8767f2efd84f6882fed44cfa6"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        10,
+        10
+      ],
+      "storage_offset": 0,
+      "stride": [
+        10,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input_copy[0]"
+  ],
+  "line": 99,
+  "runtime_launches": [
+    {
+      "cache_hash": "BNZ4ZTMXA2NS4BFWTNWAJLEIRCDYDNKQRO4OGFY2EZORRVEKE6VQ",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 128
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 4
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_atan_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              10,
+              10
+            ],
+            "storage_offset": 0,
+            "stride": [
+              10,
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              10,
+              10
+            ],
+            "storage_offset": 0,
+            "stride": [
+              10,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 100
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 4780,
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_inplace_compatibility-dtype0--4682548f7f/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "0fb01086b106748de05e2b26dbf70848b319a4b9efa2c4d2783995e302d9d19d",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_inplace_compatibility-dtype0--4682548f7f/rhs/reference-000-000/triton-cache/BNZ4ZTMXA2NS4BFWTNWAJLEIRCDYDNKQRO4OGFY2EZORRVEKE6VQ/triton_poi_fused_atan_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 4780,
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_inplace_compatibility-dtype0--4682548f7f/rhs/reference-000-000/triton-cache/BNZ4ZTMXA2NS4BFWTNWAJLEIRCDYDNKQRO4OGFY2EZORRVEKE6VQ/triton_poi_fused_atan_0.ttir",
+      "sha256": "0fb01086b106748de05e2b26dbf70848b319a4b9efa2c4d2783995e302d9d19d"
+    }
+  ],
+  "ttir_status": "captured"
+}

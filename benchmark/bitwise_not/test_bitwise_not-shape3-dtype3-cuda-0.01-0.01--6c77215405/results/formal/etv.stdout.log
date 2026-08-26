@@ -1,0 +1,147 @@
+WARNING etv.verify [run_id=ad08d94ba9d8 pair_id=build/upstream/ntops/tests/test_bitwise_not.py::test_bitwise_not[shape3-dtype3-cuda-0.01-0.01] phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_MEMORY_TYPE_UNSUPPORTED", "error": "only abstract-floating TTIR memory loads are lifted"}
+{
+  "assumptions": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.bindings",
+      "text": "X = 475"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg1 = 475"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.rhs",
+      "text": "rhs.arg2 = 475"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    }
+  ],
+  "blocks": [
+    {
+      "kind": "FRONTEND",
+      "proof_levels": [],
+      "reason": "TTIR_MEMORY_TYPE_UNSUPPORTED",
+      "required_for_final": true,
+      "status": "UNKNOWN",
+      "summary": "only abstract-floating TTIR memory loads are lifted"
+    }
+  ],
+  "counterexample": null,
+  "formal_predicates": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Input0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Output",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.X",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.rhs.arg2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    }
+  ],
+  "guarantees": {
+    "does_not_prove": [
+      "IEEE-754 or bitwise GPU equality",
+      "formal correctness of the raw-TTIR-to-ETV-IR lifting implementation",
+      "parametric shapes or unbounded loops",
+      "concurrent/shared-memory semantics",
+      "allocated-buffer bounds or GPU memory safety"
+    ],
+    "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+  },
+  "inputs": {
+    "lhs": "/data3/yelv.lh/ETV/benchmark/bitwise_not/test_bitwise_not-shape3-dtype3-cuda-0.01-0.01--6c77215405/lhs/launch-000.ttir",
+    "rhs": "/data3/yelv.lh/ETV/benchmark/bitwise_not/test_bitwise_not-shape3-dtype3-cuda-0.01-0.01--6c77215405/rhs/reference-000-000/selected-000.ttir",
+    "sha256": {
+      "lhs": "4e04329ad51e8a09fc56da3ee0829e484e6640cc2c71fd976ef57a19fe2d8838",
+      "rhs": "948dfbb2671e4f2b2ae55c39b18a7bb7e57c668d9fa72cbdd4f045889c0d98e3",
+      "spec": "927b519730f9e5e619b9f7da700e55a1c2f02c743b5de9a2d3eca6f25921414e"
+    },
+    "spec": "/data3/yelv.lh/ETV/benchmark/bitwise_not/test_bitwise_not-shape3-dtype3-cuda-0.01-0.01--6c77215405/pairspec/pair.json"
+  },
+  "llm_context": {
+    "assumptions": [
+      "This pair was captured from the same specialized ntops pytest node; pointer roles are mapped by one-store dataflow and remaining ABI order."
+    ],
+    "proof_relevance": "informational_only",
+    "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
+  },
+  "pair_id": "build/upstream/ntops/tests/test_bitwise_not.py::test_bitwise_not[shape3-dtype3-cuda-0.01-0.01]",
+  "proof": {},
+  "reason": "TTIR_MEMORY_TYPE_UNSUPPORTED",
+  "rewrite_registry": {
+    "builtin": "validated_builtin_rules",
+    "inline_legacy_rules": [],
+    "user_sources": []
+  },
+  "schema_version": 5,
+  "scope": "fixed-specialization single-store bounded translation validation",
+  "semantic_mode": "abstract_float",
+  "soundness": {
+    "conditional_on": [
+      "declared predicate: abi.Input0",
+      "declared predicate: abi.Output",
+      "declared predicate: binding.X",
+      "declared predicate: binding.lhs.arg1",
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
+    ],
+    "level": "formal_under_declared_predicates",
+    "non_formal_assistance": [
+      "PairSpec.assumptions"
+    ]
+  },
+  "status": "UNKNOWN",
+  "tool": {
+    "name": "ETV",
+    "version": "0.6.1"
+  },
+  "trusted_axioms": [
+    "PairSpec role correspondence",
+    "PairSpec fixed shape/stride/launch bindings",
+    "PairSpec no-alias declarations",
+    "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
+    "ETV IR evaluator and memory-token model"
+  ],
+  "unsupported": [
+    "only abstract-floating TTIR memory loads are lifted"
+  ]
+}

@@ -1,0 +1,366 @@
+{
+  "callspec": {
+    "approximate": "none",
+    "atol": 0.01,
+    "device": "cuda",
+    "dtype": {
+      "kind": "torch.dtype",
+      "value": "torch.float16"
+    },
+    "rtol": 0.01,
+    "shape": {
+      "items": [
+        307
+      ],
+      "kind": "list"
+    }
+  },
+  "format": "etv-benchmark-test-capture-v1",
+  "lhs_launches": [
+    {
+      "best_config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "ninetoothed_meta_prefix_ninetoothed_BLOCK_SIZE_5": 512
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 7,
+        "num_warps": 8
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_hash": "351b894558e6632d91004b8dae9da7158d688ae79eb048f948eb93fe6fd6dddf",
+      "kernel_name": "default_application",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "name": "ninetoothed_ninetoothed_tensor_0_pointer",
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              307
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "name": "ninetoothed_ninetoothed_tensor_0_size_0",
+          "position": 1,
+          "value": 307
+        },
+        {
+          "name": "ninetoothed_ninetoothed_tensor_0_stride_0",
+          "position": 2,
+          "value": 1
+        },
+        {
+          "name": "ninetoothed_ninetoothed_tensor_1_pointer",
+          "position": 3,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              307
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "name": "ninetoothed_ninetoothed_tensor_1_size_0",
+          "position": 4,
+          "value": 307
+        },
+        {
+          "name": "ninetoothed_ninetoothed_tensor_1_stride_0",
+          "position": 5,
+          "value": 1
+        }
+      ],
+      "status": "captured",
+      "ttir": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/lhs/launch-000.ttir",
+      "ttir_sha256": "2ffbe15b9826c436953af937a8cb53d75f5c004fea04b54565efff7b00a03403"
+    }
+  ],
+  "ninetoothed_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/lhs/ninetoothed-source/c3cb7b37fab6dbb344ab0b4fc28be601bd66c0e62e44c758d8d9191752cd25c9.py",
+      "sha256": "c3cb7b37fab6dbb344ab0b4fc28be601bd66c0e62e44c758d8d9191752cd25c9"
+    }
+  ],
+  "nodeid": "build/upstream/ntops/tests/test_gelu.py::test_gelu[shape1-dtype1-cuda-0.01-0.01-none]",
+  "pytest_exception": null,
+  "reference_executions": 1,
+  "reference_sites": [
+    {
+      "end_line": 25,
+      "expression": "F.gelu(input, approximate=approximate)",
+      "free_names": [
+        "F",
+        "approximate",
+        "input"
+      ],
+      "index": 0,
+      "line": 25,
+      "target_names": [
+        "reference_output"
+      ]
+    }
+  ],
+  "rhs_references": [
+    {
+      "best_configs": [
+        {
+          "content": {
+            "XBLOCK": 128,
+            "configs_hash": "1b2cc4dbebb9680d3ce31843331593b159e4046c056f195ca1ccf2464d5b37d1",
+            "found_by_coordesc": false,
+            "num_stages": 1,
+            "num_warps": 4,
+            "time_taken_ms": 13,
+            "triton_cache_hash": "GTYU7BE4N3JVTMB4246FMCVXNF6VOQDU5FPL2K4UQRFI53SGJADQ"
+          },
+          "path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/rhs/reference-000-000/torchinductor-cache/cv/d5deb96f96168df1f542f224809c08f26a281b844d0235e289694654b1d76ea4.best_config"
+        }
+      ],
+      "captured_output": {
+        "device": "cuda:0",
+        "dtype": "torch.float16",
+        "kind": "tensor",
+        "requires_grad": false,
+        "shape": [
+          307
+        ],
+        "storage_offset": 0,
+        "stride": [
+          1
+        ]
+      },
+      "checks": {
+        "compiled_vs_captured_reference": {
+          "leaf_count_actual": 1,
+          "leaf_count_expected": 1,
+          "structure_equal": true,
+          "tensor_leaves": [
+            {
+              "allclose_1e-3": true,
+              "equal": true,
+              "max_abs_error": 0.0
+            }
+          ]
+        },
+        "compiled_vs_fx_eager": {
+          "leaf_count_actual": 1,
+          "leaf_count_expected": 1,
+          "structure_equal": true,
+          "tensor_leaves": [
+            {
+              "allclose_1e-3": true,
+              "equal": true,
+              "max_abs_error": 0.0
+            }
+          ]
+        }
+      },
+      "execution": 0,
+      "expression": "F.gelu(input, approximate=approximate)",
+      "inductor_sources": [
+        {
+          "path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/rhs/reference-000-000/inductor-source/000-ccvx2dh343r2y4t73g3asgh6h56wqikinjrxuenruzaacmix3xnj.py",
+          "sha256": "b3eaa7bd70563eba80a7cfb4c930e559d047545a1388eb4464e150721ac2b62b"
+        },
+        {
+          "path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/rhs/reference-000-000/inductor-source/001-cq4spgybava2xezzckixdd2afhe5atu5nfbpvms2uz7azwf3h737.py",
+          "sha256": "d3e091e7e5cf178bb8fd77e94b78ce20fc2efe7075fcaf2ae0fdc21f5bf73bcd"
+        }
+      ],
+      "input_descriptions": [
+        {
+          "device": "cuda:0",
+          "dtype": "torch.float16",
+          "kind": "tensor",
+          "requires_grad": false,
+          "shape": [
+            307
+          ],
+          "storage_offset": 0,
+          "stride": [
+            1
+          ]
+        }
+      ],
+      "input_names": [
+        "input[0]"
+      ],
+      "line": 25,
+      "runtime_launches": [
+        {
+          "cache_hash": "GTYU7BE4N3JVTMB4246FMCVXNF6VOQDU5FPL2K4UQRFI53SGJADQ",
+          "config": {
+            "kind": "triton.Config",
+            "kwargs": {
+              "XBLOCK": 128
+            },
+            "maxnreg": null,
+            "num_ctas": 1,
+            "num_stages": 1,
+            "num_warps": 4
+          },
+          "grid": [
+            3,
+            1,
+            1
+          ],
+          "index": 0,
+          "kernel_name": "triton_poi_fused_gelu_0",
+          "programs": 3,
+          "runtime_arguments": [
+            {
+              "position": 0,
+              "value": {
+                "device": "cuda:0",
+                "dtype": "torch.float16",
+                "kind": "tensor",
+                "requires_grad": false,
+                "shape": [
+                  307
+                ],
+                "storage_offset": 0,
+                "stride": [
+                  1
+                ]
+              }
+            },
+            {
+              "position": 1,
+              "value": {
+                "device": "cuda:0",
+                "dtype": "torch.float16",
+                "kind": "tensor",
+                "requires_grad": false,
+                "shape": [
+                  307
+                ],
+                "storage_offset": 0,
+                "stride": [
+                  1
+                ]
+              }
+            },
+            {
+              "position": 2,
+              "value": 307
+            }
+          ],
+          "status": "cache_resolved"
+        }
+      ],
+      "selected_ttir": [
+        {
+          "bytes": 6189,
+          "path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/rhs/reference-000-000/selected-000.ttir",
+          "sha256": "8a7f383edc95cd1c41d9c4a2982c9e5cb8528d1d8c57496b0f83e1c2e635d21b",
+          "source": "triton_cache",
+          "source_path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/rhs/reference-000-000/triton-cache/GTYU7BE4N3JVTMB4246FMCVXNF6VOQDU5FPL2K4UQRFI53SGJADQ/triton_poi_fused_gelu_0.ttir"
+        }
+      ],
+      "site_index": 0,
+      "status": "compiled",
+      "target_names": [
+        "reference_output"
+      ],
+      "ttir": [
+        {
+          "bytes": 6189,
+          "path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/rhs/reference-000-000/triton-cache/GTYU7BE4N3JVTMB4246FMCVXNF6VOQDU5FPL2K4UQRFI53SGJADQ/triton_poi_fused_gelu_0.ttir",
+          "sha256": "8a7f383edc95cd1c41d9c4a2982c9e5cb8528d1d8c57496b0f83e1c2e635d21b"
+        },
+        {
+          "bytes": 6189,
+          "path": "/data3/yelv.lh/ETV/benchmark/gelu/test_gelu-shape1-dtype1-cuda-0.01-0.01-none--3aabb54713/rhs/reference-000-000/triton-cache/SPMWKBFV3QFB6AJ7O76ZASTDZGDAVUTCGEIPQ7MNCBBRAWZKQF7A/triton_poi_fused_gelu_0.ttir",
+          "sha256": "a9a57a0b8a00bdffd6b39549567674b6516e52384e208b95498f3420f9dab52b"
+        }
+      ],
+      "ttir_status": "captured"
+    }
+  ],
+  "runtime_locals": {
+    "@py_assert1": null,
+    "@py_assert7": null,
+    "approximate": "none",
+    "atol": 0.01,
+    "device": "cuda",
+    "dtype": {
+      "kind": "torch.dtype",
+      "value": "torch.float16"
+    },
+    "input": {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        307
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    },
+    "ninetoothed_output": {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        307
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    },
+    "reference_output": {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        307
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    },
+    "rtol": 0.01,
+    "shape": {
+      "items": [
+        307
+      ],
+      "kind": "list"
+    }
+  },
+  "test_file": "/data3/yelv.lh/ETV/build/upstream/ntops/tests/test_gelu.py",
+  "test_function": "test_gelu",
+  "versions": {
+    "cuda_runtime": "12.8",
+    "torch": "2.8.0+cu128"
+  }
+}

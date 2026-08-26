@@ -1,0 +1,131 @@
+{
+  "best_configs": [],
+  "capture_origin": "line_trace",
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      2,
+      32,
+      32,
+      64
+    ],
+    "storage_offset": 0,
+    "stride": [
+      65536,
+      2048,
+      64,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "F.scaled_dot_product_attention(query, key_cloned, value_cloned, attn_mask=attn_mask, is_causal=is_causal, scale=scale, enable_gqa=enable_gqa)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/scaled_dot_product_attention/test_scaled_dot_product_attention-2-32-32-64-16-224-None-False-None-True-1-False-dtype6-cuda-0.025-0--fa47a74f9e/rhs/reference-000-000/inductor-source/000-cumvhlhdzeilrgs7zjze2bihynecfvrwwjgvveynbm2rmifyii3g.py",
+      "sha256": "8439418778fa43cf035dbd0edf30ee90f89821c4777e569e1f31463cbd2e21bb"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        2,
+        16,
+        224,
+        64
+      ],
+      "storage_offset": 0,
+      "stride": [
+        229376,
+        14336,
+        64,
+        1
+      ]
+    },
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        2,
+        32,
+        32,
+        64
+      ],
+      "storage_offset": 0,
+      "stride": [
+        65536,
+        2048,
+        64,
+        1
+      ]
+    },
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        2,
+        16,
+        224,
+        64
+      ],
+      "storage_offset": 0,
+      "stride": [
+        229376,
+        14336,
+        64,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "key_cloned[0]",
+    "query[0]",
+    "value_cloned[0]"
+  ],
+  "line": 176,
+  "runtime_launches": [],
+  "selected_ttir": [],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [],
+  "ttir_status": "no_triton_kernel_launched"
+}

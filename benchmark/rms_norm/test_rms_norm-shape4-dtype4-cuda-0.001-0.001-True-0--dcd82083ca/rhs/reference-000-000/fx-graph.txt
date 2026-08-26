@@ -1,0 +1,8 @@
+graph():
+    %arg0_1 : [num_users=2] = placeholder[target=arg0_1]
+    %pow_1 : [num_users=1] = call_function[target=torch.ops.aten.pow.Tensor_Scalar](args = (%arg0_1, 2), kwargs = {})
+    %mean : [num_users=1] = call_function[target=torch.ops.aten.mean.dim](args = (%pow_1, [2, 1], True), kwargs = {})
+    %add_ : [num_users=1] = call_function[target=torch.ops.aten.add_.Scalar](args = (%mean, 0.0), kwargs = {})
+    %rsqrt : [num_users=1] = call_function[target=torch.ops.aten.rsqrt.default](args = (%add_,), kwargs = {})
+    %mul : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%arg0_1, %rsqrt), kwargs = {})
+    return mul

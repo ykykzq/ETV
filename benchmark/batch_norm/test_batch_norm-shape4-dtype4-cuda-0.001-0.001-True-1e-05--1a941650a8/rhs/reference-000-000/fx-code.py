@@ -1,0 +1,11 @@
+
+
+
+def forward(self, arg0_1, arg1_1, arg2_1):
+    cudnn_batch_norm = torch.ops.aten.cudnn_batch_norm.default(arg1_1, arg2_1, arg0_1, None, None, True, 0.1, 1e-05);  arg1_1 = arg2_1 = arg0_1 = None
+    getitem = cudnn_batch_norm[0]
+    getitem_1 = cudnn_batch_norm[1];  getitem_1 = None
+    getitem_2 = cudnn_batch_norm[2];  getitem_2 = None
+    getitem_3 = cudnn_batch_norm[3];  cudnn_batch_norm = getitem_3 = None
+    return getitem
+    

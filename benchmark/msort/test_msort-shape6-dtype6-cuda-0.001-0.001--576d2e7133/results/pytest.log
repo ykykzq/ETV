@@ -1,0 +1,223 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________ test_msort[shape6-dtype6-cuda-0.001-0.001] __________________
+../../../.venv-nt025/lib/python3.12/site-packages/triton/language/core.py:42: in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+../../../.venv-nt025/lib/python3.12/site-packages/triton/language/core.py:1938: in reshape
+    return _semantic.reshape(input, shape, can_reorder)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.venv-nt025/lib/python3.12/site-packages/triton/language/semantic.py:626: in reshape
+    if input.type.numel != numel:
+       ^^^^^^^^^^^^^^^^
+E   AttributeError: 'dtype' object has no attribute 'numel'. Did you mean: 'name'?
+
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/triton/language/core.py", line 42, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/triton/language/core.py", line 1938, in reshape
+    return _semantic.reshape(input, shape, can_reorder)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/triton/language/semantic.py", line 626, in reshape
+    if input.type.numel != numel:
+       ^^^^^^^^^^^^^^^^
+AttributeError: 'dtype' object has no attribute 'numel'. Did you mean: 'name'?
+
+The above exception was the direct cause of the following exception:
+
+triton.compiler.errors.CompilationError: at 37:8:
+    # run first log_k bitonic sort iterations:
+    for i in core.static_range(1, log_k + 1):
+        h = _bitonic_merge_hypercube(h, i, 2 if i < log_n else descending)
+
+    # select top k elements using bitonic top-k
+    # https://www.doc.ic.ac.uk/~hlgr/pdfs/MassivelyParallelTopK.pdf
+    for i in core.static_range(log_k + 1, log_n + 1):
+        h = max(h, axis=(_log2(h.numel) - 1 - log_k)) if descending else min(h, axis=(_log2(h.numel) - 1 - log_k))
+        h = _bitonic_merge_hypercube(h, log_k, 2 if i < log_n else descending)
+
+    # reshape back:
+    x = core.reshape(h, x.shape[:-1] + [2**log_k])
+        ^
+
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/triton/language/core.py", line 42, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/triton/language/core.py", line 1938, in reshape
+    return _semantic.reshape(input, shape, can_reorder)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/triton/language/semantic.py", line 626, in reshape
+    if input.type.numel != numel:
+       ^^^^^^^^^^^^^^^^
+AttributeError: 'dtype' object has no attribute 'numel'. Did you mean: 'name'?
+
+The above exception was the direct cause of the following exception:
+
+triton.compiler.errors.CompilationError: at 37:8:
+    # run first log_k bitonic sort iterations:
+    for i in core.static_range(1, log_k + 1):
+        h = _bitonic_merge_hypercube(h, i, 2 if i < log_n else descending)
+
+    # select top k elements using bitonic top-k
+    # https://www.doc.ic.ac.uk/~hlgr/pdfs/MassivelyParallelTopK.pdf
+    for i in core.static_range(log_k + 1, log_n + 1):
+        h = max(h, axis=(_log2(h.numel) - 1 - log_k)) if descending else min(h, axis=(_log2(h.numel) - 1 - log_k))
+        h = _bitonic_merge_hypercube(h, log_k, 2 if i < log_n else descending)
+
+    # reshape back:
+    x = core.reshape(h, x.shape[:-1] + [2**log_k])
+        ^
+
+The above exception was the direct cause of the following exception:
+
+triton.compiler.errors.CompilationError: at 2:11:
+def sort(x, dim: core.constexpr = None, descending: core.constexpr = core.CONSTEXPR_0):
+    return sort_impl(x, dim=dim, descending=descending)
+           ^
+
+The above exception was the direct cause of the following exception:
+tests/test_msort.py:14: in test_msort
+    ninetoothed_output = ntops.torch.msort(input)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+src/ntops/torch/msort.py:13: in msort
+    kernel(input, out)
+../ninetoothed-v025/src/ninetoothed/jit.py:128: in __call__
+    return self._launch(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../benchmark/msort/test_msort-shape6-dtype6-cuda-0.001-0.001--576d2e7133/lhs/ninetoothed-source/474b2ffd0c1950909cba800c77b64cfa41263bdcf4702f8eb9c63e98236a82f2.py:26: in launch_application
+    application[lambda meta: ((ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 - 1 + 1 - 1 + 1) * ((ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) - 1 + ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + 1),)](ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_1, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_1, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0, ninetoothed_tensor_0, ninetoothed_tensor_0.stride(0), ninetoothed_tensor_0.stride(1), ninetoothed_tensor_0.stride(2), ninetoothed_tensor_0.stride(3), ninetoothed_tensor_1, ninetoothed_tensor_1.stride(0), ninetoothed_tensor_1.stride(1), ninetoothed_tensor_1.stride(2), ninetoothed_tensor_1.stride(3), num_warps=8, num_stages=7)
+../../../.venv-nt025/lib/python3.12/site-packages/triton/runtime/jit.py:390: in <lambda>
+    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../tools/capture_benchmark_test.py:400: in recording_jitfunction_run
+    kernel = _ORIGINAL_JITFUNCTION_RUN(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.venv-nt025/lib/python3.12/site-packages/triton/runtime/jit.py:594: in run
+    kernel = self.compile(src, target=target, options=options.__dict__)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.venv-nt025/lib/python3.12/site-packages/triton/compiler/compiler.py:339: in compile
+    module = src.make_ir(options, codegen_fns, module_map, context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.venv-nt025/lib/python3.12/site-packages/triton/compiler/compiler.py:83: in make_ir
+    return ast_to_ttir(self.fn, self, context=context, options=options, codegen_fns=codegen_fns,
+E   triton.compiler.errors.CompilationError: at 9:1146:
+E   def application(ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0: triton.language.constexpr, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_1: triton.language.constexpr, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2: triton.language.constexpr, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3: triton.language.constexpr, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0: triton.language.constexpr, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_1: triton.language.constexpr, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2: triton.language.constexpr, ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3: triton.language.constexpr, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0: triton.language.constexpr, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0: triton.language.constexpr, ninetoothed_ninetoothed_tensor_0_pointer, ninetoothed_ninetoothed_tensor_0_stride_0, ninetoothed_ninetoothed_tensor_0_stride_1, ninetoothed_ninetoothed_tensor_0_stride_2, ninetoothed_ninetoothed_tensor_0_stride_3, ninetoothed_ninetoothed_tensor_1_pointer, ninetoothed_ninetoothed_tensor_1_stride_0, ninetoothed_ninetoothed_tensor_1_stride_1, ninetoothed_ninetoothed_tensor_1_stride_2, ninetoothed_ninetoothed_tensor_1_stride_3):
+E       ninetoothed_pid = triton.language.program_id(0)
+E       ninetoothed_tensor_0_index_0 = ninetoothed_pid // ((ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) - 1 + ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + 1)
+E       ninetoothed_tensor_0_index_1 = ninetoothed_pid % ((ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) - 1 + ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + 1)
+E       ninetoothed_tensor_0_pointers = ninetoothed_ninetoothed_tensor_0_pointer
+E       ninetoothed_tensor_1_index_0 = ninetoothed_pid // ((ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - 1) - 1 + ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - 1) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + 1)
+E       ninetoothed_tensor_1_index_1 = ninetoothed_pid % ((ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - 1) - 1 + ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - 1) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + 1)
+E       ninetoothed_tensor_1_pointers = ninetoothed_ninetoothed_tensor_1_pointer
+E       triton.language.store(ninetoothed_tensor_1_pointers + ((ninetoothed_tensor_1_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,]) * ninetoothed_ninetoothed_tensor_1_stride_0 + ninetoothed_tensor_1_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) * ninetoothed_ninetoothed_tensor_1_stride_1 + ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 * ninetoothed_ninetoothed_tensor_1_stride_2 + ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 * ninetoothed_ninetoothed_tensor_1_stride_3), triton.language.sort(triton.language.load(ninetoothed_tensor_0_pointers + ((ninetoothed_tensor_0_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,]) * ninetoothed_ninetoothed_tensor_0_stride_0 + ninetoothed_tensor_0_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) * ninetoothed_ninetoothed_tensor_0_stride_1 + ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 * ninetoothed_ninetoothed_tensor_0_stride_2 + ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 * ninetoothed_ninetoothed_tensor_0_stride_3), mask=True & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0) & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] >= 0) & (ninetoothed_tensor_0_index_0 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_0_index_0 >= 0) & (ninetoothed_tensor_0_index_1 < (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) - 1 + ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 - 1) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + 1) & (ninetoothed_tensor_0_index_1 >= 0) & (0 < 1) & (0 >= 0) & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0) & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] >= 0) & (ninetoothed_tensor_0_index_0 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) & (ninetoothed_tensor_0_index_0 >= 0) & (ninetoothed_tensor_0_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0) & (ninetoothed_tensor_0_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] >= 0) & (ninetoothed_tensor_0_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_1) & (ninetoothed_tensor_0_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) >= 0) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 >= 0) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 >= 0) & (ninetoothed_tensor_0_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0) & (ninetoothed_tensor_0_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] >= 0) & (ninetoothed_tensor_0_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0) & (ninetoothed_tensor_0_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_0)[::,] >= 0) & (ninetoothed_tensor_0_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_1) & (ninetoothed_tensor_0_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) >= 0) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 >= 0) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) & (ninetoothed_tensor_0_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_0_size_3 >= 0), other=float('inf'))), mask=True & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0) & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] >= 0) & (ninetoothed_tensor_1_index_0 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 - 1 + 1 - 1 + 1) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 < (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - 1) - 1 + ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 - 1) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + 1) & (ninetoothed_tensor_1_index_1 >= 0) & (0 < 1) & (0 >= 0) & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0) & (triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] >= 0) & (ninetoothed_tensor_1_index_0 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) & (ninetoothed_tensor_1_index_0 >= 0) & (ninetoothed_tensor_1_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0) & (ninetoothed_tensor_1_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] >= 0) & (ninetoothed_tensor_1_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_1) & (ninetoothed_tensor_1_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) >= 0) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 >= 0) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 >= 0) & (ninetoothed_tensor_1_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0) & (ninetoothed_tensor_1_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] >= 0) & (ninetoothed_tensor_1_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0) & (ninetoothed_tensor_1_index_1 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0 + triton.language.arange(0, ninetoothed_next_power_of_2_prefix_ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_0)[::,] >= 0) & (ninetoothed_tensor_1_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_1) & (ninetoothed_tensor_1_index_0 // (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) >= 0) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) // ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 >= 0) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 < ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) & (ninetoothed_tensor_1_index_0 % (ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_2 * ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3) % ninetoothed_constexpr_prefix_ninetoothed_ninetoothed_tensor_1_size_3 >= 0))
+E                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             ^
+------------------------------ Captured log call -------------------------------
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:structured.py:27 
+DEBUG    torch.__trace:convert_frame.py:1083 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:structured.py:41 
+DEBUG    torch.__trace:meta_utils.py:272 
+DEBUG    torch.__trace:meta_utils.py:487 
+DEBUG    torch.__trace:meta_utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:output_graph.py:1673 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:compile_fx.py:2106 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:compile_fx.py:2130 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:dispatch_and_compile_graph.py:214 
+DEBUG    torch.__trace:dispatch_and_compile_graph.py:232 
+DEBUG    torch.__trace:jit_compile_runtime_wrappers.py:215 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:compile_fx.py:1173 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:compile_fx.py:1222 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:compile_fx.py:1260 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:graph.py:2365 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:async_compile.py:113 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1939 
+DEBUG    torch.__trace:compile_fx.py:990 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1939 
+DEBUG    torch.__trace:autograd_cache.py:1166 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:guards.py:2981 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1601 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1900 
+DEBUG    torch.__trace:utils.py:1601
+=========================== short test summary info ============================
+FAILED tests/test_msort.py::test_msort[shape6-dtype6-cuda-0.001-0.001] - trit...
+1 failed in 3.57s

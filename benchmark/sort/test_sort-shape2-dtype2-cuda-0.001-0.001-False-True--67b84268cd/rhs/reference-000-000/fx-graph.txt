@@ -1,0 +1,6 @@
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %sort : [num_users=2] = call_function[target=torch.ops.aten.sort.stable](args = (%arg0_1,), kwargs = {stable: True, dim: -2})
+    %getitem : [num_users=1] = call_function[target=operator.getitem](args = (%sort, 0), kwargs = {})
+    %getitem_1 : [num_users=1] = call_function[target=operator.getitem](args = (%sort, 1), kwargs = {})
+    return (getitem, getitem_1)

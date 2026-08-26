@@ -1,0 +1,151 @@
+{
+  "best_configs": [],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float32",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [],
+    "storage_offset": 0,
+    "stride": []
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.logsumexp(input_tensor, dim=dim, keepdim=keepdim)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape0-dtype0-cuda-0.001-0.001--523967e32f/rhs/reference-000-000/inductor-source/000-cnfhrgqdr74oz5jcmk7hkiqsabptwmfvczg5wpzwz4njrz3dkjwh.py",
+      "sha256": "3432cb06158d4a3cea802dae642b3144e3b2bbfb66ea8bb46b5014bec4978629"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape0-dtype0-cuda-0.001-0.001--523967e32f/rhs/reference-000-000/inductor-source/001-cumh626penur7euo4yy7qigl6lbbrdhiaeise3hgtfltboozzvjs.py",
+      "sha256": "e6e7ede34744d405d13cf744dcc1f4d341fcc177b0bad9a81b760122b473637c"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float32",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        724
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input_tensor[0]"
+  ],
+  "line": 21,
+  "runtime_launches": [
+    {
+      "cache_hash": "3GVAOKA6SMMLTHU357AOJJNDUU642D4K6WCJM2ARKE5SDMOL62SQ",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {},
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 8
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_per_fused_logsumexp_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [],
+            "storage_offset": 0,
+            "stride": []
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              724
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 1
+        },
+        {
+          "position": 3,
+          "value": 724
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 9712,
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape0-dtype0-cuda-0.001-0.001--523967e32f/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "6bff36e718d13156413f753915bfe25c3277f8fb7ebefe0a40eae0f61854633a",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape0-dtype0-cuda-0.001-0.001--523967e32f/rhs/reference-000-000/triton-cache/3GVAOKA6SMMLTHU357AOJJNDUU642D4K6WCJM2ARKE5SDMOL62SQ/triton_per_fused_logsumexp_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 9712,
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape0-dtype0-cuda-0.001-0.001--523967e32f/rhs/reference-000-000/triton-cache/3GVAOKA6SMMLTHU357AOJJNDUU642D4K6WCJM2ARKE5SDMOL62SQ/triton_per_fused_logsumexp_0.ttir",
+      "sha256": "6bff36e718d13156413f753915bfe25c3277f8fb7ebefe0a40eae0f61854633a"
+    }
+  ],
+  "ttir_status": "captured"
+}

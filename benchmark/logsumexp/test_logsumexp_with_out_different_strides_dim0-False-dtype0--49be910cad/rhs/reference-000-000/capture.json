@@ -1,0 +1,169 @@
+{
+  "best_configs": [],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      4,
+      5
+    ],
+    "storage_offset": 0,
+    "stride": [
+      5,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": false,
+          "max_abs_error": 0.001953125
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": false,
+          "max_abs_error": 0.001953125
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.logsumexp(input_tensor, dim=dim, keepdim=keepdim)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_out_different_strides_dim0-False-dtype0--49be910cad/rhs/reference-000-000/inductor-source/000-cd7asiu5p47w3xiwt4nzsqz3w27p5226au34swwq4bdap75utrx3.py",
+      "sha256": "ee6e596b86a9426c8d50839ba0e47074cd78fb96e50c937556599de65306c450"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_out_different_strides_dim0-False-dtype0--49be910cad/rhs/reference-000-000/inductor-source/001-chdhkipg6rgyw7mxnzzhciyhx7pjatgstklw2ii7q2v4l6hxy4vr.py",
+      "sha256": "86bd3cf0f51f21577675c4f2e392a23ba8c9ba6f357ae27a1e5c8c985032ff32"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        6,
+        4,
+        5
+      ],
+      "storage_offset": 0,
+      "stride": [
+        20,
+        5,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input_tensor[0]"
+  ],
+  "line": 161,
+  "runtime_launches": [
+    {
+      "cache_hash": "UKSOXQTWY5ZSK32RERWPQQUYECPGWU6G3GGARGQFCK4IWFZYMXJA",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 32
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 1
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_logsumexp_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              6,
+              4,
+              5
+            ],
+            "storage_offset": 0,
+            "stride": [
+              20,
+              5,
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              4,
+              5
+            ],
+            "storage_offset": 0,
+            "stride": [
+              5,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 20
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 21523,
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_out_different_strides_dim0-False-dtype0--49be910cad/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "e6e97a39e888110985e6f3cd1749c6428d61034d66a71c1d0ac0c3bc0ead9692",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_out_different_strides_dim0-False-dtype0--49be910cad/rhs/reference-000-000/triton-cache/UKSOXQTWY5ZSK32RERWPQQUYECPGWU6G3GGARGQFCK4IWFZYMXJA/triton_poi_fused_logsumexp_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 21523,
+      "path": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_out_different_strides_dim0-False-dtype0--49be910cad/rhs/reference-000-000/triton-cache/UKSOXQTWY5ZSK32RERWPQQUYECPGWU6G3GGARGQFCK4IWFZYMXJA/triton_poi_fused_logsumexp_0.ttir",
+      "sha256": "e6e97a39e888110985e6f3cd1749c6428d61034d66a71c1d0ac0c3bc0ead9692"
+    }
+  ],
+  "ttir_status": "captured"
+}

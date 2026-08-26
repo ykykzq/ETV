@@ -1,0 +1,157 @@
+{
+  "best_configs": [],
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      5
+    ],
+    "storage_offset": 0,
+    "stride": [
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "torch.atan(test_values)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_boundary_values-cuda-dtype0--fb8e49692b/rhs/reference-000-000/inductor-source/000-cjdbsd4yrjtsvrnjnn45agvg6jcx4rnmswnpeb5zfumutewmbxai.py",
+      "sha256": "6404331b4591aa7a7743539eaca9758cf19b0962105873d1ed69228447d30fac"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_boundary_values-cuda-dtype0--fb8e49692b/rhs/reference-000-000/inductor-source/001-cyh5vkpsngdtka23ri2tjsuy3lx2e4ukfe36z43theia5od4e2jw.py",
+      "sha256": "df8ec2bb5742a1b6be8cf00c53d3e1825ef583219f733b418b82ee011a755af6"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        5
+      ],
+      "storage_offset": 0,
+      "stride": [
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "test_values[0]"
+  ],
+  "line": 42,
+  "runtime_launches": [
+    {
+      "cache_hash": "YDHWZEVLEXJBQWXREHVLDCE57ODWUJFCA6NSMV6CXQ36L4ULRQWA",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 8
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 1
+      },
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_atan_0",
+      "programs": 1,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              5
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              5
+            ],
+            "storage_offset": 0,
+            "stride": [
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 5
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 4716,
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_boundary_values-cuda-dtype0--fb8e49692b/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "4effb1953ef7e851bc91fdce22b0bf1b875f704565440220cd774f784faf0a52",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_boundary_values-cuda-dtype0--fb8e49692b/rhs/reference-000-000/triton-cache/YDHWZEVLEXJBQWXREHVLDCE57ODWUJFCA6NSMV6CXQ36L4ULRQWA/triton_poi_fused_atan_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 4716,
+      "path": "/data3/yelv.lh/ETV/benchmark/atan/test_atan_boundary_values-cuda-dtype0--fb8e49692b/rhs/reference-000-000/triton-cache/YDHWZEVLEXJBQWXREHVLDCE57ODWUJFCA6NSMV6CXQ36L4ULRQWA/triton_poi_fused_atan_0.ttir",
+      "sha256": "4effb1953ef7e851bc91fdce22b0bf1b875f704565440220cd774f784faf0a52"
+    }
+  ],
+  "ttir_status": "captured"
+}

@@ -1,0 +1,200 @@
+{
+  "best_configs": [
+    {
+      "content": {
+        "XBLOCK": 1024,
+        "configs_hash": "3ca5c3e34d35093f3c9ab2829a9faeebad5e61c4ca13d5ed6053d7b71ce60d5a",
+        "found_by_coordesc": false,
+        "num_stages": 1,
+        "num_warps": 4,
+        "time_taken_ms": 12,
+        "triton_cache_hash": "NLJ4JJTEQSIALZR2RFAGYJVP54RQWE6EOXP7N572YQGEOZHLMV4Q"
+      },
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size0-None-0-dilation2-False-dtype1-cuda--ade3e326e8/rhs/reference-000-000/torchinductor-cache/wq/289b18ac2dd26dc0347c685c4ad6ee0c13a093f4062743c8039a8685d309cbb2.best_config"
+    }
+  ],
+  "capture_origin": "line_trace",
+  "captured_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float16",
+    "kind": "tensor",
+    "requires_grad": false,
+    "shape": [
+      2,
+      3,
+      112,
+      112
+    ],
+    "storage_offset": 0,
+    "stride": [
+      37632,
+      12544,
+      112,
+      1
+    ]
+  },
+  "checks": {
+    "compiled_vs_captured_reference": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    },
+    "compiled_vs_fx_eager": {
+      "leaf_count_actual": 1,
+      "leaf_count_expected": 1,
+      "structure_equal": true,
+      "tensor_leaves": [
+        {
+          "allclose_1e-3": true,
+          "equal": true,
+          "max_abs_error": 0.0
+        }
+      ]
+    }
+  },
+  "execution": 0,
+  "expression": "F.max_pool2d(input, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, ceil_mode=ceil_mode)",
+  "inductor_sources": [
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size0-None-0-dilation2-False-dtype1-cuda--ade3e326e8/rhs/reference-000-000/inductor-source/000-cts3r52x64dzhq3r2oidgrprdmzzqk2uvt6zhddqxjiemlbxm44v.py",
+      "sha256": "116ea49390776a0ebccd71208ded081490547ab4e322ebf59f96edf7d87e4921"
+    },
+    {
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size0-None-0-dilation2-False-dtype1-cuda--ade3e326e8/rhs/reference-000-000/inductor-source/001-cwq5b72ea2fvm2zcsqm4nzvrimvetq7r4pla7ek5wqrpmqn76gwo.py",
+      "sha256": "f07d9fe4aed50b064703656bee9d992cddd71e67db1e0f6f1ccda40d86a70f96"
+    }
+  ],
+  "input_descriptions": [
+    {
+      "device": "cuda:0",
+      "dtype": "torch.float16",
+      "kind": "tensor",
+      "requires_grad": false,
+      "shape": [
+        2,
+        3,
+        112,
+        112
+      ],
+      "storage_offset": 0,
+      "stride": [
+        37632,
+        12544,
+        112,
+        1
+      ]
+    }
+  ],
+  "input_names": [
+    "input[0]"
+  ],
+  "line": 39,
+  "runtime_launches": [
+    {
+      "cache_hash": "NLJ4JJTEQSIALZR2RFAGYJVP54RQWE6EOXP7N572YQGEOZHLMV4Q",
+      "config": {
+        "kind": "triton.Config",
+        "kwargs": {
+          "XBLOCK": 1024
+        },
+        "maxnreg": null,
+        "num_ctas": 1,
+        "num_stages": 1,
+        "num_warps": 4
+      },
+      "grid": [
+        74,
+        1,
+        1
+      ],
+      "index": 0,
+      "kernel_name": "triton_poi_fused_max_pool2d_with_indices_0",
+      "programs": 74,
+      "runtime_arguments": [
+        {
+          "position": 0,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              2,
+              3,
+              112,
+              112
+            ],
+            "storage_offset": 0,
+            "stride": [
+              37632,
+              12544,
+              112,
+              1
+            ]
+          }
+        },
+        {
+          "position": 1,
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float16",
+            "kind": "tensor",
+            "requires_grad": false,
+            "shape": [
+              2,
+              3,
+              112,
+              112
+            ],
+            "storage_offset": 0,
+            "stride": [
+              37632,
+              12544,
+              112,
+              1
+            ]
+          }
+        },
+        {
+          "position": 2,
+          "value": 75264
+        }
+      ],
+      "status": "cache_resolved"
+    }
+  ],
+  "selected_ttir": [
+    {
+      "bytes": 8640,
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size0-None-0-dilation2-False-dtype1-cuda--ade3e326e8/rhs/reference-000-000/selected-000.ttir",
+      "sha256": "fc490acdc846530d608b3f5e24460bf47cce10f15162361be61fe71a99e7bb0e",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size0-None-0-dilation2-False-dtype1-cuda--ade3e326e8/rhs/reference-000-000/triton-cache/NLJ4JJTEQSIALZR2RFAGYJVP54RQWE6EOXP7N572YQGEOZHLMV4Q/triton_poi_fused_max_pool2d_with_indices_0.ttir"
+    }
+  ],
+  "site_index": 0,
+  "status": "compiled",
+  "target_names": [
+    "reference_output"
+  ],
+  "ttir": [
+    {
+      "bytes": 8604,
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size0-None-0-dilation2-False-dtype1-cuda--ade3e326e8/rhs/reference-000-000/triton-cache/H3FY2ZLXCIFRLKLNWDHENPTOEUERSCRWQQ63KAM37THAJEBEO2GA/triton_poi_fused_max_pool2d_with_indices_0.ttir",
+      "sha256": "a876b3f8d21ecac79c5aeccd76784dcf17a7abcf40df7fe7e30bee9a36e9988e"
+    },
+    {
+      "bytes": 8640,
+      "path": "/data3/yelv.lh/ETV/benchmark/max_pool2d/test_max_pool2d-2-3-112-112-kernel_size0-None-0-dilation2-False-dtype1-cuda--ade3e326e8/rhs/reference-000-000/triton-cache/NLJ4JJTEQSIALZR2RFAGYJVP54RQWE6EOXP7N572YQGEOZHLMV4Q/triton_poi_fused_max_pool2d_with_indices_0.ttir",
+      "sha256": "fc490acdc846530d608b3f5e24460bf47cce10f15162361be61fe71a99e7bb0e"
+    }
+  ],
+  "ttir_status": "captured"
+}
