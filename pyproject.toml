@@ -15,10 +15,19 @@ dependencies = ["egglog==13.2.0", "z3-solver==4.16.0.0"]
 [project.optional-dependencies]
 dev = ["pytest==8.4.2", "hypothesis==6.141.1"]
 extraction = [
+    "numpy>=1.26.4",
     "torch==2.8.0",
-    "ninetoothed @ git+https://github.com/InfiniTensor/ninetoothed.git@efe519d1b12a820e7aa605d775af3d52c8b0d605",
+    "ninetoothed @ git+https://github.com/InfiniTensor/ninetoothed.git@efe519d1b12a820e7aa605d775af3d52c8b0d605 ; platform_system != 'Darwin'",
 ]
 ttir = ["triton==3.7.1; platform_system == 'Linux' and python_version >= '3.10'"]
+ttir-build = [
+    "cmake==3.31.6",
+    "lit==23.1.0",
+    "ninja==1.13.0",
+    "pybind11==3.1.0",
+    "setuptools==84.0.0",
+    "wheel==0.48.0",
+]
 
 [project.scripts]
 etv = "etv.cli:main"
@@ -29,3 +38,12 @@ include = ["etv*"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+
+[tool.uv]
+required-version = ">=0.12.0,<0.13"
+conflicts = [
+    [
+        { extra = "extraction" },
+        { extra = "ttir" },
+    ],
+]

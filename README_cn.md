@@ -32,14 +32,19 @@ store；它不是 e-graph。证明阶段才把 ETV IR 中的表达式编码进 e
 ## 安装
 
 ```bash
-python3.12 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[dev,ttir]'
-.venv/bin/python -m pytest
+uv sync --locked --python 3.12 --extra dev
+uv run --locked --extra dev pytest -q
 ```
 
-Linux 可直接安装 `ttir` extra。macOS 需要源码构建 Triton 3.7.1，见
-[依赖与环境](docs/dependencies.md)。
+该核心环境会跳过 raw TT IR 集成测试。项目要求 uv 0.12.x；Linux 完整环境使用
+`uv sync --locked --extra dev --extra ttir`。macOS 使用
+`tools/setup_uv_ttir.sh` 建立独立 `.venv-ttir` 环境并源码构建固定
+Triton 3.7.1/libtriton。
+`extraction` 与 `ttir` 被显式声明为互斥，因为 Linux 上 PyTorch 2.8.0 会选择
+Triton 3.4.0。详见[依赖与环境](docs/dependencies.md)。
+
+下文命令使用 `.venv/bin/python`；macOS 源码构建环境应替换为
+`.venv-ttir/bin/python`。
 
 ## 使用
 
@@ -149,9 +154,12 @@ etv/partition.py              LLM 成对子图提议与机器检查
 etv/observability.py          结构化运行日志与 run 关联
 etv/verify.py                 端到端证明编排
 tools/extract_add_pair.py     ntops/TorchInductor 双 TT IR 提取
+tools/setup_uv_ttir.sh        可重复的 uv/源码构建环境
+tools/test_ntops_torch_ttir.py  全算子 TorchInductor TTIR 探针
 examples/add/                 程序对、PairSpec、源代码与来源哈希
 ```
 
 进一步阅读：[架构](docs/architecture.md)、[完整验证过程](docs/verification_process.md)、
-[实现状态](docs/implementation_status.md)、[运行日志](docs/logging.md)和
+[实现状态](docs/implementation_status.md)、[uv 与全算子测试](docs/operator_testing.md)、
+[运行日志](docs/logging.md)和
 [真实 Add 验证](docs/add_validation.md)。

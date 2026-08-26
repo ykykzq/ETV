@@ -18,6 +18,8 @@
 | LLM 规则辅助 | 可选路径已完成 | 自然语言上下文、节点选择、predicate gate、严格 schema 和审计 |
 | LLM 子图划分 | 可选路径已完成 | 整程序扫描、成对子图、依赖 DAG 检查和组合证明 |
 | 报告 | 已完成 | schema v5、谓词/规则来源、soundness 分级、义务、e-graph、反例 |
+| uv 环境 | 已完成 | `uv.lock`、互斥 extra、macOS libtriton 源码构建脚本 |
+| ntops Torch 侧矩阵 | 已完成前端探针 | 76 模块各一个 specialization；67 个生成优化 TTIR |
 
 ## 当前样例
 
@@ -32,10 +34,9 @@
 128-lane TT IR，在正 i32 参数与 `a*b=c` 下证明等价。它不是声称固定规模
 TorchInductor kernel 对任意 shape 通用，而是专门构造的符号 TT IR 前端/后端回归。
 
-此前在 macOS arm64、Python 3.12.13、源码构建的 libtriton 3.7.1 环境中，正式固定例和
+在 macOS arm64、Python 3.12.13、源码构建的 libtriton 3.7.1 环境中，正式固定例和
 参数化例均返回 `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`，参数化报告包含 45 个 SMT
-检查。本次 PairSpec v2 重构在不含 libtriton 的临时 Python 3.12 环境执行证明核心与
-schema 回归；最新数字见本文末尾的测试说明，不能把跳过的 raw TT IR 测试算作通过。
+检查。当前完整环境中的 88 个 ETV 测试全部通过。
 
 内部 JSON 夹具覆盖正确、错误 stride、错误 mask、错误计算、FMA、规则策略、LLM 和
 子图划分。它们只测试证明核心，不属于生产前端。
@@ -74,16 +75,19 @@ libtriton 能解析但提升器不支持的合法 TT IR 返回 `UNKNOWN`。这�
 3. 为浮点定义域、IEEE-754 与快速数学建立可选语义；
 4. 将子图划分从纯表达式树扩展到 region 和显式内存 effect；
 5. 导出 egglog explanation 或可独立重放的证明证书；
-6. 更新上游 ntops 版本并建立全算子 TorchInductor TT IR 可提取性矩阵。
+6. 把当前 Torch 侧可提取性矩阵扩展为 ntops/Torch 双侧 TTIR、PairSpec 和端到端验证矩阵。
 
-## 本次重构验证
+## 当前测试证据
 
 在 macOS arm64、Python 3.12.13 的隔离环境中执行：
 
 ```text
-79 passed, 7 skipped
+88 passed
 ```
 
-7 项均因该临时环境未安装源码构建的 Triton/libtriton 3.7.1 而按测试条件跳过；其余
-schema、谓词、rewrite registry、Z3、egglog、LLM 审计、子图划分和证明核心测试通过。
-这组结果不替代在固定 libtriton 环境重新执行 raw TT IR 集成测试。
+固定 ntops 提交包含 76 个算子测试模块和 2102 个参数化 CUDA 用例。本机无 CUDA，
+这些上游数值测试全部跳过，不能计为通过。离线 TorchInductor 探针对每个模块测试一个
+代表 specialization：67 个生成并编译为优化 TTIR，6 个默认走外部/ATen kernel，3 个
+受 CPU-only PyTorch 的 FakeTensor trace 限制。该矩阵只检查 Torch 侧前端可提取性，
+不等价于双侧形式验证。完整分类和复现命令见
+[uv 环境与全算子测试](operator_testing.md)。

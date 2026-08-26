@@ -5,7 +5,7 @@
 | 依赖 | 声明版本 | 实现期间安装的版本 | 用途 |
 | --- | --- | --- | --- |
 | Python | `>=3.11` | `3.12.13` | 实现、egglog 与 CLI |
-| pip | 可编辑安装要求 `>=21.3` | `26.1.2` | PEP 660 可编辑安装 |
+| uv | `>=0.12.0,<0.13` | `0.12.6` | 环境、锁文件与包安装 |
 | setuptools | `>=61` | `84.0.0` | PEP 517 构建后端 |
 | `z3-solver` | `==4.16.0.0` | `4.16.0.0`（`z3 4.16.0`） | 规则准入与参数化证明的 SMT 检查 |
 | `egglog` | `==13.2.0` | `13.2.0` | 唯一的 e-graph 与等式饱和后端 |
@@ -31,14 +31,13 @@ egglog 13.2.0 要求 Python 3.11 以上，因此 ETV 不再支持原来的 Pytho
 | `pytest` | `8.4.2` | 单元测试、集成测试和 CLI 测试 |
 | `hypothesis` | `6.141.1` | 整数恒等式的性质测试 |
 
-开发依赖统一声明在 `pyproject.toml` 的 `dev` extra 中，传递依赖由 pip 解析。仅运行
+开发依赖统一声明在 `pyproject.toml` 的 `dev` extra 中，直接和传递依赖由
+`uv.lock` 固定。仅运行
 证明内核单元测试（raw TT IR 集成测试会跳过）可通过以下命令重建环境：
 
 ```bash
-python3.12 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[dev]'
-.venv/bin/python -m pytest
+uv sync --locked --python 3.12 --extra dev
+uv run --locked --extra dev pytest -q
 ```
 
 实现时使用的环境是 macOS Darwin arm64。本地虚拟环境已被 git 忽略。
@@ -57,31 +56,31 @@ python3.12 -m venv .venv
 | Triton/libtriton | `3.7.1` | 两侧 AST 前端、TTIR pass 和最终 parser/verifier |
 
 实现期间隔离环境中由 PyTorch/ninetoothed 解析出的主要传递依赖包括
-`numpy==2.3.4`、`sympy==1.14.0`、`mpmath==1.3.0`、`filelock==3.32.2`、
+`numpy==2.5.2`、`sympy==1.14.0`、`mpmath==1.3.0`、`filelock==3.32.4`、
 `fsspec==2026.7.0`、`jinja2==3.1.6`、`MarkupSafe==3.0.3` 和
-`networkx==3.6.1`。这些库不由 ETV 直接调用，未来重新安装时应以固定直接依赖
-解析和 `pip check` 为准。
+`networkx==3.6.1`。这些库不由 ETV 直接调用，重新安装时以 `uv.lock` 为准。
 
 提取工具要求 ninetoothed 以 editable 模式指向固定 checkout，并检查 ntops/
 ninetoothed 的 Git HEAD、两个 ntops 源文件哈希以及 Python 包版本。详细命令见
 [真实 Add 验证](add_validation.md)。
 
-提取环境可先统一安装 pyproject 中声明的依赖；运行提取工具前，再用同一固定提交的
-本地 checkout 以 editable 模式覆盖 ninetoothed：
+`extraction` 与 `ttir` 不能装进同一个 uv resolution：Linux 的 PyTorch 2.8.0 依赖
+Triton 3.4.0，而 ETV 固定 libtriton 3.7.1。该冲突已写入 `[tool.uv].conflicts`，
+`uv sync --all-extras` 会主动拒绝。macOS 上 `extraction` 不直接安装 ninetoothed，
+因为其无条件 Triton 依赖只提供 Linux wheel；源码环境在固定 3.7.1 构建完成后以
+`--no-deps` 安装 ninetoothed。
+
+完整提取/全算子环境由脚本建立：
 
 ```bash
-python3.12 -m venv .extract-venv
-.extract-venv/bin/python -m pip install --upgrade pip
-.extract-venv/bin/python -m pip install -e '.[extraction,ttir]'
-.extract-venv/bin/python -m pip install -e /path/to/ninetoothed
+tools/setup_uv_ttir.sh
 ```
 
 Linux 上启用 raw TTIR：
 
 ```bash
-python3.12 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[dev,ttir]'
+uv sync --locked --python 3.12 --extra dev --extra ttir
+uv run --locked --extra dev --extra ttir pytest -q
 ```
 
 PyPI 的 `triton==3.7.1` 要求 Python 3.10 至 3.14，并只发布 manylinux x86_64/aarch64 wheel。ETV 的 Python 3.11 下限由 egglog 决定；raw TTIR 路径还要求可加载的 3.7.1 libtriton。
@@ -90,25 +89,18 @@ PyPI 的 `triton==3.7.1` 要求 Python 3.10 至 3.14，并只发布 manylinux x8
 
 ETV 将 parser 精确锁定为 Triton/libtriton 3.7.1。该版本提供 `ir.load_dialects(context)`、`ir.parse_mlir_module(path, context)` 和 MLIR module verifier，可注册 Triton、TritonGPU、算术、数学、SCF、GPU、CF、LLVM 等内置方言。精确版本检查可以避免 TTIR 自定义语法、属性和 Python 绑定演进造成静默行为漂移；版本不匹配时返回 `TTIR_VERSION_MISMATCH`。
 
-Linux 直接使用前述 `.[dev,ttir]` 安装即可。解析与验证 TTIR 不要求 CUDA 或 GPU。
+Linux 直接使用前述 `uv sync --extra dev --extra ttir` 即可。解析与验证 TTIR 不要求
+CUDA 或 GPU。
 
-PyPI 不提供 macOS wheel。当前 macOS arm64 环境已用以下源码构建过程验证：
+PyPI 不提供 macOS wheel。当前 macOS arm64 环境已用仓库脚本中的以下等价流程验证：
 
 ```bash
-brew install python@3.12 cmake ninja
-git clone --depth 1 --branch v3.7.1 https://github.com/triton-lang/triton.git
-python3.12 -m venv /tmp/etv-triton-venv
-/tmp/etv-triton-venv/bin/python -m pip install \
-  'cmake>=3.20,<4.0' 'ninja>=1.11.1' 'pybind11>=2.13.1' \
-  setuptools wheel lit
-TRITON_BUILD_PROTON=OFF \
-TRITON_APPEND_CMAKE_ARGS=-DTRITON_BUILD_UT=OFF MAX_JOBS=4 \
-  /tmp/etv-triton-venv/bin/python -m pip install \
-  --no-build-isolation -e /path/to/triton
-/tmp/etv-triton-venv/bin/python -m pip install -e '.[dev]'
+tools/setup_uv_ttir.sh
+.venv-ttir/bin/python -m pytest -q
 ```
 
-构建过程会下载 Triton 锁定的 LLVM，并需要数 GB 临时空间。运行时会检查 `triton.__version__ == "3.7.1"`。
+脚本用 uv 安装 `ttir-build` extra，再以固定提交源码构建；过程会下载 Triton 锁定的
+LLVM，并需要数 GB 临时空间。运行时会检查 `triton.__version__ == "3.7.1"`。
 本次使用的 v3.7.1 提交为
 `f797708c0626e5f9840ca5b0a98790e2c7cb09ad`。
 
@@ -119,15 +111,18 @@ TRITON_APPEND_CMAKE_ARGS=-DTRITON_BUILD_UT=OFF MAX_JOBS=4 \
 | 依赖 | 版本或约束 | 用途 |
 | --- | --- | --- |
 | Homebrew Python | `3.12.13` | Triton 3.7.1 支持的解释器 |
-| CMake | Homebrew `4.4.1`；隔离环境 `3.31.10` | Triton 构建；官方要求 `<4.0`，实际构建使用 3.31.10 |
-| Ninja | `1.13.x` | 并行构建 libtriton |
+| uv | `0.12.6` | 创建、同步和锁定全部 Python 环境 |
+| CMake | `3.31.6` | Triton 构建；固定低于 4.0 |
+| Ninja | `1.13.0` | 并行构建 libtriton |
 | pybind11 | `3.1.0` | Python C++ 绑定构建 |
-| lit | `18.1.8` | Triton 构建系统工具 |
+| lit | `23.1.0` | Triton 构建系统工具 |
+| wheel | `0.48.0` | editable/source build 支持 |
 | Triton 锁定 LLVM | v3.7.1 构建脚本下载的 macOS arm64 包 | MLIR/Triton 编译基础设施 |
 
-这些构建产物位于隔离的 `/tmp` 环境，不提交到仓库。
-`TRITON_BUILD_UT=OFF` 只关闭 Triton 自己的 C++ 单元测试和 googletest 下载，不关闭
-libtriton Python 模块，也不影响本工程随后执行的 TT IR 集成测试。
+构建产物默认位于 git 忽略的 `.venv-ttir` 和 `build/upstream`，不提交到仓库。
+`TRITON_APPEND_CMAKE_ARGS=-DTRITON_BUILD_UT=OFF` 只关闭 Triton 自己的 C++ 单元测试和
+googletest 下载，不关闭 libtriton Python 模块，也不影响本工程随后执行的 TT IR
+集成测试。
 
 ## 已验证环境
 
@@ -138,6 +133,10 @@ libtriton Python 模块，也不影响本工程随后执行的 TT IR 集成测�
   前端、独立语义提升得到内部 IR，程序对经关系/代数重写得到
   `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`；
 - 包含 `scf.for`/`scf.yield` 的测试模块通过完整解析，并正确保持在语义提升边界之外。
+- ETV 完整环境测试为 `88 passed`；ntops 的 76 个算子模块、2102 个 CUDA 用例均完成
+  收集，但在本机因无 CUDA 全部跳过；Torch reference 离线矩阵中 67 个生成 TTIR、
+  6 个走外部 kernel、3 个受 CPU-only PyTorch trace 限制。详见
+  [uv 环境与全算子测试](operator_testing.md)。
 
 SymPy 由 PyTorch 提取环境传递安装，但 ETV 不使用它进行规则准入。内建代数规则
 仍由 Z3 直接证明；外部用户代数规则默认也如此，但 PairSpec 可显式选择弱化策略并

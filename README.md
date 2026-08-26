@@ -38,14 +38,21 @@ undeclared target-dependent `index` width likewise produces `UNKNOWN`.
 ## Installation
 
 ```bash
-python3.12 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[dev,ttir]'
-.venv/bin/python -m pytest
+uv sync --locked --python 3.12 --extra dev
+uv run --locked --extra dev pytest -q
 ```
 
-The `ttir` extra can be installed directly on Linux. Building Triton 3.7.1 from
-source is required on macOS; see [Dependencies and Environment](docs/dependencies.md).
+This core environment skips raw TT IR integration tests. The project requires
+uv 0.12.x. A complete Linux environment uses
+`uv sync --locked --extra dev --extra ttir`. On macOS, use
+`tools/setup_uv_ttir.sh` to create an isolated `.venv-ttir` environment and
+build pinned Triton 3.7.1/libtriton from source. The
+`extraction` and `ttir` extras are intentionally mutually exclusive because
+PyTorch 2.8.0 selects Triton 3.4.0 on Linux. See
+[Dependencies and Environment](docs/dependencies.md).
+
+Commands below use `.venv/bin/python`; substitute `.venv-ttir/bin/python` for
+the macOS source-build environment.
 
 ## Usage
 
@@ -166,11 +173,14 @@ etv/partition.py              LLM paired-subgraph proposals and machine validati
 etv/observability.py          Structured runtime logging and run correlation
 etv/verify.py                 End-to-end proof orchestration
 tools/extract_add_pair.py     ntops/TorchInductor dual-TT-IR extraction
+tools/setup_uv_ttir.sh        Reproducible uv/source-build environment
+tools/test_ntops_torch_ttir.py  All-operator TorchInductor TTIR probe
 examples/add/                 Program pair, PairSpec, sources, and provenance hashes
 ```
 
 Further reading: [Architecture](docs/architecture.md),
 [Complete Verification Process](docs/verification_process.md),
 [Implementation Status](docs/implementation_status.md),
+[uv and Operator Testing](docs/operator_testing.md),
 [Runtime Logging](docs/logging.md), and
 [Real Add Verification](docs/add_validation.md).

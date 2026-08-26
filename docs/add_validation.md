@@ -45,9 +45,10 @@ CUDA kernel。
 - Triton/libtriton 3.7.1；
 - 两侧源文件、TT IR 和 PairSpec 的 SHA-256。
 
-本提交先完成双 TT IR 前端重构，仍保留上述已验证的固定上游版本。最新版 ntops 和
-全算子 TorchInductor TT IR 可提取性矩阵属于下一阶段，不能把一次网络 checkout 当作
-已经完成的来源升级。
+检查时 ntops 上游 `master` 仍是上述固定提交。当前已经为该提交的 76 个算子测试模块
+建立 Torch reference 侧可提取性矩阵，但只有 Add 具备已提交的双侧 TTIR、PairSpec 和
+端到端证明；不能把单侧 TTIR 生成成功当作算子等价验证。详见
+[uv 环境与全算子测试](operator_testing.md)。
 
 ## ABI 对应
 
@@ -90,13 +91,14 @@ rhs: input[k] + load(alpha_block,0) * other[k]
 验证已提交输入：
 
 ```bash
-python -m etv check examples/add/pair.json --out build/add
+.venv-ttir/bin/python -m etv check examples/add/pair.json --out build/add
 ```
 
 重新提取需要固定 checkout 和额外依赖：
 
 ```bash
-python tools/extract_add_pair.py \
+tools/setup_uv_ttir.sh
+.venv-ttir/bin/python tools/extract_add_pair.py \
   --ntops-repo /path/to/ntops \
   --ninetoothed-repo /path/to/ninetoothed \
   --output examples/add
