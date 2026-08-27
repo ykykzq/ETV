@@ -1425,11 +1425,13 @@ def _verify_lifted_pair(
                 "kind": role.lhs.kind,
                 "name": role.lhs.name,
                 "index": role.lhs.index,
+                "offset": role.lhs.offset,
             },
             "rhs": {
                 "kind": role.rhs.kind,
                 "name": role.rhs.name,
                 "index": role.rhs.index,
+                "offset": role.rhs.offset,
             },
         }
         for role in spec.roles
@@ -1527,6 +1529,11 @@ def _verify_lifted_pair(
         rhs = evaluate_program(rhs_program, spec, "rhs")
     except UnsupportedSemantics as exc:
         report["unsupported"].append(str(exc))
+        report["blocks"].append(
+            _block("LIFT_EVAL", Status.UNKNOWN, str(exc), reason=exc.code)
+        )
+        return _finish(report, Status.UNKNOWN, exc.code)
+    except InputError as exc:
         report["blocks"].append(
             _block("LIFT_EVAL", Status.UNKNOWN, str(exc), reason=exc.code)
         )

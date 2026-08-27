@@ -1,0 +1,75 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "Both kernels were captured from the same specialized pytest node.",
+      "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
+      "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
+      "This PairSpec observes output leaf 'reference_output' only."
+    ]
+  },
+  "format": "etv-pair-v2",
+  "metadata": {
+    "frontends": {
+      "lhs": {
+        "function": "application",
+        "kind": "ttir",
+        "programs": 1,
+        "store_index": 0
+      },
+      "rhs": {
+        "function": "triton_poi_fused_diagonal_copy_0",
+        "kind": "ttir",
+        "programs": 1,
+        "store_index": 0
+      }
+    },
+    "lhs": "../../lhs/launch-000.ttir",
+    "limits": {
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "timeout_ms": 10000
+    },
+    "pair_id": "build/upstream/ntops/tests/test_diag.py::test_diag_2d[shape8-0-dtype0]::r000-e000-o000",
+    "rhs": "../../rhs/reference-000-000/selected-000.ttir",
+    "semantic_mode": "abstract_float"
+  },
+  "observation": {
+    "output_numel": {
+      "var": "X"
+    },
+    "output_role": "Output",
+    "require_disjoint": [],
+    "require_full_coverage": true
+  },
+  "predicates": {
+    "abi": {
+      "Output": {
+        "lhs": {
+          "kind": "block",
+          "name": "arg2"
+        },
+        "rhs": {
+          "kind": "block",
+          "name": "arg1"
+        }
+      }
+    },
+    "bindings": {
+      "X": 3
+    },
+    "constraints": [],
+    "custom": [],
+    "disjoint": [],
+    "parameters": {},
+    "side_bindings": {
+      "lhs": {
+        "arg1": 15,
+        "arg3": 1
+      },
+      "rhs": {
+        "arg2": 3
+      }
+    }
+  },
+  "rewrites": []
+}

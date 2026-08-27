@@ -149,11 +149,13 @@ softmax, sort, stack, sub, tanh, threshold
 
 ## 结论边界
 
-67/76 是“一个代表 specialization 的 Torch reference 能产生可解析 TTIR”，不是
-“67 个 ntops 算子已被 ETV 证明等价”。矩阵没有执行 CUDA，也没有生成 ntops/torch
-双侧 PairSpec。当前仓库仍只有 Add 具备完整的双侧真实 TTIR、ABI predicates、观察
-范围和端到端等价证明。
+67/76 仍只是早期“每个模块一个代表 specialization”的 Torch reference 探针，不能
+解释为 67 个算子已证明等价。当前 `benchmark/` 已在 NVIDIA CUDA 环境执行 76 个算子
+的全部 2102 个参数化用例，并直接截获原测试 reference callable/FX graph，经
+TorchInductor 收集 RHS TTIR。生成器按 reference 与 tensor output leaf 拆分 PairSpec，
+并记录 pointer storage/tensor provenance、view offset、alias、scratch 与未映射依赖。
 
-要把矩阵提升为全算子验证，需要为每个算子提取 ntops 侧 TTIR、处理外部 kernel 或
-改变 Inductor 调度策略、生成 PairSpec，并扩展 ETV 对归约、循环、多 store、动态输出
-和多 kernel 的语义支持。数值测试还必须在 CUDA 机器上重新执行全部 2102 个用例。
+完整数值、采集、PairSpec 和形式化统计以 `benchmark/summary.json`、
+`benchmark/REPORT.md` 为准。多 kernel orchestration、LHS 多 launch、store 间顺序
+effect，以及 `scf.for`/`tt.reduce` 等 TTIR 语义仍不在当前验证器支持范围；相关用例
+必须如实记为未运行或 `UNKNOWN`，不能从原数值测试通过外推为形式化证明。

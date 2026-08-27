@@ -1,0 +1,105 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "Both kernels were captured from the same specialized pytest node.",
+      "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
+      "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
+      "This PairSpec observes output leaf 'reference_output[1]' only."
+    ]
+  },
+  "format": "etv-pair-v2",
+  "metadata": {
+    "frontends": {
+      "lhs": {
+        "function": "application",
+        "kind": "ttir",
+        "programs": 184,
+        "store_index": 1
+      },
+      "rhs": {
+        "function": "triton_per_fused_sort_0",
+        "kind": "ttir",
+        "programs": 6,
+        "store_index": 1
+      }
+    },
+    "lhs": "../../lhs/launch-000.ttir",
+    "limits": {
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "timeout_ms": 10000
+    },
+    "pair_id": "build/upstream/ntops/tests/test_sort.py::test_sort[shape6-dtype6-cuda-0.001-0.001-False-False]::r000-e000-o001",
+    "rhs": "../../rhs/reference-000-000/selected-000.ttir",
+    "semantic_mode": "abstract_float"
+  },
+  "observation": {
+    "output_numel": {
+      "var": "X"
+    },
+    "output_role": "Output",
+    "require_disjoint": [],
+    "require_full_coverage": true
+  },
+  "predicates": {
+    "abi": {
+      "Input0": {
+        "lhs": {
+          "kind": "block",
+          "name": "arg0"
+        },
+        "rhs": {
+          "kind": "block",
+          "name": "arg0"
+        }
+      },
+      "Output": {
+        "lhs": {
+          "kind": "block",
+          "name": "arg16"
+        },
+        "rhs": {
+          "kind": "block",
+          "name": "arg2"
+        }
+      }
+    },
+    "bindings": {
+      "X": 552
+    },
+    "constraints": [],
+    "custom": [],
+    "disjoint": [],
+    "parameters": {},
+    "side_bindings": {
+      "lhs": {
+        "arg1": 3,
+        "arg10": 1,
+        "arg11": 23,
+        "arg12": 4,
+        "arg13": 2,
+        "arg14": 3,
+        "arg15": 24,
+        "arg17": 6,
+        "arg18": 3,
+        "arg19": 1,
+        "arg2": 23,
+        "arg20": 23,
+        "arg21": 4,
+        "arg22": 2,
+        "arg23": 3,
+        "arg3": 4,
+        "arg4": 2,
+        "arg5": 3,
+        "arg6": 24,
+        "arg7": 6,
+        "arg9": 3
+      },
+      "rhs": {
+        "arg3": 184,
+        "arg4": 3
+      }
+    }
+  },
+  "rewrites": []
+}

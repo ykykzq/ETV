@@ -107,7 +107,12 @@ predicates, observation targets, and rewrite libraries:
     "rhs": "rhs.ttir",
     "semantic_mode": "abstract_float",
     "frontends": {
-      "lhs": {"kind": "ttir", "function": "lhs_kernel", "programs": 1},
+      "lhs": {
+        "kind": "ttir",
+        "function": "lhs_kernel",
+        "programs": 1,
+        "store_index": 0
+      },
       "rhs": {"kind": "ttir", "function": "rhs_kernel", "programs": 1}
     }
   },
@@ -115,7 +120,7 @@ predicates, observation targets, and rewrite libraries:
   "predicates": {
     "abi": {
       "Output": {
-        "lhs": {"kind": "block", "name": "arg0"},
+        "lhs": {"kind": "block", "name": "arg0", "offset": 4},
         "rhs": {"kind": "block", "name": "arg0"}
       }
     },

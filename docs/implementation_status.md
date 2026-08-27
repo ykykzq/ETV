@@ -7,7 +7,7 @@
 | 正式输入边界 | 已完成 | 两侧只接受 raw `.ttir`/`.mlir`，必须显式入口与 launch |
 | libtriton 前端 | 已完成基础路径 | 固定 3.7.1，parse、verify、完整遍历和稳定快照 |
 | 共同内部 IR | 已完成 | 独立 `etv/ir.py`，与 PairSpec model、e-graph 分离 |
-| TT IR 语义提升 | 已完成逐点子集 | program/lane、指针、mask、load/store、显式整数 cast、整数和浮点表达式 |
+| TT IR 语义提升 | 已完成逐点子集 | program/lane、指针、mask、可选单 store 观察、显式整数 cast、整数和浮点表达式 |
 | PairSpec v2 | 已完成 | metadata、LLM assumptions、统一 predicates、observation 和外部 rewrites |
 | 固定规模验证 | 已完成 | 有限 launch/lane 枚举、地址/mask/覆盖与抽象值反例 |
 | 参数化验证 | 已完成基础路径 | 固定 rank 符号 shape、launch、`a*b=c` 等 SMT 关系 |
@@ -45,7 +45,8 @@ TorchInductor kernel 对任意 shape 通用，而是专门构造的符号 TT IR 
 
 - 动态 rank；
 - `scf.for`、`tt.reduce` 等循环和归约语义；
-- 多 store effect、原子操作、shared memory 和 barrier；
+- 多 store 间的顺序 effect、原子操作、shared memory 和 barrier；单个 store/输出 leaf
+  可由 PairSpec 的 `store_index` 独立观察；
 - 多 kernel orchestration；
 - 多维 program grid 的完整语义；
 - buffer 分配大小与 GPU 内存安全；

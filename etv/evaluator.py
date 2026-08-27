@@ -130,7 +130,12 @@ def eval_expr(
                     "SCALAR_ABI_MISMATCH",
                 )
             return Expr("input", data=logical, sort=Sort.FLOAT)
-        return Expr("read", args=(int_const(offset),), data=logical, sort=Sort.FLOAT)
+        return Expr(
+            "read",
+            args=(int_const(offset + endpoint.offset),),
+            data=logical,
+            sort=Sort.FLOAT,
+        )
 
     if op in INTEGER_CAST_OPS:
         value = eval_expr(expr.args[0], env, facts, roles)
@@ -257,7 +262,7 @@ def evaluate_program(program: Program, spec: PairSpec, side: str) -> Evaluation:
                     logical_index=logical_index,
                     active=active,
                     output_role=output_role,
-                    offset=offset,
+                    offset=(offset + endpoint.offset if offset is not None else None),
                     value=value,
                 )
             )

@@ -2,7 +2,7 @@ from hypothesis import given, strategies as st
 import pytest
 
 from etv.evaluator import SideRoles, eval_expr
-from etv.model import FactContext, UnsupportedSemantics
+from etv.model import FactContext, RoleEndpoint, UnsupportedSemantics
 from etv.schema import parse_expr
 
 EMPTY_FACTS = FactContext(bindings={}, assumptions=(), disjoint_groups=())
@@ -77,3 +77,23 @@ def test_target_dependent_index_cast_is_not_assumed_to_be_identity():
     with pytest.raises(UnsupportedSemantics) as error:
         eval_expr(expr, {"value": 7}, EMPTY_FACTS, EMPTY_ROLES)
     assert error.value.code == "INTEGER_CAST_UNSUPPORTED"
+
+
+def test_block_endpoint_offset_normalizes_view_relative_load_address():
+    expression = parse_expr(
+        {
+            "op": "load",
+            "block": "arg0",
+            "offset": 0,
+            "mask": True,
+            "default": {"float": "0"},
+        }
+    )
+    roles = SideRoles(
+        blocks={"arg0": ("Input", RoleEndpoint("block", "arg0", offset=4))},
+        scalars={},
+    )
+
+    result = eval_expr(expression, {}, EMPTY_FACTS, roles)
+
+    assert result.render() == "read(Input, 4)"

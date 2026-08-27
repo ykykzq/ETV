@@ -69,6 +69,10 @@ class FrontendSpec:
     kind: str = "ttir"
     function: Optional[str] = None
     programs: Optional[Expr] = None
+    # A PairSpec may observe one leaf of a multi-output kernel without claiming
+    # general ordered multi-store semantics.  None retains the strict
+    # single-store behavior; an integer selects the corresponding tt.store.
+    store_index: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +80,9 @@ class RoleEndpoint:
     kind: str
     name: str
     index: int = 0
+    # Physical TTIR pointer arguments can already point into a tensor view.
+    # Normalize their relative addresses back to the logical storage base.
+    offset: int = 0
 
 
 @dataclass(frozen=True)
@@ -212,6 +219,11 @@ class PredicateSet:
                             if role.lhs.kind == "scalar_block"
                             else {}
                         ),
+                        **(
+                            {"offset": role.lhs.offset}
+                            if role.lhs.kind == "block" and role.lhs.offset
+                            else {}
+                        ),
                     },
                     "rhs": {
                         "kind": role.rhs.kind,
@@ -219,6 +231,11 @@ class PredicateSet:
                         **(
                             {"index": role.rhs.index}
                             if role.rhs.kind == "scalar_block"
+                            else {}
+                        ),
+                        **(
+                            {"offset": role.rhs.offset}
+                            if role.rhs.kind == "block" and role.rhs.offset
                             else {}
                         ),
                     },

@@ -257,6 +257,13 @@ def main() -> int:
 
     ntops_repo = args.ntops_repo.resolve()
     benchmark_root = args.benchmark_root.resolve()
+    summary_path = benchmark_root / "collection-summary.json"
+    previous_summary: dict[str, Any] | None = None
+    if summary_path.exists():
+        try:
+            previous_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            previous_summary = None
     python = args.python if args.python.is_absolute() else Path.cwd() / args.python
     tools_dir = Path(__file__).resolve().parent
     nodes = args.node or _collect_nodes(python, ntops_repo)
@@ -266,18 +273,31 @@ def main() -> int:
     if args.limit is not None:
         nodes = nodes[: args.limit]
     operators = Counter(_operator(node) for node in nodes)
-    inventory = {
+    selected_inventory = {
         "nodes": len(nodes),
         "operators": len(operators),
         "tests_by_operator": dict(sorted(operators.items())),
     }
+    incremental = bool(args.node or args.operator or args.limit is not None)
+    inventory = (
+        previous_summary.get("inventory", selected_inventory)
+        if incremental and previous_summary is not None
+        else selected_inventory
+    )
     _write_json(benchmark_root / "inventory.json", inventory)
     gpu_devices = [item.strip() for item in args.gpus.split(",") if item.strip()]
     if not gpu_devices:
         parser.error("--gpus must contain at least one device")
     jobs = max(1, min(args.jobs, len(gpu_devices)))
-    records: list[dict[str, Any]] = []
-    summary_path = benchmark_root / "collection-summary.json"
+    records_by_node = {
+        record["nodeid"]: record
+        for record in (
+            previous_summary.get("records", [])
+            if incremental and previous_summary is not None
+            else []
+        )
+        if isinstance(record, dict) and isinstance(record.get("nodeid"), str)
+    }
 
     def submit(index_and_node: tuple[int, str]) -> dict[str, Any]:
         index, nodeid = index_and_node
@@ -301,8 +321,11 @@ def main() -> int:
             concurrent.futures.as_completed(futures), start=1
         ):
             record = future.result()
-            records.append(record)
-            _write_json(summary_path, _summarize(records, inventory))
+            records_by_node[record["nodeid"]] = record
+            merged_records = sorted(
+                records_by_node.values(), key=lambda item: item["nodeid"]
+            )
+            _write_json(summary_path, _summarize(merged_records, inventory))
             print(
                 f"[{completed_index}/{len(nodes)}] {record['outcome']} "
                 f"lhs={record['lhs_status']} rhs={record['rhs_status']} "

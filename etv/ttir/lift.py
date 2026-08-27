@@ -299,7 +299,12 @@ def _function_operations(module: TTIRModule) -> Tuple[TTIROperation, ...]:
     return tuple(op for op in module.operations if start <= op.index < selected.index)
 
 
-def lift_ttir(module: TTIRModule, programs: Expr) -> Program:
+def lift_ttir(
+    module: TTIRModule,
+    programs: Expr,
+    *,
+    store_index: int | None = None,
+) -> Program:
     """Lift the acyclic pointwise subset and reject every unsupported semantic case."""
 
     function_operations = _function_operations(module)
@@ -670,12 +675,18 @@ def lift_ttir(module: TTIRModule, programs: Expr) -> Program:
 
     if not stores:
         raise UnsupportedSemantics("TTIR function has no tt.store", "TTIR_NO_STORE")
-    if len(stores) != 1:
+    if store_index is None and len(stores) != 1:
         raise UnsupportedSemantics(
             "TTIR lifting currently requires exactly one tt.store",
             "MULTIPLE_STORES_UNSUPPORTED",
         )
-    store_operation, pointer, value, mask = stores[0]
+    selected_store = 0 if store_index is None else store_index
+    if selected_store >= len(stores):
+        raise UnsupportedSemantics(
+            f"requested tt.store index {selected_store}, but function has {len(stores)} stores",
+            "TTIR_STORE_INDEX_OUT_OF_RANGE",
+        )
+    store_operation, pointer, value, mask = stores[selected_store]
     store_mask_id = (
         store_operation.operands[2].id if len(store_operation.operands) >= 3 else None
     )

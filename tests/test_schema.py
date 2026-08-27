@@ -284,6 +284,40 @@ def test_v2_rejects_non_integer_observation_size(tmp_path):
         load_pair_spec(path)
 
 
+def test_v2_accepts_pointer_base_offsets_and_store_selection(tmp_path):
+    source = json.loads((ROOT / "examples/add/pair.json").read_text(encoding="utf-8"))
+    source["metadata"]["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
+    source["metadata"]["rhs"] = str(
+        ROOT / "examples/add/ttir/torch_inductor_add.ttir"
+    )
+    source["metadata"]["frontends"]["lhs"]["store_index"] = 0
+    source["metadata"]["frontends"]["rhs"]["store_index"] = 0
+    source["predicates"]["abi"]["Input"]["lhs"]["offset"] = 4
+    path = tmp_path / "offset-store.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    spec = load_pair_spec(path)
+
+    assert spec.lhs_frontend.store_index == 0
+    assert spec.rhs_frontend.store_index == 0
+    assert spec.role("Input").lhs.offset == 4
+    assert spec.role("Input").rhs.offset == 0
+
+
+def test_v2_rejects_offset_on_scalar_endpoint(tmp_path):
+    source = json.loads((ROOT / "examples/add/pair.json").read_text(encoding="utf-8"))
+    source["metadata"]["lhs"] = str(ROOT / "examples/add/ttir/ntops_add.ttir")
+    source["metadata"]["rhs"] = str(
+        ROOT / "examples/add/ttir/torch_inductor_add.ttir"
+    )
+    source["predicates"]["abi"]["Alpha"]["lhs"]["offset"] = 1
+    path = tmp_path / "bad-offset.json"
+    path.write_text(json.dumps(source), encoding="utf-8")
+
+    with pytest.raises(InputError, match="offset is only valid for block"):
+        load_pair_spec(path)
+
+
 def test_v2_z3_custom_predicate_enters_formal_constraints(tmp_path):
     source = json.loads(
         (ROOT / "examples/add/pair_parametric.json").read_text(encoding="utf-8")

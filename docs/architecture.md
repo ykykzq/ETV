@@ -83,9 +83,10 @@ observe_store(side:physical_output, offset(k), mask(k), value(k))
 PairSpec 的内部唯一事实源是 `PredicateSet`。`spec.roles` 与 `spec.facts` 只是供现有证明
 模块使用的只读兼容视图，不是另一份状态。v2 提供 TT IR 本身缺少的跨程序关系：
 
-- `metadata`：两侧文件、入口、launch、limits、LLM 与划分配置；
+- `metadata`：两侧文件、入口、launch、可选观察 store、limits、LLM 与划分配置；
 - `assumptions.for_llm`：非形式化自然语言上下文；
-- `predicates.abi`：物理 block/scalar/scalar-block 到逻辑角色；
+- `predicates.abi`：物理 block/scalar/scalar-block 到逻辑角色；block endpoint 可携带
+  storage-base 元素偏移以归一化 tensor view；
 - `predicates.bindings/parameters/constraints/disjoint`：shape、参数关系和 no-alias；
 - `predicates.custom`：`z3_expr` 或 `trusted` 的带 ID 扩展谓词；
 - `observation`：观察角色、逻辑元素数、覆盖与内存条件；

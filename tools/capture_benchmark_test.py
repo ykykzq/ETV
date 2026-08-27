@@ -12,6 +12,7 @@ import os
 import shutil
 import sys
 import traceback
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,111 @@ _LHS_AUTOTUNER_DEPTH = 0
 _PHASE = "lhs"
 
 
+class ProvenanceRegistry:
+    """Assign process-local tensors stable logical IDs without serializing pointers."""
+
+    def __init__(self) -> None:
+        self._storage_ids: dict[tuple[str, int], str] = {}
+        self._tensor_ids: dict[int, str] = {}
+        self._storage_owners: dict[tuple[str, int], list[weakref.ReferenceType[Any]]] = {}
+        self._tensor_owners: dict[int, weakref.ReferenceType[Any]] = {}
+        self._storage_origins: dict[str, set[str]] = {}
+        self._tensor_origins: dict[str, set[str]] = {}
+        self._storage_count = 0
+        self._tensor_count = 0
+
+    @staticmethod
+    def _storage_key(tensor: Any) -> tuple[str, int]:
+        storage = tensor.untyped_storage()
+        return str(tensor.device), int(getattr(storage, "_cdata", storage.data_ptr()))
+
+    @staticmethod
+    def _tensor_key(tensor: Any) -> int:
+        return int(getattr(tensor, "_cdata", id(tensor)))
+
+    def describe(
+        self,
+        tensor: Any,
+        *,
+        origin: str | None = None,
+        storage_id: str | None = None,
+        tensor_id: str | None = None,
+    ) -> dict[str, Any]:
+        storage_key = self._storage_key(tensor)
+        existing_storage = self._storage_ids.get(storage_key)
+        owners = self._storage_owners.get(storage_key, [])
+        if existing_storage is not None and owners and not any(owner() is not None for owner in owners):
+            self._storage_ids.pop(storage_key, None)
+            self._storage_owners.pop(storage_key, None)
+            existing_storage = None
+        if storage_id is not None and existing_storage not in {None, storage_id}:
+            raise ValueError(
+                f"runtime storage is already bound to {existing_storage}, not {storage_id}"
+            )
+        if existing_storage is None:
+            existing_storage = storage_id or f"storage-{self._storage_count:04d}"
+            self._storage_count += storage_id is None
+            self._storage_ids[storage_key] = existing_storage
+        self._storage_owners.setdefault(storage_key, []).append(weakref.ref(tensor))
+
+        tensor_key = self._tensor_key(tensor)
+        existing_tensor = self._tensor_ids.get(tensor_key)
+        tensor_owner = self._tensor_owners.get(tensor_key)
+        if existing_tensor is not None and tensor_owner is not None and tensor_owner() is None:
+            self._tensor_ids.pop(tensor_key, None)
+            self._tensor_owners.pop(tensor_key, None)
+            existing_tensor = None
+        if tensor_id is not None and existing_tensor not in {None, tensor_id}:
+            raise ValueError(
+                f"runtime tensor is already bound to {existing_tensor}, not {tensor_id}"
+            )
+        if existing_tensor is None:
+            existing_tensor = tensor_id or f"tensor-{self._tensor_count:04d}"
+            self._tensor_count += tensor_id is None
+            self._tensor_ids[tensor_key] = existing_tensor
+        self._tensor_owners[tensor_key] = weakref.ref(tensor)
+
+        if origin:
+            self._storage_origins.setdefault(existing_storage, set()).add(origin)
+            self._tensor_origins.setdefault(existing_tensor, set()).add(origin)
+        storage = tensor.untyped_storage()
+        return {
+            "storage_id": existing_storage,
+            "alias_group": existing_storage,
+            "tensor_id": existing_tensor,
+            "storage_offset": int(tensor.storage_offset()),
+            "byte_offset": int(tensor.storage_offset()) * int(tensor.element_size()),
+            "storage_nbytes": int(storage.nbytes()),
+        }
+
+    def bind(self, tensor: Any, description: dict[str, Any], *, origin: str) -> None:
+        storage_id = description.get("storage_id")
+        tensor_id = description.get("tensor_id")
+        if not isinstance(storage_id, str) or not isinstance(tensor_id, str):
+            raise ValueError("snapshot tensor provenance is incomplete")
+        self.describe(
+            tensor,
+            origin=origin,
+            storage_id=storage_id,
+            tensor_id=tensor_id,
+        )
+
+    def report(self) -> dict[str, Any]:
+        return {
+            "storages": [
+                {"storage_id": key, "alias_group": key, "origins": sorted(origins)}
+                for key, origins in sorted(self._storage_origins.items())
+            ],
+            "tensors": [
+                {"tensor_id": key, "origins": sorted(origins)}
+                for key, origins in sorted(self._tensor_origins.items())
+            ],
+        }
+
+
+_PROVENANCE = ProvenanceRegistry()
+
+
 def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -47,7 +153,7 @@ def _sha256(path: Path) -> str:
     return _sha256_bytes(path.read_bytes())
 
 
-def _json_value(value: Any) -> Any:
+def _json_value(value: Any, *, origin: str | None = None) -> Any:
     try:
         import torch
         from triton.runtime.autotuner import Config
@@ -57,10 +163,10 @@ def _json_value(value: Any) -> Any:
                 "kind": "tensor",
                 "shape": list(value.shape),
                 "stride": list(value.stride()),
-                "storage_offset": value.storage_offset(),
                 "dtype": str(value.dtype),
                 "device": str(value.device),
                 "requires_grad": value.requires_grad,
+                "provenance": _PROVENANCE.describe(value, origin=origin),
             }
         if isinstance(value, torch.dtype):
             return {"kind": "torch.dtype", "value": str(value)}
@@ -82,12 +188,24 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return {
             "kind": type(value).__name__,
-            "items": [_json_value(item) for item in value],
+            "items": [
+                _json_value(
+                    item,
+                    origin=f"{origin}[{index}]" if origin else None,
+                )
+                for index, item in enumerate(value)
+            ],
         }
     if isinstance(value, dict):
         return {
             "kind": "dict",
-            "items": {str(key): _json_value(item) for key, item in value.items()},
+            "items": {
+                str(key): _json_value(
+                    item,
+                    origin=f"{origin}[{key!r}]" if origin else None,
+                )
+                for key, item in value.items()
+            },
         }
     return {"kind": type(value).__qualname__, "repr": repr(value)}
 
@@ -104,6 +222,7 @@ class ValueSnapshot:
     names: list[str]
     structures: dict[str, tuple[list[Any], Any, list[int]]]
     tensor_bytes: bytes
+    tensor_descriptions: list[dict[str, Any]]
 
     @classmethod
     def capture(cls, names: list[str], namespace: dict[str, Any]) -> "ValueSnapshot":
@@ -112,14 +231,21 @@ class ValueSnapshot:
 
         structures: dict[str, tuple[list[Any], Any, list[int]]] = {}
         tensors: list[Any] = []
+        tensor_descriptions: list[dict[str, Any]] = []
         for name in names:
             leaves, spec = _pytree.tree_flatten(namespace[name])
             saved_leaves: list[Any] = []
             tensor_indices: list[int] = []
-            for leaf in leaves:
+            for leaf_index, leaf in enumerate(leaves):
                 if isinstance(leaf, torch.Tensor):
                     tensor_indices.append(len(tensors))
                     tensors.append(leaf.detach())
+                    tensor_descriptions.append(
+                        _json_value(
+                            leaf,
+                            origin=f"reference_input:{name}[{leaf_index}]",
+                        )
+                    )
                     saved_leaves.append(None)
                 else:
                     tensor_indices.append(-1)
@@ -127,13 +253,26 @@ class ValueSnapshot:
             structures[name] = (saved_leaves, spec, tensor_indices)
         buffer = io.BytesIO()
         torch.save(tuple(tensors), buffer)
-        return cls(names=names, structures=structures, tensor_bytes=buffer.getvalue())
+        return cls(
+            names=names,
+            structures=structures,
+            tensor_bytes=buffer.getvalue(),
+            tensor_descriptions=tensor_descriptions,
+        )
 
     def restore(self) -> dict[str, Any]:
         import torch
         from torch.utils import _pytree
 
         tensors = torch.load(io.BytesIO(self.tensor_bytes), weights_only=False)
+        for index, (tensor, description) in enumerate(
+            zip(tensors, self.tensor_descriptions, strict=True)
+        ):
+            _PROVENANCE.bind(
+                tensor,
+                description["provenance"],
+                origin=f"restored_reference_input[{index}]",
+            )
         namespace: dict[str, Any] = {}
         for name in self.names:
             saved_leaves, spec, tensor_indices = self.structures[name]
@@ -191,6 +330,7 @@ class ReferenceRecord:
     capture_origin: str = "line_trace"
     output_bytes: bytes | None = None
     output_description: Any = None
+    output_leaves: list[dict[str, Any]] | None = None
 
 
 def _target_names(target: ast.expr) -> list[str]:
@@ -267,7 +407,35 @@ def _reference_sites(function: Any) -> list[ReferenceSite]:
     return sorted(sites, key=lambda site: (site.lineno, site.index))
 
 
-def _snapshot_output(names: list[str], namespace: dict[str, Any]) -> tuple[bytes, Any]:
+def _pytree_tensor_leaves(value: Any, *, origin: str) -> list[dict[str, Any]]:
+    import torch
+    from torch.utils import _pytree
+
+    try:
+        path_leaves, _ = _pytree.tree_flatten_with_path(value)
+    except AttributeError:
+        path_leaves = [((index,), leaf) for index, leaf in enumerate(_pytree.tree_leaves(value))]
+    result: list[dict[str, Any]] = []
+    for flat_index, (path, leaf) in enumerate(path_leaves):
+        if not isinstance(leaf, torch.Tensor):
+            continue
+        try:
+            path_text = _pytree.keystr(path)
+        except (AttributeError, TypeError):
+            path_text = "".join(f"[{getattr(item, 'key', item)!r}]" for item in path)
+        result.append(
+            {
+                "leaf_index": flat_index,
+                "path": f"{origin}{path_text}",
+                "value": _json_value(leaf, origin=f"{origin}{path_text}"),
+            }
+        )
+    return result
+
+
+def _snapshot_output(
+    names: list[str], namespace: dict[str, Any]
+) -> tuple[bytes, Any, list[dict[str, Any]]]:
     import torch
 
     output = (
@@ -277,7 +445,11 @@ def _snapshot_output(names: list[str], namespace: dict[str, Any]) -> tuple[bytes
     )
     buffer = io.BytesIO()
     torch.save(output, buffer)
-    return buffer.getvalue(), _json_value(output)
+    return (
+        buffer.getvalue(),
+        _json_value(output, origin="reference_output"),
+        _pytree_tensor_leaves(output, origin="reference_output"),
+    )
 
 
 def _compiled_kernel_ttir(kernel: Any) -> str | None:
@@ -287,6 +459,128 @@ def _compiled_kernel_ttir(kernel: Any) -> str | None:
         return str(ttir) if ttir is not None else None
     except Exception:
         return None
+
+
+def _compiled_kernel_signature(kernel: Any) -> dict[str, Any] | None:
+    source = getattr(kernel, "src", None)
+    if source is None:
+        return None
+    signature = getattr(source, "signature", None)
+    constants = getattr(source, "constants", None)
+    attributes = getattr(source, "attrs", None)
+    function = getattr(source, "fn", None)
+    return {
+        "arg_names": list(getattr(function, "arg_names", ()) or ()),
+        "signature": (
+            {str(key): str(value) for key, value in signature.items()}
+            if isinstance(signature, dict)
+            else repr(signature)
+        ),
+        "constants": (
+            {repr(key): _json_value(value) for key, value in constants.items()}
+            if isinstance(constants, dict)
+            else repr(constants)
+        ),
+        "attributes": (
+            {repr(key): repr(value) for key, value in attributes.items()}
+            if isinstance(attributes, dict)
+            else repr(attributes)
+        ),
+    }
+
+
+def _description_storage_id(description: Any) -> str | None:
+    if not isinstance(description, dict) or description.get("kind") != "tensor":
+        return None
+    provenance = description.get("provenance")
+    storage_id = provenance.get("storage_id") if isinstance(provenance, dict) else None
+    return storage_id if isinstance(storage_id, str) else None
+
+
+def _annotate_runtime_roles(
+    launches: list[dict[str, Any]],
+    *,
+    inputs: list[dict[str, Any]],
+    outputs: list[dict[str, Any]],
+) -> None:
+    input_storages = {
+        storage_id
+        for storage_id in (_description_storage_id(item) for item in inputs)
+        if storage_id is not None
+    }
+    output_by_storage: dict[str, list[int]] = {}
+    for output in outputs:
+        storage_id = _description_storage_id(output.get("value"))
+        if storage_id is not None:
+            output_by_storage.setdefault(storage_id, []).append(output["leaf_index"])
+    for launch in launches:
+        for argument in launch.get("runtime_arguments", []):
+            value = argument.get("value")
+            storage_id = _description_storage_id(value)
+            if storage_id is None:
+                continue
+            provenance = value["provenance"]
+            is_input = storage_id in input_storages
+            output_leaves = output_by_storage.get(storage_id, [])
+            if is_input and output_leaves:
+                role = "input_output_alias"
+            elif output_leaves:
+                role = "output"
+            elif is_input:
+                role = "input"
+            else:
+                role = "scratch"
+            provenance["runtime_role"] = role
+            provenance["output_leaf_indices"] = output_leaves
+
+
+def _annotate_lhs_runtime_roles(
+    launches: list[dict[str, Any]],
+    inputs: list[dict[str, Any]],
+    outputs: list[dict[str, Any]],
+) -> None:
+    input_storages = {
+        storage_id
+        for storage_id in (_description_storage_id(item) for item in inputs)
+        if storage_id is not None
+    }
+    output_by_storage: dict[str, list[int]] = {}
+    for output in outputs:
+        storage_id = _description_storage_id(output.get("value"))
+        if storage_id is not None:
+            output_by_storage.setdefault(storage_id, []).append(output["leaf_index"])
+    for launch in launches:
+        for argument in launch.get("runtime_arguments", []):
+            value = argument.get("value")
+            storage_id = _description_storage_id(value)
+            if storage_id is None:
+                continue
+            provenance = value["provenance"]
+            is_input = storage_id in input_storages
+            output_leaves = output_by_storage.get(storage_id, [])
+            if is_input and output_leaves:
+                role = "input_output_alias"
+            elif output_leaves:
+                role = "output"
+            elif is_input:
+                role = "input"
+            else:
+                role = "scratch"
+            provenance["runtime_role"] = role
+            provenance["output_leaf_indices"] = output_leaves
+
+
+def _lhs_output_leaves(frame_locals: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates = [
+        (name, value)
+        for name, value in frame_locals.items()
+        if name.lower().startswith(("ninetoothed_", "ntops_"))
+        and ("output" in name.lower() or "result" in name.lower())
+    ]
+    if not candidates:
+        return []
+    name, value = candidates[0]
+    return _pytree_tensor_leaves(value, origin=f"lhs_output:{name}")
 
 
 def _normalize_grid(grid: Any) -> list[int] | None:
@@ -334,7 +628,14 @@ def pytest_configure(config: pytest.Config) -> None:
         global _LHS_AUTOTUNER_DEPTH
         launch_index = len(_LHS_LAUNCHES)
         runtime_arguments = [
-            {"position": index, "name": name, "value": _json_value(value)}
+            {
+                "position": index,
+                "name": name,
+                "value": _json_value(
+                    value,
+                    origin=f"lhs.launch[{launch_index}].arg[{index}]:{name}",
+                ),
+            }
             for index, (name, value) in enumerate(
                 zip(getattr(self, "arg_names", ()), args, strict=False)
             )
@@ -378,6 +679,7 @@ def pytest_configure(config: pytest.Config) -> None:
                 "programs": _program_count(grid),
                 "kernel_name": getattr(kernel, "name", None),
                 "kernel_hash": getattr(kernel, "hash", None),
+                "compiler_signature": _compiled_kernel_signature(kernel),
             }
             if ttir:
                 data = ttir.encode("utf-8")
@@ -416,7 +718,14 @@ def pytest_configure(config: pytest.Config) -> None:
             "status": "captured" if ttir else "ttir_unavailable",
             "launch_kind": "jit_function",
             "runtime_arguments": [
-                {"position": index, "name": name, "value": _json_value(value)}
+                {
+                    "position": index,
+                    "name": name,
+                    "value": _json_value(
+                        value,
+                        origin=f"lhs.launch[{launch_index}].arg[{index}]:{name}",
+                    ),
+                }
                 for index, (name, value) in enumerate(
                     zip(getattr(self, "arg_names", ()), args, strict=False)
                 )
@@ -425,6 +734,7 @@ def pytest_configure(config: pytest.Config) -> None:
             "programs": _program_count(grid),
             "kernel_name": getattr(kernel, "name", None),
             "kernel_hash": getattr(kernel, "hash", None),
+            "compiler_signature": _compiled_kernel_signature(kernel),
         }
         if ttir:
             data = ttir.encode("utf-8")
@@ -461,11 +771,13 @@ def pytest_configure(config: pytest.Config) -> None:
                 pass
         cache_hash = getattr(launcher, "cache_hash", None)
         ttir = None
+        selected_kernel = None
         kernel_name = getattr(getattr(self, "fn", None), "__name__", None)
         for compile_result in getattr(self, "compile_results", ()):
             if getattr(compile_result, "config", None) != config:
                 continue
             kernel = getattr(compile_result, "kernel", None)
+            selected_kernel = kernel
             ttir = _compiled_kernel_ttir(kernel)
             kernel_name = getattr(kernel, "name", kernel_name)
             break
@@ -478,9 +790,16 @@ def pytest_configure(config: pytest.Config) -> None:
             "grid": grid,
             "programs": _program_count(grid),
             "runtime_arguments": [
-                {"position": index, "value": _json_value(value)}
+                {
+                    "position": index,
+                    "value": _json_value(
+                        value,
+                        origin=f"rhs.launch[{launch_index}].arg[{index}]",
+                    ),
+                }
                 for index, value in enumerate(args)
             ],
+            "compiler_signature": _compiled_kernel_signature(selected_kernel),
         }
         if ttir and _CURRENT_REFERENCE_DIR is not None:
             data = ttir.encode("utf-8")
@@ -611,8 +930,12 @@ def _compile_reference(
         "expression": record.site.expression,
         "target_names": record.site.target_names,
         "input_names": input_names,
-        "input_descriptions": [_json_value(value) for value in example_inputs],
+        "input_descriptions": [
+            _json_value(value, origin=f"reference[{record.site.index}].input:{name}")
+            for name, value in zip(input_names, example_inputs, strict=True)
+        ],
         "captured_output": record.output_description,
+        "captured_output_leaves": record.output_leaves or [],
     }
     try:
         with record.rng.restore_temporarily():
@@ -654,6 +977,20 @@ def _compile_reference(
                 else None
             ),
         }
+        compiled_output_leaves = _pytree_tensor_leaves(
+            compiled_output,
+            origin="compiled_output",
+        )
+        report["compiled_output"] = _json_value(
+            compiled_output,
+            origin="compiled_output",
+        )
+        report["output_leaves"] = compiled_output_leaves
+        _annotate_runtime_roles(
+            rhs_launches,
+            inputs=report["input_descriptions"],
+            outputs=compiled_output_leaves,
+        )
         report["status"] = "compiled"
     except Exception as error:
         report.update(
@@ -761,11 +1098,12 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
             return
         if all(name in frame.f_locals for name in pending.site.target_names):
             try:
-                output_bytes, description = _snapshot_output(
+                output_bytes, description, output_leaves = _snapshot_output(
                     pending.site.target_names, frame.f_locals
                 )
                 pending.output_bytes = output_bytes
                 pending.output_description = description
+                pending.output_leaves = output_leaves
             except Exception:
                 pending.output_description = {"snapshot_error": traceback.format_exc()}
         _REFERENCE_RECORDS.append(pending)
@@ -850,9 +1188,19 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
         _compile_reference(record, pyfuncitem.obj.__globals__)
         for record in _REFERENCE_RECORDS
     ]
+    lhs_output_leaves = _lhs_output_leaves(final_frame_locals)
+    _annotate_lhs_runtime_roles(
+        _LHS_LAUNCHES,
+        [
+            description
+            for report in rhs_reports
+            for description in report.get("input_descriptions", [])
+        ],
+        lhs_output_leaves,
+    )
     callspec = getattr(pyfuncitem, "callspec", None)
     report = {
-        "format": "etv-benchmark-test-capture-v1",
+        "format": "etv-benchmark-test-capture-v2",
         "nodeid": pyfuncitem.nodeid,
         "test_file": str(Path(pyfuncitem.obj.__code__.co_filename).resolve()),
         "test_function": pyfuncitem.obj.__qualname__,
@@ -878,6 +1226,7 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
             for record in _REFERENCE_RECORDS
         ),
         "lhs_launches": _LHS_LAUNCHES,
+        "lhs_output_leaves": lhs_output_leaves,
         "rhs_references": rhs_reports,
         "ninetoothed_sources": [
             {"path": str(path), "sha256": _sha256(path)}
@@ -887,8 +1236,10 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
             repr(outcome.excinfo[1]) if outcome.excinfo is not None else None
         ),
         "runtime_locals": {
-            name: _json_value(value) for name, value in final_frame_locals.items()
+            name: _json_value(value, origin=f"test_local:{name}")
+            for name, value in final_frame_locals.items()
         },
+        "provenance": _PROVENANCE.report(),
         "versions": {
             "torch": torch.__version__,
             "cuda_runtime": torch.version.cuda,

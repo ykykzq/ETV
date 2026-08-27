@@ -438,6 +438,7 @@ class SymbolicValueRewriter:
                 z3.IntVal(endpoint.index)
                 if endpoint.kind == "scalar_block"
                 else self.context.term(self.canonical_index, self.smt_env).value
+                - endpoint.offset
             )
             offset_proof = self.prover.require_unsat(
                 "LOAD",
@@ -844,7 +845,8 @@ def verify_parametric_pair(
             "roles": roles,
             "programs": programs.value,
             "candidate_env": candidate_env,
-            "candidate_offset": candidate_offset.value,
+            "candidate_offset": candidate_offset.value + output_mapping[1].offset,
+            "output_endpoint": output_mapping[1],
             "candidate_expr_env": {
                 "pid": Expr(
                     "idiv",
@@ -900,6 +902,12 @@ def verify_parametric_pair(
         )
         physical_value = value_rewriter.value(store.value)
         physical_offset = _substitute(store.offset, item["candidate_expr_env"])
+        if item["output_endpoint"].offset:
+            physical_offset = Expr(
+                "iadd",
+                args=(physical_offset, int_const(item["output_endpoint"].offset)),
+                sort=Sort.INT,
+            )
         physical_mask = _substitute(store.mask, item["candidate_expr_env"])
         mask_term = item["context"].term(store.mask, item["candidate_env"])
         store_mask_proof = prover.require_unsat(

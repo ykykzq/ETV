@@ -103,6 +103,51 @@ def test_lifter_preserves_integer_cast_operators(
     assert cast.sort == Sort.INT
 
 
+def test_lifter_selects_one_store_from_multi_output_ttir():
+    module = _cast_module("arith.extsi", "i8", "i32")
+    original_store = module.operations[-2]
+    second_store = TTIROperation(
+        index=original_store.index + 1,
+        name="tt.store",
+        operands=original_store.operands,
+        results=(),
+        block_id=0,
+        regions=0,
+        attributes={},
+        assembly=None,
+    )
+    function = module.operations[-1]
+    multi_store = TTIRModule(
+        source=module.source,
+        source_sha256=module.source_sha256,
+        parser=module.parser,
+        parser_version=module.parser_version,
+        function=module.function,
+        arguments=module.arguments,
+        operations=module.operations[:-1]
+        + (second_store,)
+        + (
+            TTIROperation(
+                index=second_store.index + 1,
+                name=function.name,
+                operands=function.operands,
+                results=function.results,
+                block_id=function.block_id,
+                regions=function.regions,
+                attributes=function.attributes,
+                assembly=function.assembly,
+            ),
+        ),
+        canonical_assembly=module.canonical_assembly,
+    )
+
+    with pytest.raises(UnsupportedSemantics) as error:
+        lift_ttir(multi_store, int_const(1))
+    assert error.value.code == "MULTIPLE_STORES_UNSUPPORTED"
+    assert len(lift_ttir(multi_store, int_const(1), store_index=0).stores) == 1
+    assert len(lift_ttir(multi_store, int_const(1), store_index=1).stores) == 1
+
+
 def test_real_add_artifacts_match_provenance():
     root = ROOT / "examples/add"
     provenance = json.loads((root / "provenance.json").read_text(encoding="utf-8"))

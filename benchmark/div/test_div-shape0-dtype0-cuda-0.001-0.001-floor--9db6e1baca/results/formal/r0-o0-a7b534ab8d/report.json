@@ -1,0 +1,170 @@
+{
+  "assumptions": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.bindings",
+      "text": "X = 874"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg1 = 874"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg3 = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.lhs",
+      "text": "lhs.arg5 = 874"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.side_bindings.rhs",
+      "text": "rhs.arg3 = 874"
+    }
+  ],
+  "blocks": [
+    {
+      "kind": "FRONTEND",
+      "proof_levels": [],
+      "reason": "TTIR_OP_UNSUPPORTED",
+      "required_for_final": true,
+      "status": "UNKNOWN",
+      "summary": "operation math.floor is valid TTIR but has no ETV IR lifting rule"
+    }
+  ],
+  "counterexample": null,
+  "formal_predicates": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Input0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Input1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Output",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.X",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg3",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.lhs.arg5",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "binding.rhs.arg3",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    }
+  ],
+  "guarantees": {
+    "does_not_prove": [
+      "IEEE-754 or bitwise GPU equality",
+      "formal correctness of the raw-TTIR-to-ETV-IR lifting implementation",
+      "parametric shapes or unbounded loops",
+      "concurrent/shared-memory semantics",
+      "allocated-buffer bounds or GPU memory safety"
+    ],
+    "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+  },
+  "inputs": {
+    "lhs": "/data3/yelv.lh/ETV/benchmark/div/test_div-shape0-dtype0-cuda-0.001-0.001-floor--9db6e1baca/lhs/launch-000.ttir",
+    "rhs": "/data3/yelv.lh/ETV/benchmark/div/test_div-shape0-dtype0-cuda-0.001-0.001-floor--9db6e1baca/rhs/reference-000-000/selected-000.ttir",
+    "sha256": {
+      "lhs": "66a07fb2a5930d7c4a9bb43fedbf238dac8b6143aaa65ae395353881ab2adce0",
+      "rhs": "248632c0c546274975e26cfdca43a0d71d87aa536020aa3658325ef25edb8c13",
+      "spec": "b6fb719305f65012b815e9f7539a9b264216763c27e20bf4339bdbd0f1524ded"
+    },
+    "spec": "/data3/yelv.lh/ETV/benchmark/div/test_div-shape0-dtype0-cuda-0.001-0.001-floor--9db6e1baca/pairspec/pairs/pair-r000-e000-o000.json"
+  },
+  "llm_context": {
+    "assumptions": [
+      "Both kernels were captured from the same specialized pytest node.",
+      "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
+      "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
+      "This PairSpec observes output leaf 'reference_output' only."
+    ],
+    "proof_relevance": "informational_only",
+    "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
+  },
+  "pair_id": "build/upstream/ntops/tests/test_div.py::test_div[shape0-dtype0-cuda-0.001-0.001-floor]::r000-e000-o000",
+  "proof": {},
+  "reason": "TTIR_OP_UNSUPPORTED",
+  "rewrite_registry": {
+    "builtin": "validated_builtin_rules",
+    "inline_legacy_rules": [],
+    "user_sources": []
+  },
+  "schema_version": 5,
+  "scope": "fixed-specialization single-store bounded translation validation",
+  "semantic_mode": "abstract_float",
+  "soundness": {
+    "conditional_on": [
+      "declared predicate: abi.Input0",
+      "declared predicate: abi.Input1",
+      "declared predicate: abi.Output",
+      "declared predicate: binding.X",
+      "declared predicate: binding.lhs.arg1",
+      "declared predicate: binding.lhs.arg3",
+      "declared predicate: binding.lhs.arg5",
+      "declared predicate: binding.rhs.arg3"
+    ],
+    "level": "formal_under_declared_predicates",
+    "non_formal_assistance": [
+      "PairSpec.assumptions"
+    ]
+  },
+  "status": "UNKNOWN",
+  "tool": {
+    "name": "ETV",
+    "version": "0.6.1"
+  },
+  "trusted_axioms": [
+    "PairSpec role correspondence",
+    "PairSpec fixed shape/stride/launch bindings",
+    "PairSpec no-alias declarations",
+    "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
+    "ETV IR evaluator and memory-token model"
+  ],
+  "unsupported": [
+    "operation math.floor is valid TTIR but has no ETV IR lifting rule"
+  ]
+}

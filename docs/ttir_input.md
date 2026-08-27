@@ -22,7 +22,12 @@ ETV 的两个程序输入必须是 raw TT IR 文本，扩展名为 `.ttir` 或 `
     "rhs": "ttir/rhs.ttir",
     "semantic_mode": "abstract_float",
     "frontends": {
-      "lhs": {"kind": "ttir", "function": "lhs_kernel", "programs": 1},
+      "lhs": {
+        "kind": "ttir",
+        "function": "lhs_kernel",
+        "programs": 1,
+        "store_index": 0
+      },
       "rhs": {
         "kind": "ttir",
         "function": "rhs_kernel",
@@ -73,6 +78,7 @@ ETV 的两个程序输入必须是 raw TT IR 文本，扩展名为 `.ttir` 或 `
 | `kind` | 必须为 `ttir` |
 | `function` | TT IR module 内的入口 `tt.func` 名称 |
 | `programs` | host 启动的一维 program 数，可为整数表达式 |
+| `store_index` | 可选的零起始 `tt.store` 序号；多 store module 中选择本次观察的 leaf |
 
 TT IR 不携带完整 host launch grid，所以 ETV 不允许省略 `programs`。`limits` 控制
 egglog 迭代、e-node 数和超时。`llm` 与 `partition` 只控制辅助流程；API 输出本身不构成
@@ -105,8 +111,15 @@ all declared predicates => observation(lhs) = observation(rhs)
 - `disjoint`：逻辑 block 的 no-alias 组；
 - `custom`：带稳定 ID 的扩展谓词。
 
-ABI endpoint 支持 `block`、`scalar` 和 `scalar_block`。`scalar_block` 还必须给出读取
-`index`。同名物理参数不会自动对应，只能通过 `abi` 建立关系。
+ABI endpoint 支持 `block`、`scalar` 和 `scalar_block`。`block` 可带整数 `offset`，表示
+物理参数相对逻辑 storage base 的元素偏移；ETV 会用它归一化 view 指针。例如 LHS
+接收 `base[4:]`、RHS 接收 `base` 时，可分别声明 `offset: 4` 和 `offset: 0`。
+`scalar_block` 还必须给出读取 `index`，且不能使用 `offset`。同名物理参数不会自动
+对应，只能通过 `abi` 建立关系。
+
+`store_index` 只选择一个可观察 store，并不建模多个 store 之间的顺序内存 effect。
+如果选中 store 从同一 kernel 先前写入的 scratch block 读取，相关物理 block 必须仍在
+ABI 中得到正确建模；否则验证会返回 `UNKNOWN`，不能把单 leaf 结论外推到整个 kernel。
 
 验证器为结构谓词生成稳定 ID，例如 `abi.Output`、`binding.n`、
 `binding.lhs.arg4`、`parameter.n`、`constraint.0` 和 `disjoint.0`。外部规则可以用

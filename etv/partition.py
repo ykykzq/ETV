@@ -118,6 +118,7 @@ def _pair_context(spec: PairSpec) -> dict:
             "programs": (
                 None if frontend.programs is None else frontend.programs.to_json()
             ),
+            "store_index": frontend.store_index,
         }
 
     return {
@@ -134,11 +135,13 @@ def _pair_context(spec: PairSpec) -> dict:
                     "kind": role.lhs.kind,
                     "name": role.lhs.name,
                     "index": role.lhs.index,
+                    "offset": role.lhs.offset,
                 },
                 "rhs": {
                     "kind": role.rhs.kind,
                     "name": role.rhs.name,
                     "index": role.rhs.index,
+                    "offset": role.rhs.offset,
                 },
             }
             for role in spec.roles

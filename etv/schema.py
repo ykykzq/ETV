@@ -340,7 +340,7 @@ def load_program(path: Path) -> Program:
 def _endpoint(value: Any, where: str) -> RoleEndpoint:
     if not isinstance(value, dict):
         raise InputError(f"{where} must be an object")
-    _only_keys(value, {"kind", "name", "index"}, where)
+    _only_keys(value, {"kind", "name", "index", "offset"}, where)
     kind = value.get("kind")
     name = value.get("name")
     if kind not in {"block", "scalar", "scalar_block"}:
@@ -352,7 +352,12 @@ def _endpoint(value: Any, where: str) -> RoleEndpoint:
         raise InputError(f"{where}.index must be an integer")
     if kind != "scalar_block" and "index" in value:
         raise InputError(f"{where}.index is only valid for scalar_block")
-    return RoleEndpoint(kind=kind, name=name, index=index)
+    offset = value.get("offset", 0)
+    if not isinstance(offset, int) or isinstance(offset, bool):
+        raise InputError(f"{where}.offset must be an integer")
+    if kind != "block" and "offset" in value:
+        raise InputError(f"{where}.offset is only valid for block")
+    return RoleEndpoint(kind=kind, name=name, index=index, offset=offset)
 
 
 def _strings(value: Any, where: str) -> Tuple[str, ...]:
@@ -1147,7 +1152,7 @@ def _load_pair_spec(
         where = f"{path}.frontends.{side}"
         if not isinstance(value, dict):
             raise InputError(f"{where} must be an object")
-        _only_keys(value, {"kind", "function", "programs"}, where)
+        _only_keys(value, {"kind", "function", "programs", "store_index"}, where)
         if require_ttir and "kind" not in value:
             raise InputError(
                 f"{where}.kind must explicitly be ttir", "TTIR_PAIR_REQUIRED"
@@ -1159,6 +1164,13 @@ def _load_pair_spec(
             raise InputError(f"{where}.kind must be {expected}", "TTIR_PAIR_REQUIRED")
         function = value.get("function")
         programs = value.get("programs")
+        store_index = value.get("store_index")
+        if store_index is not None and (
+            not isinstance(store_index, int)
+            or isinstance(store_index, bool)
+            or store_index < 0
+        ):
+            raise InputError(f"{where}.store_index must be a non-negative integer")
         if kind == "ttir":
             if not isinstance(function, str) or not function:
                 raise InputError(f"{where}.function must name the TTIR entry function")
@@ -1166,7 +1178,7 @@ def _load_pair_spec(
                 raise InputError(
                     f"{where}.programs is required because TTIR does not encode the host launch grid"
                 )
-        elif function is not None or programs is not None:
+        elif function is not None or programs is not None or store_index is not None:
             raise InputError(
                 f"{where} internal Semantic IR fixtures do not accept function or programs"
             )
@@ -1179,6 +1191,7 @@ def _load_pair_spec(
             kind=kind,
             function=function,
             programs=parsed_programs,
+            store_index=store_index,
         )
 
     rewrite_rules_raw = raw.get("rewrite_rules", [])

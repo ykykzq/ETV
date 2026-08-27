@@ -81,6 +81,21 @@ def test_bounded_verifier_does_not_silently_discharge_integer_cast():
     assert "sext[i8->i32]" in cast_block["details"]["unresolved"][0]["expression"]
 
 
+def test_bounded_verifier_reports_unmapped_load_as_unknown():
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_proved.json")
+    lhs = load_program(spec.lhs_path)
+    rhs = load_program(spec.rhs_path)
+    predicates = replace(
+        spec.predicates,
+        abi=tuple(role for role in spec.predicates.abi if role.logical == "Output"),
+    )
+
+    report = verify_internal_pair(replace(spec, predicates=predicates), lhs, rhs)
+
+    assert report["status"] == Status.UNKNOWN.value
+    assert report["reason"] == "MISSING_ROLE"
+
+
 def test_bounded_verifier_uses_explicit_cast_rewrite_and_reports_trust():
     spec, lhs, rhs = _pair_with_lhs_offset_cast()
     value = var("value")

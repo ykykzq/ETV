@@ -27,4 +27,8 @@ def load_program_artifact(path: Path, frontend: FrontendSpec = FrontendSpec()) -
             "grids are not encoded in TTIR",
             "TTIR_LAUNCH_REQUIRED",
         )
-    return lift_ttir(parse_ttir(path, function=frontend.function), frontend.programs)
+    return lift_ttir(
+        parse_ttir(path, function=frontend.function),
+        frontend.programs,
+        store_index=frontend.store_index,
+    )

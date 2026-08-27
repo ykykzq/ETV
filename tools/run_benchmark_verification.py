@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Run ETV on every generated benchmark PairSpec and summarize all outcomes."""
+"""Run ETV on every generated benchmark PairSpec observation."""
 
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import subprocess
 import time
@@ -22,32 +23,71 @@ def _write_json(path: Path, value: Any) -> None:
     temporary.replace(path)
 
 
+def _tasks(status_path: Path) -> list[dict[str, Any]]:
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    case_dir = status_path.parents[1]
+    base = {
+        "nodeid": status.get("nodeid"),
+        "case_dir": str(case_dir),
+        "status_path": str(status_path),
+    }
+    if status.get("status") != "generated":
+        return [
+            {
+                **base,
+                "kind": "unavailable",
+                "reason": status.get("reason", "PairSpec unavailable"),
+            }
+        ]
+    observations = status.get("pairspecs")
+    if isinstance(observations, list) and observations:
+        return [
+            {
+                **base,
+                **observation,
+                "kind": "pairspec",
+            }
+            for observation in observations
+        ]
+    # Backward-compatible support for v1 status records.
+    return [
+        {
+            **base,
+            "kind": "pairspec",
+            "pairspec": status["pairspec"],
+            "pair_id": status.get("nodeid"),
+        }
+    ]
+
+
+def _result_dir(task: dict[str, Any]) -> Path:
+    case_dir = Path(task["case_dir"])
+    pair_id = str(task.get("pair_id") or task.get("pairspec") or "observation")
+    digest = hashlib.sha256(pair_id.encode("utf-8")).hexdigest()[:10]
+    leaf = task.get("output_leaf_index")
+    reference = task.get("reference_site")
+    slug = f"r{reference}-o{leaf}-{digest}" if leaf is not None else digest
+    return case_dir / "results" / "formal" / slug
+
+
 def _run_one(
-    status_path: Path,
+    task: dict[str, Any],
     *,
     python: Path,
     timeout: int,
     rerun: bool,
 ) -> dict[str, Any]:
-    status = json.loads(status_path.read_text(encoding="utf-8"))
-    case_dir = status_path.parents[1]
-    result_dir = case_dir / "results" / "formal"
-    runner_path = result_dir / "runner.json"
-    if status.get("status") != "generated":
-        for name in (
-            "runner.json",
-            "report.json",
-            "report.md",
-            "etv.stdout.log",
-            "etv.log",
-        ):
-            (result_dir / name).unlink(missing_ok=True)
+    if task["kind"] == "unavailable":
         return {
-            "nodeid": status.get("nodeid"),
-            "case_dir": str(case_dir),
+            "format": "etv-benchmark-formal-runner-record-v2",
+            "complete": True,
+            "nodeid": task.get("nodeid"),
+            "case_dir": task["case_dir"],
             "status": "NOT_RUN",
-            "reason": status.get("reason", "PairSpec unavailable"),
+            "reason": task.get("reason", "PairSpec unavailable"),
         }
+    result_dir = _result_dir(task)
+    runner_path = result_dir / "runner.json"
     if not rerun and runner_path.exists():
         try:
             previous = json.loads(runner_path.read_text(encoding="utf-8"))
@@ -55,7 +95,7 @@ def _run_one(
                 return previous
         except (OSError, json.JSONDecodeError):
             pass
-    spec_path = Path(status["pairspec"])
+    spec_path = Path(task["pairspec"])
     result_dir.mkdir(parents=True, exist_ok=True)
     command = [
         str(python),
@@ -100,11 +140,18 @@ def _run_one(
         result_status = "RUNNER_ERROR"
         reason = f"ETV exited {returncode} without report.json"
     record = {
-        "format": "etv-benchmark-formal-runner-record-v1",
+        "format": "etv-benchmark-formal-runner-record-v2",
         "complete": True,
-        "nodeid": status.get("nodeid"),
-        "case_dir": str(case_dir),
+        "nodeid": task.get("nodeid"),
+        "case_dir": task["case_dir"],
+        "pair_id": task.get("pair_id"),
         "pairspec": str(spec_path),
+        "mapping": task.get("mapping"),
+        "reference_site": task.get("reference_site"),
+        "reference_execution": task.get("reference_execution"),
+        "output_leaf_index": task.get("output_leaf_index"),
+        "output_leaf_path": task.get("output_leaf_path"),
+        "result_dir": str(result_dir),
         "returncode": returncode,
         "status": result_status,
         "reason": reason,
@@ -114,23 +161,69 @@ def _run_one(
     return record
 
 
-def _summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary(records: list[dict[str, Any]], expected_tasks: int) -> dict[str, Any]:
     statuses = Counter(record["status"] for record in records)
     reasons = Counter(
         str(record.get("reason"))
         for record in records
         if record.get("status") in {"UNKNOWN", "NOT_RUN", "RUNNER_ERROR", "TIMEOUT"}
     )
+    case_statuses: dict[str, Counter[str]] = {}
+    for record in records:
+        case_statuses.setdefault(str(record.get("nodeid")), Counter())[record["status"]] += 1
+    case_outcomes = Counter(
+        "+".join(
+            f"{status}:{count}" for status, count in sorted(statuses.items())
+        )
+        for statuses in case_statuses.values()
+    )
     return {
-        "format": "etv-benchmark-formal-summary-v1",
+        "format": "etv-benchmark-formal-summary-v2",
         "updated_at_unix": time.time(),
+        "expected_tasks": expected_tasks,
+        "completed_tasks": len(records),
         "counts": dict(sorted(statuses.items())),
+        "case_counts": {
+            "cases": len(case_statuses),
+            "with_etv_results": sum(
+                any(status != "NOT_RUN" for status in values)
+                for values in case_statuses.values()
+            ),
+            "with_conclusive_results": sum(
+                any(status in {"PROVED", "DISPROVED"} for status in values)
+                for values in case_statuses.values()
+            ),
+            "with_disproved_results": sum(
+                "DISPROVED" in values for values in case_statuses.values()
+            ),
+            "outcomes": dict(sorted(case_outcomes.items())),
+        },
         "unknown_or_not_run_reasons": dict(sorted(reasons.items())),
         "disproved": [
             record for record in records if record.get("status") == "DISPROVED"
         ],
-        "records": sorted(records, key=lambda item: str(item.get("nodeid"))),
+        "records": sorted(
+            records,
+            key=lambda item: (
+                str(item.get("nodeid")),
+                str(item.get("pair_id")),
+            ),
+        ),
     }
+
+
+def _remove_legacy_case_results(status_paths: list[Path]) -> None:
+    legacy_names = {
+        "certificate.json",
+        "etv.stdout.log",
+        "partition.json",
+        "report.json",
+        "runner.json",
+    }
+    for status_path in status_paths:
+        formal_dir = status_path.parents[1] / "results" / "formal"
+        for name in legacy_names:
+            (formal_dir / name).unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -154,27 +247,28 @@ def main() -> int:
         )
     else:
         status_paths = sorted(benchmark_root.glob("*/*/pairspec/status.json"))
+    _remove_legacy_case_results(status_paths)
+    tasks = [task for path in status_paths for task in _tasks(path)]
     records: list[dict[str, Any]] = []
     summary_path = benchmark_root / "formal-summary.json"
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as executor:
         futures = [
             executor.submit(
                 _run_one,
-                path,
+                task,
                 python=python,
                 timeout=args.timeout,
                 rerun=args.rerun,
             )
-            for path in status_paths
+            for task in tasks
         ]
         for index, future in enumerate(concurrent.futures.as_completed(futures), start=1):
             record = future.result()
             records.append(record)
-            summary = _summary(records)
-            _write_json(summary_path, summary)
+            _write_json(summary_path, _summary(records, len(tasks)))
             print(
-                f"[{index}/{len(status_paths)}] {record['status']} "
-                f"{record.get('reason')} {record.get('nodeid')}",
+                f"[{index}/{len(tasks)}] {record['status']} "
+                f"{record.get('reason')} {record.get('pair_id') or record.get('nodeid')}",
                 flush=True,
             )
     return 1 if any(record["status"] == "DISPROVED" for record in records) else 0
