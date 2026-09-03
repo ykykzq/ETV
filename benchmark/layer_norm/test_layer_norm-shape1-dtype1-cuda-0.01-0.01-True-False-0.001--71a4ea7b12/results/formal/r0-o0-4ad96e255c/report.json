@@ -29,6 +29,11 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -46,13 +51,6 @@
     {
       "evidence": "TRUSTED_AXIOM",
       "id": "abi.Input0",
-      "kind": "builtin",
-      "source": "PairSpec.predicates",
-      "status": "assumed"
-    },
-    {
-      "evidence": "TRUSTED_AXIOM",
-      "id": "abi.Input1",
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
@@ -105,6 +103,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -121,9 +126,9 @@
     "lhs": "/data3/yelv.lh/ETV/benchmark/layer_norm/test_layer_norm-shape1-dtype1-cuda-0.01-0.01-True-False-0.001--71a4ea7b12/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/layer_norm/test_layer_norm-shape1-dtype1-cuda-0.01-0.01-True-False-0.001--71a4ea7b12/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "0d21bdc95cbabe3d461b6997f948c4d8744c3abf98045b32010a389747490c6f",
+      "lhs": "631fac923efe6c9531a339f9a232b0c19c7418c54dc1be6b3687e05b752352c7",
       "rhs": "7b9e6ac508301b302724b18ed45c668959e2d93f1765a6c5d6b9adf8c7d189b2",
-      "spec": "7cdda6522fda5f4de09434e87662ab51edf92f9ac2af3f8374c0949471bb331d"
+      "spec": "ed410bb500139db2b3da39b8204a9aff74b36c4de710c8eb9df4b53f6a046319"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/layer_norm/test_layer_norm-shape1-dtype1-cuda-0.01-0.01-True-False-0.001--71a4ea7b12/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -132,7 +137,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'inferred_single_rhs_store_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -151,14 +156,14 @@
   "soundness": {
     "conditional_on": [
       "declared predicate: abi.Input0",
-      "declared predicate: abi.Input1",
       "declared predicate: abi.Output",
       "declared predicate: binding.X",
       "declared predicate: binding.lhs.arg1",
       "declared predicate: binding.lhs.arg3",
       "declared predicate: binding.lhs.arg5",
       "declared predicate: binding.lhs.arg7",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -168,7 +173,7 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

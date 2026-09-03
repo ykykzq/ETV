@@ -9,6 +9,11 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -23,6 +28,13 @@
   ],
   "counterexample": null,
   "formal_predicates": [
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "abi.Input0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
     {
       "evidence": "TRUSTED_AXIOM",
       "id": "abi.Output",
@@ -40,6 +52,13 @@
     {
       "evidence": "TRUSTED_AXIOM",
       "id": "binding.rhs.arg3",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
@@ -61,7 +80,7 @@
     "sha256": {
       "lhs": "bb93bb799804a7c49c501e303112829c4c208e764112786e6d39becdd15081af",
       "rhs": "d65ea09de092548527e91f658ce90f7e917ee73a05e1e3a285a16869aa143336",
-      "spec": "aa7afd00fb7cdc6df0bee5ef0fc47c93c352e049b281cc262f4c4d62bc592fa7"
+      "spec": "cfb1f7055d667c1cbc3c17f7d9198597502974b61ac5e4dd77c00dc92d2a0d3e"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/max/test_max_dim-True-shape0-dtype0-cuda-0.001-0.001--35beec916e/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -70,7 +89,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output[0]' only."
+      "This PairSpec observes output leaf 'compiled_output[0]' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -88,9 +107,11 @@
   "semantic_mode": "abstract_float",
   "soundness": {
     "conditional_on": [
+      "declared predicate: abi.Input0",
       "declared predicate: abi.Output",
       "declared predicate: binding.X",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -100,7 +121,7 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

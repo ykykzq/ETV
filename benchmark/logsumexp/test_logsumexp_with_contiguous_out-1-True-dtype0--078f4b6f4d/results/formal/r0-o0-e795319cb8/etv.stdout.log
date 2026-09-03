@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=fa54e5b9c4f3 pair_id=build/upstream/ntops/tests/test_logsumexp.py::test_logsumexp_with_contiguous_out[1-True-dtype0]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
+WARNING etv.verify [run_id=20ffdd65ae0e pair_id=build/upstream/ntops/tests/test_logsumexp.py::test_logsumexp_with_contiguous_out[1-True-dtype0]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
 {
   "assumptions": [
     {
@@ -40,6 +40,11 @@ WARNING etv.verify [run_id=fa54e5b9c4f3 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 24"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -123,6 +128,13 @@ WARNING etv.verify [run_id=fa54e5b9c4f3 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -139,9 +151,9 @@ WARNING etv.verify [run_id=fa54e5b9c4f3 pair_id=build/upstream/ntops/tests/test_
     "lhs": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_contiguous_out-1-True-dtype0--078f4b6f4d/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_contiguous_out-1-True-dtype0--078f4b6f4d/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "b16879a52535b7b59e8a4aadce022d12ebb886c0ac22e9c9e384d28a16e4c9b6",
+      "lhs": "fae21d9d131713e95dac9eb473c3ff338d0ac63bfd0fd49fd49dd920ab4a786c",
       "rhs": "ac7ddb3af082c8720c17615f6f77524a2fea2f0462c1d1275ec1cd2d8505efaa",
-      "spec": "2be3a2bab67718a6df83f1917b30d060ed68691ccd6bd124d7f0a4eb7cea82a7"
+      "spec": "4ed9d5051dfb63248b7dbf27c75e07ff96fa78a712256ad6dd38791aa527c0a1"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp_with_contiguous_out-1-True-dtype0--078f4b6f4d/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -150,7 +162,7 @@ WARNING etv.verify [run_id=fa54e5b9c4f3 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -177,7 +189,8 @@ WARNING etv.verify [run_id=fa54e5b9c4f3 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg5",
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg7",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -187,7 +200,7 @@ WARNING etv.verify [run_id=fa54e5b9c4f3 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

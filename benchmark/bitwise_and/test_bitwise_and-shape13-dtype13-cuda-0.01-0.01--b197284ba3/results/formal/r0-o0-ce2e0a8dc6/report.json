@@ -99,6 +99,21 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 504"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Input1)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input1, Output)"
     }
   ],
   "blocks": [
@@ -273,6 +288,27 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -289,9 +325,9 @@
     "lhs": "/data3/yelv.lh/ETV/benchmark/bitwise_and/test_bitwise_and-shape13-dtype13-cuda-0.01-0.01--b197284ba3/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/bitwise_and/test_bitwise_and-shape13-dtype13-cuda-0.01-0.01--b197284ba3/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "5bfcee75569b0321286ac1efc4663b49cdee4a359c0b122cdb97d0f1da2f5989",
+      "lhs": "8cbef69f5c0ef7f607ef6d07e1249e0f74b7036090a8d42f4183972aa47b335f",
       "rhs": "800155ae63e6d56d740a9f0d0e548d36b21ef200022afd300407771cdb60d397",
-      "spec": "6889d3d63a7a2c00f985fd494b5a25a91f1451ccae556ab53166a5457566394a"
+      "spec": "d75918e2cad8ff7ee936459bffaac962b185367bcd1c587eebc9e0089a3fcf20"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/bitwise_and/test_bitwise_and-shape13-dtype13-cuda-0.01-0.01--b197284ba3/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -300,7 +336,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -340,7 +376,10 @@
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg8",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0",
+      "declared predicate: disjoint.1",
+      "declared predicate: disjoint.2"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -350,7 +389,7 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

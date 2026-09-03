@@ -1,7 +1,7 @@
 # ETV verification report: build/upstream/ntops/tests/test_neg.py::test_neg[shape3-dtype3-cuda-0.01-0.01]::r000-e000-o000
 
-- Status: **UNKNOWN**
-- Reason: `TTIR_UNDEFINED_LOAD_LANE`
+- Status: **DISPROVED**
+- Reason: `MASK_MISMATCH`
 - Semantic mode: `abstract_float`
 - Scope: fixed-specialization single-store bounded translation validation
 - Soundness: `formal_under_declared_predicates`
@@ -16,13 +16,14 @@
 - `TRUSTED_AXIOM`: lhs.arg6 = 108 (PairSpec.predicates.side_bindings.lhs)
 - `TRUSTED_AXIOM`: lhs.arg7 = 6 (PairSpec.predicates.side_bindings.lhs)
 - `TRUSTED_AXIOM`: rhs.arg2 = 648 (PairSpec.predicates.side_bindings.rhs)
+- `TRUSTED_AXIOM`: disjoint(Input0, Output) (PairSpec.predicates.disjoint)
 
 ## LLM-only context
 
 - Both kernels were captured from the same specialized pytest node.
 - Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.
 - Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.
-- This PairSpec observes output leaf 'reference_output' only.
+- This PairSpec observes output leaf 'compiled_output' only.
 - Proof relevance: `informational_only`.
 
 ## Declared formal predicates
@@ -37,6 +38,7 @@
 - `binding.lhs.arg6`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.lhs.arg7`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.rhs.arg2`: builtin / assumed (`TRUSTED_AXIOM`)
+- `disjoint.0`: builtin / assumed (`TRUSTED_AXIOM`)
 
 ## Rewrite registry
 
@@ -46,7 +48,21 @@
 
 | Block | Status | Evidence | Summary |
 | --- | --- | --- | --- |
-| `FRONTEND` | **UNKNOWN** | - | a masked tt.load without 'other' is not guarded by the identical store mask |
+| `FRONTEND` | **PROVED** | STRUCTURAL | both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR |
+| `ABI` | **PROVED** | TRUSTED_AXIOM | physical parameters are aligned to explicit logical roles |
+| `INDEX` | **PROVED** | BOUNDED_EXHAUSTIVE | all launch programs and lanes were exhaustively enumerated |
+| `MASK` | **DISPROVED** | BOUNDED_EXHAUSTIVE | the active logical output domains differ |
+
+## Counterexample
+
+```json
+{
+  "kind": "MASK_DOMAIN_MISMATCH",
+  "lhs_active": false,
+  "logical_index": 108,
+  "rhs_active": true
+}
+```
 
 ## Trust boundary
 
@@ -61,13 +77,15 @@
 - Conditional on: declared predicate: binding.lhs.arg6
 - Conditional on: declared predicate: binding.lhs.arg7
 - Conditional on: declared predicate: binding.rhs.arg2
+- Conditional on: declared predicate: disjoint.0
 - PairSpec role correspondence
 - PairSpec fixed shape/stride/launch bindings
 - PairSpec no-alias declarations
 - ABSTRACT_FLOAT interprets floating operations over exact mathematical values
 - ETV IR evaluator and memory-token model
+- ETV TTIR-to-semantic-IR lifting implementation
 
-This result establishes: no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation
+This result establishes: the reported concrete witness violates observable equivalence in ABSTRACT_FLOAT semantics
 
 It does not prove:
 

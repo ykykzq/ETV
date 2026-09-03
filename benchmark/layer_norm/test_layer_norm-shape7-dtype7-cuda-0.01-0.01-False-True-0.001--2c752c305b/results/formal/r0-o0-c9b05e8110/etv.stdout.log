@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=9abb461d68ed pair_id=build/upstream/ntops/tests/test_layer_norm.py::test_layer_norm[shape7-dtype7-cuda-0.01-0.01-False-True-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation scf.for is parsed but not yet lifted"}
+WARNING etv.verify [run_id=39bfedabd530 pair_id=build/upstream/ntops/tests/test_layer_norm.py::test_layer_norm[shape7-dtype7-cuda-0.01-0.01-False-True-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation scf.for is parsed but not yet lifted"}
 {
   "assumptions": [
     {
@@ -135,6 +135,11 @@ WARNING etv.verify [run_id=9abb461d68ed pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg4 = 33"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -351,6 +356,13 @@ WARNING etv.verify [run_id=9abb461d68ed pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -367,9 +379,9 @@ WARNING etv.verify [run_id=9abb461d68ed pair_id=build/upstream/ntops/tests/test_
     "lhs": "/data3/yelv.lh/ETV/benchmark/layer_norm/test_layer_norm-shape7-dtype7-cuda-0.01-0.01-False-True-0.001--2c752c305b/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/layer_norm/test_layer_norm-shape7-dtype7-cuda-0.01-0.01-False-True-0.001--2c752c305b/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "50f49f1055e2b8d73727c18284f570590e6874052a172012ec17133bc9a82e94",
+      "lhs": "7993ec2231019e37af76b32fc32617524d87f86b7593f08607bbe670c0783a72",
       "rhs": "7d572128a313cba9c49e71e2f448c14fa4566a74fd583382bb13b443eabb6652",
-      "spec": "57220fe622afe4ecfbec5e3ec19bdd8295e175dd1764945621f04804f60c3471"
+      "spec": "6cd74c42153a2935223097edf14e05f706d3a6f6c6791063299f23a2786c97ff"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/layer_norm/test_layer_norm-shape7-dtype7-cuda-0.01-0.01-False-True-0.001--2c752c305b/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -378,7 +390,7 @@ WARNING etv.verify [run_id=9abb461d68ed pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'inferred_single_rhs_store_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -424,7 +436,8 @@ WARNING etv.verify [run_id=9abb461d68ed pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg8",
       "declared predicate: binding.lhs.arg9",
       "declared predicate: binding.rhs.arg3",
-      "declared predicate: binding.rhs.arg4"
+      "declared predicate: binding.rhs.arg4",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -434,7 +447,7 @@ WARNING etv.verify [run_id=9abb461d68ed pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

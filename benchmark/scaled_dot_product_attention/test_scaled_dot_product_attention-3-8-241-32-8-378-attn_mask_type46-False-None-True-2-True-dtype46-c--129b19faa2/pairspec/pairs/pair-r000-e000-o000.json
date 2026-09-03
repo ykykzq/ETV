@@ -1,0 +1,127 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "Both kernels were captured from the same specialized pytest node.",
+      "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
+      "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
+      "This PairSpec observes output leaf 'compiled_output' only."
+    ]
+  },
+  "format": "etv-pair-v2",
+  "metadata": {
+    "frontends": {
+      "lhs": {
+        "function": "application_with_kv_cache",
+        "kind": "ttir",
+        "programs": 96,
+        "store_index": 2
+      },
+      "rhs": {
+        "function": "triton_poi_fused__scaled_dot_product_efficient_attention_0",
+        "kind": "ttir",
+        "programs": 178,
+        "store_index": 0
+      }
+    },
+    "lhs": "../../lhs/launch-000.ttir",
+    "limits": {
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "timeout_ms": 10000
+    },
+    "pair_id": "build/upstream/ntops/tests/test_scaled_dot_product_attention.py::test_scaled_dot_product_attention[3-8-241-32-8-378-attn_mask_type46-False-None-True-2-True-dtype46-cuda-0.025-0.025]::r000-e000-o000",
+    "rhs": "../../rhs/reference-000-000/selected-000.ttir",
+    "semantic_mode": "abstract_float"
+  },
+  "observation": {
+    "output_numel": {
+      "var": "X"
+    },
+    "output_role": "Output",
+    "require_disjoint": [],
+    "require_full_coverage": true
+  },
+  "predicates": {
+    "abi": {
+      "Output": {
+        "lhs": {
+          "kind": "block",
+          "name": "arg28"
+        },
+        "rhs": {
+          "kind": "block",
+          "name": "arg1"
+        }
+      }
+    },
+    "bindings": {
+      "X": 185088
+    },
+    "constraints": [],
+    "custom": [],
+    "disjoint": [],
+    "parameters": {},
+    "side_bindings": {
+      "lhs": {
+        "arg1": 32,
+        "arg10": 32,
+        "arg11": 32,
+        "arg12": 3,
+        "arg13": 8,
+        "arg15": 241,
+        "arg16": 61696,
+        "arg17": 7712,
+        "arg18": 32,
+        "arg19": 1,
+        "arg2": 32,
+        "arg20": 3,
+        "arg22": 8,
+        "arg23": 378,
+        "arg24": 96768,
+        "arg25": 12096,
+        "arg26": 32,
+        "arg27": 1,
+        "arg29": 3,
+        "arg3": 32,
+        "arg30": 8,
+        "arg31": 378,
+        "arg32": 96768,
+        "arg33": 12096,
+        "arg34": 32,
+        "arg36": 1,
+        "arg37": 3,
+        "arg38": 8,
+        "arg39": 241,
+        "arg4": 378,
+        "arg40": 0,
+        "arg41": 0,
+        "arg43": 378,
+        "arg44": 1,
+        "arg45": 3,
+        "arg46": 8,
+        "arg47": 241,
+        "arg48": 61696,
+        "arg5": 32,
+        "arg50": 7712,
+        "arg51": 32,
+        "arg52": 1,
+        "arg53": 3,
+        "arg54": 8,
+        "arg55": 1,
+        "arg57": 32,
+        "arg58": 256,
+        "arg59": 32,
+        "arg6": 2,
+        "arg60": 32,
+        "arg61": 1,
+        "arg62": 3,
+        "arg8": 32,
+        "arg9": 32
+      },
+      "rhs": {
+        "arg2": 91098
+      }
+    }
+  },
+  "rewrites": []
+}

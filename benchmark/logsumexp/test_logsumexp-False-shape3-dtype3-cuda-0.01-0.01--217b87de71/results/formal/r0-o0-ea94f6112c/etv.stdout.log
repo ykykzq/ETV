@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=9ac25cd0e544 pair_id=build/upstream/ntops/tests/test_logsumexp.py::test_logsumexp[False-shape3-dtype3-cuda-0.01-0.01]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
+WARNING etv.verify [run_id=02d605d71187 pair_id=build/upstream/ntops/tests/test_logsumexp.py::test_logsumexp[False-shape3-dtype3-cuda-0.01-0.01]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
 {
   "assumptions": [
     {
@@ -20,6 +20,11 @@ WARNING etv.verify [run_id=9ac25cd0e544 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 121"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -75,6 +80,13 @@ WARNING etv.verify [run_id=9ac25cd0e544 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -91,9 +103,9 @@ WARNING etv.verify [run_id=9ac25cd0e544 pair_id=build/upstream/ntops/tests/test_
     "lhs": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape3-dtype3-cuda-0.01-0.01--217b87de71/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape3-dtype3-cuda-0.01-0.01--217b87de71/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "8f86f33befce5a3d58d0e712c26190029a1e58ed2115baba99966436af88f90f",
+      "lhs": "9bbf0c23cdd7461a1f75786d783787d276b61019501f91b2b479d0a314d0351a",
       "rhs": "4b9f8a2ec59730dad75c0e7655fb4e6642aa6219c1840be40c94661c64cf7bee",
-      "spec": "c72047e52229e6a8637bb064cee462a7e70c7f0f23acd98835c880ae9dc69375"
+      "spec": "d32ef7494f1674d76167b510db021459d098ed8ce48b198f9db76edc71070d81"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/logsumexp/test_logsumexp-False-shape3-dtype3-cuda-0.01-0.01--217b87de71/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -102,7 +114,7 @@ WARNING etv.verify [run_id=9ac25cd0e544 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -125,7 +137,8 @@ WARNING etv.verify [run_id=9ac25cd0e544 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.X",
       "declared predicate: binding.lhs.arg1",
       "declared predicate: binding.lhs.arg3",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -135,7 +148,7 @@ WARNING etv.verify [run_id=9ac25cd0e544 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

@@ -1,4 +1,3 @@
-WARNING etv.verify [run_id=7668c1b77b22 pair_id=build/upstream/ntops/tests/test_pow.py::test_pow[shape6-dtype6-cuda-0.001-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_OP_UNSUPPORTED", "error": "operation tt.extern_elementwise is valid TTIR but has no ETV IR lifting rule"}
 {
   "assumptions": [
     {
@@ -100,16 +99,108 @@ WARNING etv.verify [run_id=7668c1b77b22 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 490"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Input1)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input1, Output)"
     }
   ],
   "blocks": [
     {
+      "details": {
+        "lhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        },
+        "rhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        }
+      },
       "kind": "FRONTEND",
+      "proof_levels": [
+        "STRUCTURAL"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR"
+    },
+    {
+      "details": {
+        "roles": [
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            },
+            "logical": "Input0",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg7",
+              "offset": 0
+            },
+            "logical": "Input1",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg1",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg14",
+              "offset": 0
+            },
+            "logical": "Output",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg2",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      "kind": "ABI",
+      "proof_levels": [
+        "TRUSTED_AXIOM"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "physical parameters are aligned to explicit logical roles"
+    },
+    {
+      "kind": "LIFT_EVAL",
       "proof_levels": [],
-      "reason": "TTIR_OP_UNSUPPORTED",
+      "reason": "TTIR_UNDEFINED_LOAD_LANE",
       "required_for_final": true,
       "status": "UNKNOWN",
-      "summary": "operation tt.extern_elementwise is valid TTIR but has no ETV IR lifting rule"
+      "summary": "a masked tt.load without 'other' is reachable on an observed store lane"
     }
   ],
   "counterexample": null,
@@ -274,6 +365,27 @@ WARNING etv.verify [run_id=7668c1b77b22 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -287,12 +399,22 @@ WARNING etv.verify [run_id=7668c1b77b22 pair_id=build/upstream/ntops/tests/test_
     "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
   },
   "inputs": {
+    "frontends": {
+      "lhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      },
+      "rhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      }
+    },
     "lhs": "/data3/yelv.lh/ETV/benchmark/pow/test_pow-shape6-dtype6-cuda-0.001-0.001--e13ce43644/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/pow/test_pow-shape6-dtype6-cuda-0.001-0.001--e13ce43644/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "9faf01d8b9154fd6898833cfd476db3a5c6e5db211dab00a5117e3840f1d3cc8",
+      "lhs": "21736f8b1a309138bec8d641c9b0e827bf2fdc0215f940bcc7a395916948aa1a",
       "rhs": "becb43dd420bc5f331f10e6adfca7704d97abdb672584412b265e23c75e2d87b",
-      "spec": "b52ebbaf6d8d90355c5b3a35c924fcb532ec0cdac454c3aa412dab01f2958ea5"
+      "spec": "b02fa085fb52bd01afab2fa0ca3156e8004bc3c2035897399b1739cba81e808b"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/pow/test_pow-shape6-dtype6-cuda-0.001-0.001--e13ce43644/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -301,14 +423,14 @@ WARNING etv.verify [run_id=7668c1b77b22 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
   },
   "pair_id": "build/upstream/ntops/tests/test_pow.py::test_pow[shape6-dtype6-cuda-0.001-0.001]::r000-e000-o000",
   "proof": {},
-  "reason": "TTIR_OP_UNSUPPORTED",
+  "reason": "TTIR_UNDEFINED_LOAD_LANE",
   "rewrite_registry": {
     "builtin": "validated_builtin_rules",
     "inline_legacy_rules": [],
@@ -341,7 +463,10 @@ WARNING etv.verify [run_id=7668c1b77b22 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg8",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0",
+      "declared predicate: disjoint.1",
+      "declared predicate: disjoint.2"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -351,16 +476,17 @@ WARNING etv.verify [run_id=7668c1b77b22 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
     "PairSpec fixed shape/stride/launch bindings",
     "PairSpec no-alias declarations",
     "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
-    "ETV IR evaluator and memory-token model"
+    "ETV IR evaluator and memory-token model",
+    "ETV TTIR-to-semantic-IR lifting implementation"
   ],
   "unsupported": [
-    "operation tt.extern_elementwise is valid TTIR but has no ETV IR lifting rule"
+    "a masked tt.load without 'other' is reachable on an observed store lane"
   ]
 }

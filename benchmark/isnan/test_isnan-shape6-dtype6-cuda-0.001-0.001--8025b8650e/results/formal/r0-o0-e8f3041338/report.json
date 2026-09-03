@@ -79,16 +79,21 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 864"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
     {
       "kind": "FRONTEND",
       "proof_levels": [],
-      "reason": "TTIR_OP_UNSUPPORTED",
+      "reason": "TTIR_EXTERN_SYMBOL_UNSUPPORTED",
       "required_for_final": true,
       "status": "UNKNOWN",
-      "summary": "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
+      "summary": "pure external symbol '__nv_isnanf' has no ETV semantic model"
     }
   ],
   "counterexample": null,
@@ -218,6 +223,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -236,7 +248,7 @@
     "sha256": {
       "lhs": "b0be175c6ff4b92f2d4c203d2a17a343e08dafd1659c74e1fc96e373f279d1eb",
       "rhs": "742a08ef0485db19c2d1b8a1f3b3c0c67bd92970d0940f10b82f38e418f0b58d",
-      "spec": "812afc0a4de2ce54d5642073ef072c2d00b10338023b8c78e0fc2dec36eeaade"
+      "spec": "8a1927e343334fb97934a2e366a4c390333a6ba78ba96c626ec846773d3cbac4"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/isnan/test_isnan-shape6-dtype6-cuda-0.001-0.001--8025b8650e/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -245,14 +257,14 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
   },
   "pair_id": "build/upstream/ntops/tests/test_isnan.py::test_isnan[shape6-dtype6-cuda-0.001-0.001]::r000-e000-o000",
   "proof": {},
-  "reason": "TTIR_OP_UNSUPPORTED",
+  "reason": "TTIR_EXTERN_SYMBOL_UNSUPPORTED",
   "rewrite_registry": {
     "builtin": "validated_builtin_rules",
     "inline_legacy_rules": [],
@@ -280,7 +292,8 @@
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg7",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -290,7 +303,7 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
@@ -300,6 +313,6 @@
     "ETV IR evaluator and memory-token model"
   ],
   "unsupported": [
-    "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
+    "pure external symbol '__nv_isnanf' has no ETV semantic model"
   ]
 }

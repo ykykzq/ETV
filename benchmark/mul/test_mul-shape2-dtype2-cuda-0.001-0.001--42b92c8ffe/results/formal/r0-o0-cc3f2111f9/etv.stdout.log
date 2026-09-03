@@ -1,4 +1,3 @@
-WARNING etv.verify [run_id=79c4c7eba523 pair_id=build/upstream/ntops/tests/test_mul.py::test_mul[shape2-dtype2-cuda-0.001-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_UNDEFINED_LOAD_LANE", "error": "a masked tt.load without 'other' is not guarded by the identical store mask"}
 {
   "assumptions": [
     {
@@ -55,19 +54,145 @@ WARNING etv.verify [run_id=79c4c7eba523 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 954"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Input1)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input1, Output)"
     }
   ],
   "blocks": [
     {
+      "details": {
+        "lhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        },
+        "rhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        }
+      },
       "kind": "FRONTEND",
-      "proof_levels": [],
-      "reason": "TTIR_UNDEFINED_LOAD_LANE",
+      "proof_levels": [
+        "STRUCTURAL"
+      ],
       "required_for_final": true,
-      "status": "UNKNOWN",
-      "summary": "a masked tt.load without 'other' is not guarded by the identical store mask"
+      "status": "PROVED",
+      "summary": "both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR"
+    },
+    {
+      "details": {
+        "roles": [
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            },
+            "logical": "Input0",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg4",
+              "offset": 0
+            },
+            "logical": "Input1",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg1",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg8",
+              "offset": 0
+            },
+            "logical": "Output",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg2",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      "kind": "ABI",
+      "proof_levels": [
+        "TRUSTED_AXIOM"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "physical parameters are aligned to explicit logical roles"
+    },
+    {
+      "details": {
+        "lhs": {
+          "enumerated": 960,
+          "lanes": 32,
+          "programs": 30
+        },
+        "rhs": {
+          "enumerated": 1024,
+          "lanes": 256,
+          "programs": 4
+        }
+      },
+      "kind": "INDEX",
+      "proof_levels": [
+        "BOUNDED_EXHAUSTIVE"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "all launch programs and lanes were exhaustively enumerated"
+    },
+    {
+      "details": {
+        "kind": "MASK_DOMAIN_MISMATCH",
+        "lhs_active": false,
+        "logical_index": 6,
+        "rhs_active": true
+      },
+      "kind": "MASK",
+      "proof_levels": [
+        "BOUNDED_EXHAUSTIVE"
+      ],
+      "reason": "MASK_MISMATCH",
+      "required_for_final": true,
+      "status": "DISPROVED",
+      "summary": "the active logical output domains differ"
     }
   ],
-  "counterexample": null,
+  "counterexample": {
+    "kind": "MASK_DOMAIN_MISMATCH",
+    "lhs_active": false,
+    "logical_index": 6,
+    "rhs_active": true
+  },
   "formal_predicates": [
     {
       "evidence": "TRUSTED_AXIOM",
@@ -166,6 +291,27 @@ WARNING etv.verify [run_id=79c4c7eba523 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -176,15 +322,25 @@ WARNING etv.verify [run_id=79c4c7eba523 pair_id=build/upstream/ntops/tests/test_
       "concurrent/shared-memory semantics",
       "allocated-buffer bounds or GPU memory safety"
     ],
-    "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+    "establishes": "the reported concrete witness violates observable equivalence in ABSTRACT_FLOAT semantics"
   },
   "inputs": {
+    "frontends": {
+      "lhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      },
+      "rhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      }
+    },
     "lhs": "/data3/yelv.lh/ETV/benchmark/mul/test_mul-shape2-dtype2-cuda-0.001-0.001--42b92c8ffe/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/mul/test_mul-shape2-dtype2-cuda-0.001-0.001--42b92c8ffe/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "1f0df641a05d88c1c2b5af5102155dadd26ac9747d562a109e9e73bc9c04dc19",
+      "lhs": "265cf55bed468c37bd64732a839a4d43420d62f0b16b94365300bc0a4d6f39c0",
       "rhs": "fda1df2aa712c8269ee488a40df3966f97311927034fc7e74fb9a0e4d8191b7c",
-      "spec": "f9b288d2e36b46c18b8c8f5bc3cff2db5b21dccc57f234ca4c30ed4cf4bbba93"
+      "spec": "4618ee495d689864b9ce3f8d02d4f939aa64592709b84f49d53e903103517619"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/mul/test_mul-shape2-dtype2-cuda-0.001-0.001--42b92c8ffe/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -193,14 +349,14 @@ WARNING etv.verify [run_id=79c4c7eba523 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
   },
   "pair_id": "build/upstream/ntops/tests/test_mul.py::test_mul[shape2-dtype2-cuda-0.001-0.001]::r000-e000-o000",
   "proof": {},
-  "reason": "TTIR_UNDEFINED_LOAD_LANE",
+  "reason": "MASK_MISMATCH",
   "rewrite_registry": {
     "builtin": "validated_builtin_rules",
     "inline_legacy_rules": [],
@@ -224,26 +380,28 @@ WARNING etv.verify [run_id=79c4c7eba523 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg7",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0",
+      "declared predicate: disjoint.1",
+      "declared predicate: disjoint.2"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
       "PairSpec.assumptions"
     ]
   },
-  "status": "UNKNOWN",
+  "status": "DISPROVED",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
     "PairSpec fixed shape/stride/launch bindings",
     "PairSpec no-alias declarations",
     "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
-    "ETV IR evaluator and memory-token model"
+    "ETV IR evaluator and memory-token model",
+    "ETV TTIR-to-semantic-IR lifting implementation"
   ],
-  "unsupported": [
-    "a masked tt.load without 'other' is not guarded by the identical store mask"
-  ]
+  "unsupported": []
 }

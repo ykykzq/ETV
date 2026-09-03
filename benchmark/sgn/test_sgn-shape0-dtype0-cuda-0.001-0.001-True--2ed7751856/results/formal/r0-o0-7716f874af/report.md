@@ -22,7 +22,7 @@
 - Both kernels were captured from the same specialized pytest node.
 - Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.
 - Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.
-- This PairSpec observes output leaf 'reference_output' only.
+- This PairSpec observes output leaf 'compiled_output' only.
 - Proof relevance: `informational_only`.
 
 ## Declared formal predicates

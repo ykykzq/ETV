@@ -14,9 +14,37 @@
       "kind": "list"
     }
   },
-  "format": "etv-benchmark-test-capture-v1",
+  "format": "etv-benchmark-test-capture-v2",
   "lhs_launches": [
     {
+      "compiler_signature": {
+        "arg_names": [
+          "ninetoothed_ninetoothed_tensor_0_pointer",
+          "ninetoothed_ninetoothed_tensor_0_size_0",
+          "ninetoothed_ninetoothed_tensor_0_stride_0",
+          "ninetoothed_ninetoothed_tensor_1_pointer",
+          "ninetoothed_ninetoothed_tensor_1_size_0",
+          "ninetoothed_ninetoothed_tensor_1_stride_0"
+        ],
+        "attributes": {
+          "(0,)": "[['tt.divisibility', 16]]",
+          "(1,)": "[]",
+          "(3,)": "[['tt.divisibility', 16]]"
+        },
+        "constants": {
+          "(2,)": 1,
+          "(4,)": 1,
+          "(5,)": 1
+        },
+        "signature": {
+          "ninetoothed_ninetoothed_tensor_0_pointer": "*fp32",
+          "ninetoothed_ninetoothed_tensor_0_size_0": "i32",
+          "ninetoothed_ninetoothed_tensor_0_stride_0": "constexpr",
+          "ninetoothed_ninetoothed_tensor_1_pointer": "*fp32",
+          "ninetoothed_ninetoothed_tensor_1_size_0": "constexpr",
+          "ninetoothed_ninetoothed_tensor_1_stride_0": "constexpr"
+        }
+      },
       "grid": [
         1,
         1,
@@ -35,11 +63,20 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0000",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "input",
+              "storage_id": "storage-0000",
+              "storage_nbytes": 3916,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0000"
+            },
             "requires_grad": false,
             "shape": [
               979
             ],
-            "storage_offset": 0,
             "stride": [
               1
             ]
@@ -62,11 +99,20 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0001",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "scratch",
+              "storage_id": "storage-0001",
+              "storage_nbytes": 4,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0001"
+            },
             "requires_grad": false,
             "shape": [
               1
             ],
-            "storage_offset": 0,
             "stride": [
               1
             ]
@@ -88,6 +134,7 @@
       "ttir_sha256": "e27135daf476170617bae643f75568d9bf0312d86a23c6f57edebd60e2de3b8d"
     }
   ],
+  "lhs_output_leaves": [],
   "ninetoothed_sources": [
     {
       "path": "/data3/yelv.lh/ETV/benchmark/mean/test_mean_global-shape0-dtype0-cuda-0.001-0.001--51dbc42daf/lhs/ninetoothed-source/38310e90384dc6610cd9733116b2b844f40a9b02bdcc44535a1aa221bfb6bc94.py",
@@ -95,6 +142,91 @@
     }
   ],
   "nodeid": "build/upstream/ntops/tests/test_mean.py::test_mean_global[shape0-dtype0-cuda-0.001-0.001]",
+  "provenance": {
+    "storages": [
+      {
+        "alias_group": "storage-0000",
+        "origins": [
+          "lhs.launch[0].arg[0]:ninetoothed_ninetoothed_tensor_0_pointer",
+          "reference[0].input:input_tensor[0]",
+          "reference_input:input_tensor[0]",
+          "restored_reference_input[0]",
+          "rhs.launch[0].arg[1]",
+          "test_local:input_tensor"
+        ],
+        "storage_id": "storage-0000"
+      },
+      {
+        "alias_group": "storage-0001",
+        "origins": [
+          "lhs.launch[0].arg[3]:ninetoothed_ninetoothed_tensor_1_pointer"
+        ],
+        "storage_id": "storage-0001"
+      },
+      {
+        "alias_group": "storage-0002",
+        "origins": [
+          "reference_output",
+          "test_local:reference_value"
+        ],
+        "storage_id": "storage-0002"
+      },
+      {
+        "alias_group": "storage-0003",
+        "origins": [
+          "compiled_output",
+          "rhs.launch[0].arg[0]"
+        ],
+        "storage_id": "storage-0003"
+      },
+      {
+        "alias_group": "storage-0004",
+        "origins": [
+          "test_local:ntops_value"
+        ],
+        "storage_id": "storage-0004"
+      }
+    ],
+    "tensors": [
+      {
+        "origins": [
+          "lhs.launch[0].arg[0]:ninetoothed_ninetoothed_tensor_0_pointer",
+          "reference[0].input:input_tensor[0]",
+          "reference_input:input_tensor[0]",
+          "restored_reference_input[0]",
+          "rhs.launch[0].arg[1]",
+          "test_local:input_tensor"
+        ],
+        "tensor_id": "tensor-0000"
+      },
+      {
+        "origins": [
+          "lhs.launch[0].arg[3]:ninetoothed_ninetoothed_tensor_1_pointer"
+        ],
+        "tensor_id": "tensor-0001"
+      },
+      {
+        "origins": [
+          "reference_output",
+          "test_local:reference_value"
+        ],
+        "tensor_id": "tensor-0002"
+      },
+      {
+        "origins": [
+          "compiled_output",
+          "rhs.launch[0].arg[0]"
+        ],
+        "tensor_id": "tensor-0003"
+      },
+      {
+        "origins": [
+          "test_local:ntops_value"
+        ],
+        "tensor_id": "tensor-0004"
+      }
+    ]
+  },
   "pytest_exception": null,
   "reference_executions": 1,
   "reference_recovered_after_exception": 0,
@@ -121,11 +253,40 @@
         "device": "cuda:0",
         "dtype": "torch.float32",
         "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0002",
+          "byte_offset": 0,
+          "storage_id": "storage-0002",
+          "storage_nbytes": 4,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0002"
+        },
         "requires_grad": false,
         "shape": [],
-        "storage_offset": 0,
         "stride": []
       },
+      "captured_output_leaves": [
+        {
+          "leaf_index": 0,
+          "path": "reference_output",
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0002",
+              "byte_offset": 0,
+              "storage_id": "storage-0002",
+              "storage_nbytes": 4,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0002"
+            },
+            "requires_grad": false,
+            "shape": [],
+            "stride": []
+          }
+        }
+      ],
       "checks": {
         "compiled_vs_captured_reference": {
           "leaf_count_actual": 1,
@@ -152,6 +313,22 @@
           ]
         }
       },
+      "compiled_output": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0003",
+          "byte_offset": 0,
+          "storage_id": "storage-0003",
+          "storage_nbytes": 4,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0003"
+        },
+        "requires_grad": false,
+        "shape": [],
+        "stride": []
+      },
       "execution": 0,
       "expression": "torch.mean(input_tensor)",
       "inductor_sources": [
@@ -169,11 +346,18 @@
           "device": "cuda:0",
           "dtype": "torch.float32",
           "kind": "tensor",
+          "provenance": {
+            "alias_group": "storage-0000",
+            "byte_offset": 0,
+            "storage_id": "storage-0000",
+            "storage_nbytes": 3916,
+            "storage_offset": 0,
+            "tensor_id": "tensor-0000"
+          },
           "requires_grad": false,
           "shape": [
             979
           ],
-          "storage_offset": 0,
           "stride": [
             1
           ]
@@ -183,9 +367,32 @@
         "input_tensor[0]"
       ],
       "line": 41,
+      "output_leaves": [
+        {
+          "leaf_index": 0,
+          "path": "compiled_output",
+          "value": {
+            "device": "cuda:0",
+            "dtype": "torch.float32",
+            "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0003",
+              "byte_offset": 0,
+              "storage_id": "storage-0003",
+              "storage_nbytes": 4,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0003"
+            },
+            "requires_grad": false,
+            "shape": [],
+            "stride": []
+          }
+        }
+      ],
       "runtime_launches": [
         {
           "cache_hash": "BGXQ3DTQ5VTXEZTC7ZPSGTU3OHOB7L76DSXLLAVNAKGWCYLQZNHQ",
+          "compiler_signature": null,
           "config": {
             "kind": "triton.Config",
             "kwargs": {},
@@ -209,9 +416,20 @@
                 "device": "cuda:0",
                 "dtype": "torch.float32",
                 "kind": "tensor",
+                "provenance": {
+                  "alias_group": "storage-0003",
+                  "byte_offset": 0,
+                  "output_leaf_indices": [
+                    0
+                  ],
+                  "runtime_role": "output",
+                  "storage_id": "storage-0003",
+                  "storage_nbytes": 4,
+                  "storage_offset": 0,
+                  "tensor_id": "tensor-0003"
+                },
                 "requires_grad": false,
                 "shape": [],
-                "storage_offset": 0,
                 "stride": []
               }
             },
@@ -221,11 +439,20 @@
                 "device": "cuda:0",
                 "dtype": "torch.float32",
                 "kind": "tensor",
+                "provenance": {
+                  "alias_group": "storage-0000",
+                  "byte_offset": 0,
+                  "output_leaf_indices": [],
+                  "runtime_role": "input",
+                  "storage_id": "storage-0000",
+                  "storage_nbytes": 3916,
+                  "storage_offset": 0,
+                  "tensor_id": "tensor-0000"
+                },
                 "requires_grad": false,
                 "shape": [
                   979
                 ],
-                "storage_offset": 0,
                 "stride": [
                   1
                 ]
@@ -280,11 +507,18 @@
       "device": "cuda:0",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0000",
+        "byte_offset": 0,
+        "storage_id": "storage-0000",
+        "storage_nbytes": 3916,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0000"
+      },
       "requires_grad": false,
       "shape": [
         979
       ],
-      "storage_offset": 0,
       "stride": [
         1
       ]
@@ -293,18 +527,32 @@
       "device": "cuda:0",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0004",
+        "byte_offset": 0,
+        "storage_id": "storage-0004",
+        "storage_nbytes": 4,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0004"
+      },
       "requires_grad": false,
       "shape": [],
-      "storage_offset": 0,
       "stride": []
     },
     "reference_value": {
       "device": "cuda:0",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0002",
+        "byte_offset": 0,
+        "storage_id": "storage-0002",
+        "storage_nbytes": 4,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0002"
+      },
       "requires_grad": false,
       "shape": [],
-      "storage_offset": 0,
       "stride": []
     },
     "rtol": 0.001,

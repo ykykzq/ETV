@@ -2,13 +2,13 @@
   "best_configs": [
     {
       "content": {
-        "XBLOCK": 128,
+        "XBLOCK": 256,
         "configs_hash": "1b2cc4dbebb9680d3ce31843331593b159e4046c056f195ca1ccf2464d5b37d1",
         "found_by_coordesc": false,
         "num_stages": 1,
         "num_warps": 4,
-        "time_taken_ms": 12,
-        "triton_cache_hash": "6LJQ36HUNPN46Y23PDH624XB4O3S3MHC67JWD4NHUTRP4AYB6Q2Q"
+        "time_taken_ms": 11,
+        "triton_cache_hash": "R5JGVBZMVJFGAO7NUI3TUSQBB7OYG7QGOTOBA3QIMHJLHJY5HTXQ"
       },
       "path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/torchinductor-cache/ie/27310955e8cc6a0224b51897fcbd58b76db46796798ec718383ad31742ce54db.best_config"
     },
@@ -19,7 +19,7 @@
         "found_by_coordesc": false,
         "num_stages": 1,
         "num_warps": 2,
-        "time_taken_ms": 33,
+        "time_taken_ms": 24,
         "triton_cache_hash": "NZK6SSAVWJFD7H7XCUTUTE7ZLDFVHKFTHGX3FPNI5I33MQSZ4Q2A"
       },
       "path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/torchinductor-cache/vq/8d841eaf1b9a35a30dd56ac63cf1b39d432a2134e2e76663381821d12227422b.best_config"
@@ -30,19 +30,56 @@
     "device": "cuda:0",
     "dtype": "torch.float32",
     "kind": "tensor",
+    "provenance": {
+      "alias_group": "storage-0003",
+      "byte_offset": 0,
+      "storage_id": "storage-0003",
+      "storage_nbytes": 800,
+      "storage_offset": 0,
+      "tensor_id": "tensor-0003"
+    },
     "requires_grad": false,
     "shape": [
       1,
       8,
       25
     ],
-    "storage_offset": 0,
     "stride": [
       200,
       25,
       1
     ]
   },
+  "captured_output_leaves": [
+    {
+      "leaf_index": 0,
+      "path": "reference_output",
+      "value": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0003",
+          "byte_offset": 0,
+          "storage_id": "storage-0003",
+          "storage_nbytes": 800,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0003"
+        },
+        "requires_grad": false,
+        "shape": [
+          1,
+          8,
+          25
+        ],
+        "stride": [
+          200,
+          25,
+          1
+        ]
+      }
+    }
+  ],
   "checks": {
     "compiled_vs_captured_reference": {
       "leaf_count_actual": 1,
@@ -69,6 +106,30 @@
       ]
     }
   },
+  "compiled_output": {
+    "device": "cuda:0",
+    "dtype": "torch.float32",
+    "kind": "tensor",
+    "provenance": {
+      "alias_group": "storage-0006",
+      "byte_offset": 0,
+      "storage_id": "storage-0006",
+      "storage_nbytes": 800,
+      "storage_offset": 0,
+      "tensor_id": "tensor-0006"
+    },
+    "requires_grad": false,
+    "shape": [
+      1,
+      8,
+      25
+    ],
+    "stride": [
+      200,
+      25,
+      1
+    ]
+  },
   "execution": 0,
   "expression": "torch.quantile(input, q, dim=dim, keepdim=keepdim, interpolation=interpolation)",
   "inductor_sources": [
@@ -90,13 +151,20 @@
       "device": "cuda:0",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0000",
+        "byte_offset": 0,
+        "storage_id": "storage-0000",
+        "storage_nbytes": 1600,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0000"
+      },
       "requires_grad": false,
       "shape": [
         2,
         8,
         25
       ],
-      "storage_offset": 0,
       "stride": [
         200,
         25,
@@ -108,9 +176,40 @@
     "input[0]"
   ],
   "line": 39,
+  "output_leaves": [
+    {
+      "leaf_index": 0,
+      "path": "compiled_output",
+      "value": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0006",
+          "byte_offset": 0,
+          "storage_id": "storage-0006",
+          "storage_nbytes": 800,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0006"
+        },
+        "requires_grad": false,
+        "shape": [
+          1,
+          8,
+          25
+        ],
+        "stride": [
+          200,
+          25,
+          1
+        ]
+      }
+    }
+  ],
   "runtime_launches": [
     {
       "cache_hash": "NZK6SSAVWJFD7H7XCUTUTE7ZLDFVHKFTHGX3FPNI5I33MQSZ4Q2A",
+      "compiler_signature": null,
       "config": {
         "kind": "triton.Config",
         "kwargs": {
@@ -136,13 +235,22 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0000",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "input",
+              "storage_id": "storage-0000",
+              "storage_nbytes": 1600,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0000"
+            },
             "requires_grad": false,
             "shape": [
               2,
               8,
               25
             ],
-            "storage_offset": 0,
             "stride": [
               200,
               25,
@@ -156,6 +264,16 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0004",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "scratch",
+              "storage_id": "storage-0004",
+              "storage_nbytes": 1600,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0004"
+            },
             "requires_grad": false,
             "shape": [
               1,
@@ -163,7 +281,6 @@
               25,
               2
             ],
-            "storage_offset": 0,
             "stride": [
               400,
               50,
@@ -184,11 +301,12 @@
       "status": "cache_resolved"
     },
     {
-      "cache_hash": "6LJQ36HUNPN46Y23PDH624XB4O3S3MHC67JWD4NHUTRP4AYB6Q2Q",
+      "cache_hash": "R5JGVBZMVJFGAO7NUI3TUSQBB7OYG7QGOTOBA3QIMHJLHJY5HTXQ",
+      "compiler_signature": null,
       "config": {
         "kind": "triton.Config",
         "kwargs": {
-          "XBLOCK": 128
+          "XBLOCK": 256
         },
         "maxnreg": null,
         "num_ctas": 1,
@@ -196,13 +314,13 @@
         "num_warps": 4
       },
       "grid": [
-        2,
+        1,
         1,
         1
       ],
       "index": 1,
       "kernel_name": "triton_poi_fused__to_copy_any_gather_isnan_masked_fill_round_1",
-      "programs": 2,
+      "programs": 1,
       "runtime_arguments": [
         {
           "position": 0,
@@ -210,6 +328,16 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0004",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "scratch",
+              "storage_id": "storage-0004",
+              "storage_nbytes": 1600,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0004"
+            },
             "requires_grad": false,
             "shape": [
               1,
@@ -217,7 +345,6 @@
               25,
               2
             ],
-            "storage_offset": 0,
             "stride": [
               400,
               50,
@@ -232,6 +359,16 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0005",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "scratch",
+              "storage_id": "storage-0005",
+              "storage_nbytes": 800,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0005"
+            },
             "requires_grad": false,
             "shape": [
               1,
@@ -239,7 +376,6 @@
               25,
               1
             ],
-            "storage_offset": 0,
             "stride": [
               200,
               25,
@@ -258,18 +394,18 @@
   ],
   "selected_ttir": [
     {
-      "bytes": 13575,
-      "path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/selected-000.ttir",
-      "sha256": "9ea72c5882409e0201f6813ac462a1e42bd0b1259e1635bd2e0c86c7d6e3422e",
-      "source": "triton_cache",
-      "source_path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/triton-cache/6LJQ36HUNPN46Y23PDH624XB4O3S3MHC67JWD4NHUTRP4AYB6Q2Q/triton_poi_fused__to_copy_any_gather_isnan_masked_fill_round_1.ttir"
-    },
-    {
       "bytes": 14572,
-      "path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/selected-001.ttir",
+      "path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/selected-000.ttir",
       "sha256": "bfd01689632087360b7c9d08b6177f9efe96717414baeda2b89af8e77c23e2d8",
       "source": "triton_cache",
       "source_path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/triton-cache/NZK6SSAVWJFD7H7XCUTUTE7ZLDFVHKFTHGX3FPNI5I33MQSZ4Q2A/triton_per_fused_sort_0.ttir"
+    },
+    {
+      "bytes": 13575,
+      "path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/selected-001.ttir",
+      "sha256": "dc6fe7a3b64a57ea723cccd51c73bf480c97441d99ecb000c557b650b25b16e1",
+      "source": "triton_cache",
+      "source_path": "/data3/yelv.lh/ETV/benchmark/quantile/test_quantile-shape4-dtype4-cuda-0.001-0.001-nearest-True-False--29620ac066/rhs/reference-000-000/triton-cache/R5JGVBZMVJFGAO7NUI3TUSQBB7OYG7QGOTOBA3QIMHJLHJY5HTXQ/triton_poi_fused__to_copy_any_gather_isnan_masked_fill_round_1.ttir"
     }
   ],
   "site_index": 0,

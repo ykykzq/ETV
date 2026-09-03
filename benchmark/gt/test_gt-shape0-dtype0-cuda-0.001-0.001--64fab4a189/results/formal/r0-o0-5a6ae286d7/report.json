@@ -24,6 +24,21 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 708"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Input1)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input1, Output)"
     }
   ],
   "blocks": [
@@ -33,7 +48,7 @@
       "reason": "TTIR_OP_UNSUPPORTED",
       "required_for_final": true,
       "status": "UNKNOWN",
-      "summary": "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
+      "summary": "operation tt.bitcast is valid TTIR but has no ETV IR lifting rule"
     }
   ],
   "counterexample": null,
@@ -93,6 +108,27 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -109,9 +145,9 @@
     "lhs": "/data3/yelv.lh/ETV/benchmark/gt/test_gt-shape0-dtype0-cuda-0.001-0.001--64fab4a189/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/gt/test_gt-shape0-dtype0-cuda-0.001-0.001--64fab4a189/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "0cf0d36b2f44ffdd8835a7ea429beee1846a19dacdf28483d4524296e6c91d13",
-      "rhs": "86c885abbdf529aa941a4f995cb4c80cd3810a03aa4cf8d80f50d33f26ef1e01",
-      "spec": "8e92dc1ceda2a1b8ffcd8eb0b0d76b9498398c1a84c519c01fcba08ec9021b60"
+      "lhs": "11c20fbcb26f94d73480baa94bc8dc12ac795b4e0175e74eece8ead93f124054",
+      "rhs": "32f2955b1987d45a80d4207bcb8422e08ed00d5a32c12ba845386a85a6d71179",
+      "spec": "c8ddb52053baa28b076019abe1f5223ee60a0b5bf9da6741d3b125e9cbbc01e6"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/gt/test_gt-shape0-dtype0-cuda-0.001-0.001--64fab4a189/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -120,7 +156,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -145,7 +181,10 @@
       "declared predicate: binding.lhs.arg1",
       "declared predicate: binding.lhs.arg3",
       "declared predicate: binding.lhs.arg5",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0",
+      "declared predicate: disjoint.1",
+      "declared predicate: disjoint.2"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -155,7 +194,7 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
@@ -165,6 +204,6 @@
     "ETV IR evaluator and memory-token model"
   ],
   "unsupported": [
-    "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
+    "operation tt.bitcast is valid TTIR but has no ETV IR lifting rule"
   ]
 }

@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=c7e699552d16 pair_id=build/upstream/ntops/tests/test_avg_pool2d.py::test_avg_pool2d[2-3-112-112-kernel_size1-None-0-False-dtype1-0.001-0.001-cuda]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
+WARNING etv.verify [run_id=6bc803714d56 pair_id=build/upstream/ntops/tests/test_avg_pool2d.py::test_avg_pool2d[2-3-112-112-kernel_size1-None-0-False-dtype1-0.001-0.001-cuda]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
 {
   "assumptions": [
     {
@@ -80,6 +80,11 @@ WARNING etv.verify [run_id=c7e699552d16 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 8214"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -219,6 +224,13 @@ WARNING etv.verify [run_id=c7e699552d16 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -236,8 +248,8 @@ WARNING etv.verify [run_id=c7e699552d16 pair_id=build/upstream/ntops/tests/test_
     "rhs": "/data3/yelv.lh/ETV/benchmark/avg_pool2d/test_avg_pool2d-2-3-112-112-kernel_size1-None-0-False-dtype1-0.001-0.001-cuda--6d61a7a88b/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
       "lhs": "875d5d2de6d3410da474d30306eeb15b6e1c5f3a03738aec3c0921a35dda240b",
-      "rhs": "014e5f74b8c4516c2ae9624d500db2ce91f8332beea820ce901d6a25f4984b2d",
-      "spec": "bafe446363765705ca9cec1093fda8794814d88956db546128af968f8796b842"
+      "rhs": "b8ed2859407d0072f64300d9d488451ea996710c53f19f06b8076d481e4101f9",
+      "spec": "556660ccd4b8fc4d455e84cb460f88899732360e4ef699931efb167ede3a949b"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/avg_pool2d/test_avg_pool2d-2-3-112-112-kernel_size1-None-0-False-dtype1-0.001-0.001-cuda--6d61a7a88b/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -246,7 +258,7 @@ WARNING etv.verify [run_id=c7e699552d16 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'inferred_single_rhs_store_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -281,7 +293,8 @@ WARNING etv.verify [run_id=c7e699552d16 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg7",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -291,7 +304,7 @@ WARNING etv.verify [run_id=c7e699552d16 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

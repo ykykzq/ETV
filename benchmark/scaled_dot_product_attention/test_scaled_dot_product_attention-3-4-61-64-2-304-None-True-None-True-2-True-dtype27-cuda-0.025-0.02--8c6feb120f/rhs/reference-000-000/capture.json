@@ -5,6 +5,14 @@
     "device": "cuda:0",
     "dtype": "torch.float16",
     "kind": "tensor",
+    "provenance": {
+      "alias_group": "storage-0010",
+      "byte_offset": 0,
+      "storage_id": "storage-0010",
+      "storage_nbytes": 93696,
+      "storage_offset": 0,
+      "tensor_id": "tensor-0012"
+    },
     "requires_grad": false,
     "shape": [
       3,
@@ -12,7 +20,6 @@
       61,
       64
     ],
-    "storage_offset": 0,
     "stride": [
       15616,
       3904,
@@ -20,6 +27,38 @@
       1
     ]
   },
+  "captured_output_leaves": [
+    {
+      "leaf_index": 0,
+      "path": "reference_output",
+      "value": {
+        "device": "cuda:0",
+        "dtype": "torch.float16",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0010",
+          "byte_offset": 0,
+          "storage_id": "storage-0010",
+          "storage_nbytes": 93696,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0012"
+        },
+        "requires_grad": false,
+        "shape": [
+          3,
+          4,
+          61,
+          64
+        ],
+        "stride": [
+          15616,
+          3904,
+          64,
+          1
+        ]
+      }
+    }
+  ],
   "error": "AttributeError(\"'CausalBias' object has no attribute 'seq_len_q'\")",
   "execution": 0,
   "expression": "F.scaled_dot_product_attention(query, key_cloned, value_cloned, attn_mask=attn_mask, is_causal=is_causal, scale=scale, enable_gqa=enable_gqa)",
@@ -29,13 +68,20 @@
       "device": "cpu",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0007",
+        "byte_offset": 0,
+        "storage_id": "storage-0007",
+        "storage_nbytes": 148352,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0009"
+      },
       "requires_grad": false,
       "shape": [
         2,
         61,
         304
       ],
-      "storage_offset": 0,
       "stride": [
         18544,
         304,
@@ -46,6 +92,14 @@
       "device": "cuda:0",
       "dtype": "torch.float16",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0008",
+        "byte_offset": 0,
+        "storage_id": "storage-0008",
+        "storage_nbytes": 233472,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0010"
+      },
       "requires_grad": false,
       "shape": [
         3,
@@ -53,7 +107,6 @@
         304,
         64
       ],
-      "storage_offset": 0,
       "stride": [
         38912,
         19456,
@@ -65,6 +118,14 @@
       "device": "cuda:0",
       "dtype": "torch.float16",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0000",
+        "byte_offset": 0,
+        "storage_id": "storage-0000",
+        "storage_nbytes": 93696,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0000"
+      },
       "requires_grad": false,
       "shape": [
         3,
@@ -72,7 +133,6 @@
         61,
         64
       ],
-      "storage_offset": 0,
       "stride": [
         15616,
         3904,
@@ -84,6 +144,14 @@
       "device": "cuda:0",
       "dtype": "torch.float16",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0009",
+        "byte_offset": 0,
+        "storage_id": "storage-0009",
+        "storage_nbytes": 233472,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0011"
+      },
       "requires_grad": false,
       "shape": [
         3,
@@ -91,7 +159,6 @@
         304,
         64
       ],
-      "storage_offset": 0,
       "stride": [
         38912,
         19456,
@@ -114,7 +181,7 @@
   "target_names": [
     "reference_output"
   ],
-  "traceback": "Traceback (most recent call last):\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 619, in _compile_reference\n    graph_module = make_fx(callable_, tracing_mode=\"real\")(*example_inputs)\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2318, in wrapped\n    return make_fx_tracer.trace(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2250, in trace\n    return self._trace_inner(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2221, in _trace_inner\n    t = dispatch_trace(\n        ^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_compile.py\", line 53, in inner\n    return disable_fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 929, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1254, in dispatch_trace\n    graph = tracer.trace(root, concrete_args)  # type: ignore[arg-type]\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/_symbolic_trace.py\", line 850, in trace\n    (self.create_arg(fn(*args)),),\n                     ^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1312, in wrapped\n    out = f(*tensors)  # type:ignore[call-arg]\n          ^^^^^^^^^^^\n  File \"<string>\", line 1, in <lambda>\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 534, in reference_callable\n    return eval(site.code, test_globals, namespace)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/build/upstream/ntops/tests/test_scaled_dot_product_attention.py\", line 176, in <module>\n    reference_output = F.scaled_dot_product_attention(\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1360, in __torch_function__\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/attention/bias.py\", line 294, in __torch_function__\n    return cls._dispatch(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/attention/bias.py\", line 215, in _dispatch\n    attn_mask.seq_len_q == attn_mask.seq_len_kv\n    ^^^^^^^^^^^^^^^^^^^\nAttributeError: 'CausalBias' object has no attribute 'seq_len_q'\n",
+  "traceback": "Traceback (most recent call last):\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 949, in _compile_reference\n    graph_module = make_fx(callable_, tracing_mode=\"real\")(*example_inputs)\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2318, in wrapped\n    return make_fx_tracer.trace(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2250, in trace\n    return self._trace_inner(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2221, in _trace_inner\n    t = dispatch_trace(\n        ^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_compile.py\", line 53, in inner\n    return disable_fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 929, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1254, in dispatch_trace\n    graph = tracer.trace(root, concrete_args)  # type: ignore[arg-type]\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/_symbolic_trace.py\", line 850, in trace\n    (self.create_arg(fn(*args)),),\n                     ^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1312, in wrapped\n    out = f(*tensors)  # type:ignore[call-arg]\n          ^^^^^^^^^^^\n  File \"<string>\", line 1, in <lambda>\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 860, in reference_callable\n    return eval(site.code, test_globals, namespace)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/build/upstream/ntops/tests/test_scaled_dot_product_attention.py\", line 176, in <module>\n    reference_output = F.scaled_dot_product_attention(\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1360, in __torch_function__\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/attention/bias.py\", line 294, in __torch_function__\n    return cls._dispatch(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/attention/bias.py\", line 215, in _dispatch\n    attn_mask.seq_len_q == attn_mask.seq_len_kv\n    ^^^^^^^^^^^^^^^^^^^\nAttributeError: 'CausalBias' object has no attribute 'seq_len_q'\n",
   "ttir": [],
   "ttir_status": "unavailable"
 }

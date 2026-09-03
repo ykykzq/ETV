@@ -13,13 +13,16 @@
 - `TRUSTED_AXIOM`: lhs.arg3 = 1 (PairSpec.predicates.side_bindings.lhs)
 - `TRUSTED_AXIOM`: lhs.arg5 = 342 (PairSpec.predicates.side_bindings.lhs)
 - `TRUSTED_AXIOM`: rhs.arg3 = 342 (PairSpec.predicates.side_bindings.rhs)
+- `TRUSTED_AXIOM`: disjoint(Input0, Input1) (PairSpec.predicates.disjoint)
+- `TRUSTED_AXIOM`: disjoint(Input0, Output) (PairSpec.predicates.disjoint)
+- `TRUSTED_AXIOM`: disjoint(Input1, Output) (PairSpec.predicates.disjoint)
 
 ## LLM-only context
 
 - Both kernels were captured from the same specialized pytest node.
 - Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.
 - Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.
-- This PairSpec observes output leaf 'reference_output' only.
+- This PairSpec observes output leaf 'compiled_output' only.
 - Proof relevance: `informational_only`.
 
 ## Declared formal predicates
@@ -32,6 +35,9 @@
 - `binding.lhs.arg3`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.lhs.arg5`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.rhs.arg3`: builtin / assumed (`TRUSTED_AXIOM`)
+- `disjoint.0`: builtin / assumed (`TRUSTED_AXIOM`)
+- `disjoint.1`: builtin / assumed (`TRUSTED_AXIOM`)
+- `disjoint.2`: builtin / assumed (`TRUSTED_AXIOM`)
 
 ## Rewrite registry
 
@@ -41,7 +47,7 @@
 
 | Block | Status | Evidence | Summary |
 | --- | --- | --- | --- |
-| `FRONTEND` | **UNKNOWN** | - | operation arith.cmpf is valid TTIR but has no ETV IR lifting rule |
+| `FRONTEND` | **UNKNOWN** | - | operation tt.bitcast is valid TTIR but has no ETV IR lifting rule |
 
 ## Trust boundary
 
@@ -54,6 +60,9 @@
 - Conditional on: declared predicate: binding.lhs.arg3
 - Conditional on: declared predicate: binding.lhs.arg5
 - Conditional on: declared predicate: binding.rhs.arg3
+- Conditional on: declared predicate: disjoint.0
+- Conditional on: declared predicate: disjoint.1
+- Conditional on: declared predicate: disjoint.2
 - PairSpec role correspondence
 - PairSpec fixed shape/stride/launch bindings
 - PairSpec no-alias declarations

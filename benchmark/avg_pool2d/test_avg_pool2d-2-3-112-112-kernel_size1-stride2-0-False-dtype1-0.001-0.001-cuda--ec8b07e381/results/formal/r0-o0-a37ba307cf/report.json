@@ -79,6 +79,11 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 12210"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -218,6 +223,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -234,9 +246,9 @@
     "lhs": "/data3/yelv.lh/ETV/benchmark/avg_pool2d/test_avg_pool2d-2-3-112-112-kernel_size1-stride2-0-False-dtype1-0.001-0.001-cuda--ec8b07e381/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/avg_pool2d/test_avg_pool2d-2-3-112-112-kernel_size1-stride2-0-False-dtype1-0.001-0.001-cuda--ec8b07e381/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "04bf008f017085e3c236e9b2f68b235af9de1292a71f19256f61fa171a3ec8f3",
-      "rhs": "6f272abf63d865cfb27f44abf55af68ce8811595feb9aedd31832adeea8d53e3",
-      "spec": "78c58a69aba43ea48a938d0c81fb882d48b0b23ee17cde4ddf0bc7d6aa09afcc"
+      "lhs": "0c84e973f2160776ee96cca13e147f2da1496f0f452b48a9b519adddc56312be",
+      "rhs": "721c50f91a9f8bb5cd625792035f61398428b6aaa9c78c75468c7a1b5043280e",
+      "spec": "16eb15773d6e3ad5c2bf92bd3c7e71239c7afe1de23fd5266963bff35c46ed81"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/avg_pool2d/test_avg_pool2d-2-3-112-112-kernel_size1-stride2-0-False-dtype1-0.001-0.001-cuda--ec8b07e381/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -245,7 +257,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'inferred_single_rhs_store_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -280,7 +292,8 @@
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg7",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -290,7 +303,7 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

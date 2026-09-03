@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=9d98a819a345 pair_id=build/upstream/ntops/tests/test_instance_norm.py::test_instance_norm[shape3-dtype3-cuda-0.01-0.01-False-True-True-False-1e-05]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation scf.for is parsed but not yet lifted"}
+WARNING etv.verify [run_id=5589f30e955d pair_id=build/upstream/ntops/tests/test_instance_norm.py::test_instance_norm[shape3-dtype3-cuda-0.01-0.01-False-True-True-False-1e-05]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation scf.for is parsed but not yet lifted"}
 {
   "assumptions": [
     {
@@ -85,6 +85,21 @@ WARNING etv.verify [run_id=9d98a819a345 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg4 = 16"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Input1)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input1, Output)"
     }
   ],
   "blocks": [
@@ -238,6 +253,27 @@ WARNING etv.verify [run_id=9d98a819a345 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -255,8 +291,8 @@ WARNING etv.verify [run_id=9d98a819a345 pair_id=build/upstream/ntops/tests/test_
     "rhs": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape3-dtype3-cuda-0.01-0.01-False-True-True-False-1e-05--c43ed81f4f/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
       "lhs": "74385a292295a182bfd1bb4815fc4bbc489280813ed9a98aa402c27a7febe479",
-      "rhs": "e8f8d65220e9079e161f8d9b8f5372e555f7d8e9534f65afdb56ced13b4dc14a",
-      "spec": "40ea15f58794cb7eec9d0b3109e6e2f058c501895316e379bbe0a7ed69283a63"
+      "rhs": "2b6fae9db48213a5d2b6552706002ee94a90aa79077c2e106cd309ee6d989bf7",
+      "spec": "8aa90377e155ae6d556987273acdb056f5cc60f0db5b2b343d2af4d45588350a"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/instance_norm/test_instance_norm-shape3-dtype3-cuda-0.01-0.01-False-True-True-False-1e-05--c43ed81f4f/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -265,7 +301,7 @@ WARNING etv.verify [run_id=9d98a819a345 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'inferred_single_rhs_store_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -302,7 +338,10 @@ WARNING etv.verify [run_id=9d98a819a345 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg7",
       "declared predicate: binding.lhs.arg9",
       "declared predicate: binding.rhs.arg3",
-      "declared predicate: binding.rhs.arg4"
+      "declared predicate: binding.rhs.arg4",
+      "declared predicate: disjoint.0",
+      "declared predicate: disjoint.1",
+      "declared predicate: disjoint.2"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -312,7 +351,7 @@ WARNING etv.verify [run_id=9d98a819a345 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

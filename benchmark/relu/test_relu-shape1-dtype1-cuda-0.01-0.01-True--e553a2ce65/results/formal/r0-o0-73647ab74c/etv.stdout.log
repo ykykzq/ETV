@@ -1,4 +1,3 @@
-WARNING etv.verify [run_id=f847dc39957a pair_id=build/upstream/ntops/tests/test_relu.py::test_relu[shape1-dtype1-cuda-0.01-0.01-True]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_OP_UNSUPPORTED", "error": "operation arith.maxnumf is valid TTIR but has no ETV IR lifting rule"}
 {
   "assumptions": [
     {
@@ -24,15 +23,111 @@ WARNING etv.verify [run_id=f847dc39957a pair_id=build/upstream/ntops/tests/test_
   ],
   "blocks": [
     {
+      "details": {
+        "lhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        },
+        "rhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        }
+      },
       "kind": "FRONTEND",
-      "proof_levels": [],
-      "reason": "TTIR_OP_UNSUPPORTED",
+      "proof_levels": [
+        "STRUCTURAL"
+      ],
       "required_for_final": true,
-      "status": "UNKNOWN",
-      "summary": "operation arith.maxnumf is valid TTIR but has no ETV IR lifting rule"
+      "status": "PROVED",
+      "summary": "both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR"
+    },
+    {
+      "details": {
+        "roles": [
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            },
+            "logical": "Input0",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg2",
+              "offset": 0
+            },
+            "logical": "Output",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg1",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      "kind": "ABI",
+      "proof_levels": [
+        "TRUSTED_AXIOM"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "physical parameters are aligned to explicit logical roles"
+    },
+    {
+      "details": {
+        "lhs": {
+          "enumerated": 672,
+          "lanes": 32,
+          "programs": 21
+        },
+        "rhs": {
+          "enumerated": 768,
+          "lanes": 128,
+          "programs": 6
+        }
+      },
+      "kind": "INDEX",
+      "proof_levels": [
+        "BOUNDED_EXHAUSTIVE"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "all launch programs and lanes were exhaustively enumerated"
+    },
+    {
+      "details": {
+        "kind": "MASK_DOMAIN_MISMATCH",
+        "lhs_active": false,
+        "logical_index": 1,
+        "rhs_active": true
+      },
+      "kind": "MASK",
+      "proof_levels": [
+        "BOUNDED_EXHAUSTIVE"
+      ],
+      "reason": "MASK_MISMATCH",
+      "required_for_final": true,
+      "status": "DISPROVED",
+      "summary": "the active logical output domains differ"
     }
   ],
-  "counterexample": null,
+  "counterexample": {
+    "kind": "MASK_DOMAIN_MISMATCH",
+    "lhs_active": false,
+    "logical_index": 1,
+    "rhs_active": true
+  },
   "formal_predicates": [
     {
       "evidence": "TRUSTED_AXIOM",
@@ -85,15 +180,25 @@ WARNING etv.verify [run_id=f847dc39957a pair_id=build/upstream/ntops/tests/test_
       "concurrent/shared-memory semantics",
       "allocated-buffer bounds or GPU memory safety"
     ],
-    "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+    "establishes": "the reported concrete witness violates observable equivalence in ABSTRACT_FLOAT semantics"
   },
   "inputs": {
+    "frontends": {
+      "lhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      },
+      "rhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      }
+    },
     "lhs": "/data3/yelv.lh/ETV/benchmark/relu/test_relu-shape1-dtype1-cuda-0.01-0.01-True--e553a2ce65/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/relu/test_relu-shape1-dtype1-cuda-0.01-0.01-True--e553a2ce65/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
       "lhs": "63748638926fd69ec9b0305bd22aa88f5b14d5f876c17dd58be42fcc784c3000",
       "rhs": "5ca72b0f1d49523ff2bdeaf6b0d9fb5f05ee55ad83caf023a724b2367607a7f8",
-      "spec": "446f780a7d444214354b42d3d4f0f9572cdb429dd1a553510fc18c7e59df13fb"
+      "spec": "49d7d8be676ae2ea3c228ff7ce20e06d68fac314164ed6f2c93d98a9b64faeb8"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/relu/test_relu-shape1-dtype1-cuda-0.01-0.01-True--e553a2ce65/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -102,14 +207,14 @@ WARNING etv.verify [run_id=f847dc39957a pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
   },
   "pair_id": "build/upstream/ntops/tests/test_relu.py::test_relu[shape1-dtype1-cuda-0.01-0.01-True]::r000-e000-o000",
   "proof": {},
-  "reason": "TTIR_OP_UNSUPPORTED",
+  "reason": "MASK_MISMATCH",
   "rewrite_registry": {
     "builtin": "validated_builtin_rules",
     "inline_legacy_rules": [],
@@ -132,19 +237,18 @@ WARNING etv.verify [run_id=f847dc39957a pair_id=build/upstream/ntops/tests/test_
       "PairSpec.assumptions"
     ]
   },
-  "status": "UNKNOWN",
+  "status": "DISPROVED",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
     "PairSpec fixed shape/stride/launch bindings",
     "PairSpec no-alias declarations",
     "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
-    "ETV IR evaluator and memory-token model"
+    "ETV IR evaluator and memory-token model",
+    "ETV TTIR-to-semantic-IR lifting implementation"
   ],
-  "unsupported": [
-    "operation arith.maxnumf is valid TTIR but has no ETV IR lifting rule"
-  ]
+  "unsupported": []
 }

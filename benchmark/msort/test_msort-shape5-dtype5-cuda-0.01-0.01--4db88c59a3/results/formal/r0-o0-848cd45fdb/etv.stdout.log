@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=bd653a0c8c82 pair_id=build/upstream/ntops/tests/test_msort.py::test_msort[shape5-dtype5-cuda-0.01-0.01]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
+WARNING etv.verify [run_id=1f8e2dd53abb pair_id=build/upstream/ntops/tests/test_msort.py::test_msort[shape5-dtype5-cuda-0.01-0.01]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation tt.reduce is parsed but not yet lifted"}
 {
   "assumptions": [
     {
@@ -35,6 +35,11 @@ WARNING etv.verify [run_id=bd653a0c8c82 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 4"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -111,6 +116,13 @@ WARNING etv.verify [run_id=bd653a0c8c82 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -128,8 +140,8 @@ WARNING etv.verify [run_id=bd653a0c8c82 pair_id=build/upstream/ntops/tests/test_
     "rhs": "/data3/yelv.lh/ETV/benchmark/msort/test_msort-shape5-dtype5-cuda-0.01-0.01--4db88c59a3/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
       "lhs": "d0e0030b0b220d91e6c1a138b302670aec8b4a8c08906a8ecbaecd4483e16540",
-      "rhs": "015ce3ebdaedce652371754c4c94487aeb2c134bf168b22807ccc152dab65bd6",
-      "spec": "d7bd6041017a14c80526d26289cd8bb3ae7e7eb27ea47ce1bcd6f681bac4a15e"
+      "rhs": "78602fe36e7e961345ae6b7ee9e90144763fe2fef4c590a63c65c449540541c1",
+      "spec": "267c648e27c10ae4e077d4fde1968e009b4feee8b214b0f1369dc3e2d5d50f54"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/msort/test_msort-shape5-dtype5-cuda-0.01-0.01--4db88c59a3/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -138,7 +150,7 @@ WARNING etv.verify [run_id=bd653a0c8c82 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -164,7 +176,8 @@ WARNING etv.verify [run_id=bd653a0c8c82 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg4",
       "declared predicate: binding.lhs.arg5",
       "declared predicate: binding.rhs.arg2",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -174,7 +187,7 @@ WARNING etv.verify [run_id=bd653a0c8c82 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

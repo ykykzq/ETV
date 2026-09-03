@@ -19,19 +19,120 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 604"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
     {
+      "details": {
+        "lhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        },
+        "rhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        }
+      },
       "kind": "FRONTEND",
-      "proof_levels": [],
-      "reason": "TTIR_OP_UNSUPPORTED",
+      "proof_levels": [
+        "STRUCTURAL"
+      ],
       "required_for_final": true,
-      "status": "UNKNOWN",
-      "summary": "operation tt.extern_elementwise is valid TTIR but has no ETV IR lifting rule"
+      "status": "PROVED",
+      "summary": "both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR"
+    },
+    {
+      "details": {
+        "roles": [
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            },
+            "logical": "Input0",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg2",
+              "offset": 0
+            },
+            "logical": "Output",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg1",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      "kind": "ABI",
+      "proof_levels": [
+        "TRUSTED_AXIOM"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "physical parameters are aligned to explicit logical roles"
+    },
+    {
+      "details": {
+        "lhs": {
+          "enumerated": 640,
+          "lanes": 128,
+          "programs": 5
+        },
+        "rhs": {
+          "enumerated": 640,
+          "lanes": 128,
+          "programs": 5
+        }
+      },
+      "kind": "INDEX",
+      "proof_levels": [
+        "BOUNDED_EXHAUSTIVE"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "all launch programs and lanes were exhaustively enumerated"
+    },
+    {
+      "details": {
+        "kind": "MASK_DOMAIN_MISMATCH",
+        "lhs_active": false,
+        "logical_index": 1,
+        "rhs_active": true
+      },
+      "kind": "MASK",
+      "proof_levels": [
+        "BOUNDED_EXHAUSTIVE"
+      ],
+      "reason": "MASK_MISMATCH",
+      "required_for_final": true,
+      "status": "DISPROVED",
+      "summary": "the active logical output domains differ"
     }
   ],
-  "counterexample": null,
+  "counterexample": {
+    "kind": "MASK_DOMAIN_MISMATCH",
+    "lhs_active": false,
+    "logical_index": 1,
+    "rhs_active": true
+  },
   "formal_predicates": [
     {
       "evidence": "TRUSTED_AXIOM",
@@ -74,6 +175,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -84,15 +192,25 @@
       "concurrent/shared-memory semantics",
       "allocated-buffer bounds or GPU memory safety"
     ],
-    "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
+    "establishes": "the reported concrete witness violates observable equivalence in ABSTRACT_FLOAT semantics"
   },
   "inputs": {
+    "frontends": {
+      "lhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      },
+      "rhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      }
+    },
     "lhs": "/data3/yelv.lh/ETV/benchmark/cosh/test_cosh-shape1-dtype1-cuda-0.01-0.01--529ced7b47/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/cosh/test_cosh-shape1-dtype1-cuda-0.01-0.01--529ced7b47/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "5a4eb46a26cfd6033886e34f25cc691f2446dab4e99637f60ba84dae6e793c21",
-      "rhs": "59f9de47e0167229ca5d0fb0e415bca8bb76c3b5021451d678ead2a1cebae7c7",
-      "spec": "530b299e21d78c1f1460754b96cc02165a84fe798574aed45500ad7006ee0552"
+      "lhs": "5dcf6193404e3bd497a94a118ffd01efc595df7c91a44e0f24ad5aa5cb3214fc",
+      "rhs": "c07309e834310edbeb4236adff55efb4bdd32964150a4be4262240bdbf3a62d6",
+      "spec": "ef37fdfeca85d7e09893d7334701de6aefe3ad471b19f96c054afb334caea89d"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/cosh/test_cosh-shape1-dtype1-cuda-0.01-0.01--529ced7b47/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -101,14 +219,14 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
   },
   "pair_id": "build/upstream/ntops/tests/test_cosh.py::test_cosh[shape1-dtype1-cuda-0.01-0.01]::r000-e000-o000",
   "proof": {},
-  "reason": "TTIR_OP_UNSUPPORTED",
+  "reason": "MASK_MISMATCH",
   "rewrite_registry": {
     "builtin": "validated_builtin_rules",
     "inline_legacy_rules": [],
@@ -124,26 +242,26 @@
       "declared predicate: binding.X",
       "declared predicate: binding.lhs.arg1",
       "declared predicate: binding.lhs.arg3",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
       "PairSpec.assumptions"
     ]
   },
-  "status": "UNKNOWN",
+  "status": "DISPROVED",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
     "PairSpec fixed shape/stride/launch bindings",
     "PairSpec no-alias declarations",
     "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
-    "ETV IR evaluator and memory-token model"
+    "ETV IR evaluator and memory-token model",
+    "ETV TTIR-to-semantic-IR lifting implementation"
   ],
-  "unsupported": [
-    "operation tt.extern_elementwise is valid TTIR but has no ETV IR lifting rule"
-  ]
+  "unsupported": []
 }

@@ -1,7 +1,7 @@
 # ETV verification report: build/upstream/ntops/tests/test_relu.py::test_relu[shape2-dtype2-cuda-0.001-0.001-True]::r000-e000-o000
 
-- Status: **UNKNOWN**
-- Reason: `TTIR_OP_UNSUPPORTED`
+- Status: **DISPROVED**
+- Reason: `MASK_MISMATCH`
 - Semantic mode: `abstract_float`
 - Scope: fixed-specialization single-store bounded translation validation
 - Soundness: `formal_under_declared_predicates`
@@ -22,7 +22,7 @@
 - Both kernels were captured from the same specialized pytest node.
 - Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.
 - Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.
-- This PairSpec observes output leaf 'reference_output' only.
+- This PairSpec observes output leaf 'compiled_output' only.
 - Proof relevance: `informational_only`.
 
 ## Declared formal predicates
@@ -46,7 +46,21 @@
 
 | Block | Status | Evidence | Summary |
 | --- | --- | --- | --- |
-| `FRONTEND` | **UNKNOWN** | - | operation arith.maxnumf is valid TTIR but has no ETV IR lifting rule |
+| `FRONTEND` | **PROVED** | STRUCTURAL | both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR |
+| `ABI` | **PROVED** | TRUSTED_AXIOM | physical parameters are aligned to explicit logical roles |
+| `INDEX` | **PROVED** | BOUNDED_EXHAUSTIVE | all launch programs and lanes were exhaustively enumerated |
+| `MASK` | **DISPROVED** | BOUNDED_EXHAUSTIVE | the active logical output domains differ |
+
+## Counterexample
+
+```json
+{
+  "kind": "MASK_DOMAIN_MISMATCH",
+  "lhs_active": false,
+  "logical_index": 31,
+  "rhs_active": true
+}
+```
 
 ## Trust boundary
 
@@ -66,8 +80,9 @@
 - PairSpec no-alias declarations
 - ABSTRACT_FLOAT interprets floating operations over exact mathematical values
 - ETV IR evaluator and memory-token model
+- ETV TTIR-to-semantic-IR lifting implementation
 
-This result establishes: no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation
+This result establishes: the reported concrete witness violates observable equivalence in ABSTRACT_FLOAT semantics
 
 It does not prove:
 

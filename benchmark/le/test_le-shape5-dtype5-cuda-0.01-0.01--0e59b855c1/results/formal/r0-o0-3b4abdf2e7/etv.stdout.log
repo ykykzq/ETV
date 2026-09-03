@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_le.py::test_le[shape5-dtype5-cuda-0.01-0.01]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_OP_UNSUPPORTED", "error": "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"}
+WARNING etv.verify [run_id=73778c4615f9 pair_id=build/upstream/ntops/tests/test_le.py::test_le[shape5-dtype5-cuda-0.01-0.01]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_OP_UNSUPPORTED", "error": "operation tt.bitcast is valid TTIR but has no ETV IR lifting rule"}
 {
   "assumptions": [
     {
@@ -85,6 +85,21 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 988"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Input1)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input1, Output)"
     }
   ],
   "blocks": [
@@ -94,7 +109,7 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
       "reason": "TTIR_OP_UNSUPPORTED",
       "required_for_final": true,
       "status": "UNKNOWN",
-      "summary": "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
+      "summary": "operation tt.bitcast is valid TTIR but has no ETV IR lifting rule"
     }
   ],
   "counterexample": null,
@@ -238,6 +253,27 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.1",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.2",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -255,8 +291,8 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
     "rhs": "/data3/yelv.lh/ETV/benchmark/le/test_le-shape5-dtype5-cuda-0.01-0.01--0e59b855c1/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
       "lhs": "3215a266c780f30314aaf64cbb8ba7600ba9c0dc09f698a160da5ba65d265924",
-      "rhs": "a770113ebc0d4d261be3c856318c15eab29c32de9fcf09758a71a0fffd77716a",
-      "spec": "99b92b84ef3301c6592898244df55853d70837fea3e58dba6f094d74c5f76915"
+      "rhs": "daf91b9e7d05c4418a653aa27c6be6212022c37ebcf04bdf6404cc049723b9ff",
+      "spec": "915d02fb20d6fda3cef2c073c9cd3cdf9aa4615daa93658b01b32275d0c4553e"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/le/test_le-shape5-dtype5-cuda-0.01-0.01--0e59b855c1/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -265,7 +301,7 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -302,7 +338,10 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg7",
       "declared predicate: binding.lhs.arg8",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0",
+      "declared predicate: disjoint.1",
+      "declared predicate: disjoint.2"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -312,7 +351,7 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
@@ -322,6 +361,6 @@ WARNING etv.verify [run_id=06959a73fd18 pair_id=build/upstream/ntops/tests/test_
     "ETV IR evaluator and memory-token model"
   ],
   "unsupported": [
-    "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
+    "operation tt.bitcast is valid TTIR but has no ETV IR lifting rule"
   ]
 }

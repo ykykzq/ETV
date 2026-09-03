@@ -24,17 +24,19 @@
 - `TRUSTED_AXIOM`: lhs.arg9 = 1 (PairSpec.predicates.side_bindings.lhs)
 - `TRUSTED_AXIOM`: rhs.arg2 = 30 (PairSpec.predicates.side_bindings.rhs)
 - `TRUSTED_AXIOM`: rhs.arg3 = 17 (PairSpec.predicates.side_bindings.rhs)
+- `TRUSTED_AXIOM`: disjoint(Input0, Output) (PairSpec.predicates.disjoint)
 
 ## LLM-only context
 
 - Both kernels were captured from the same specialized pytest node.
 - Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.
 - Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.
-- This PairSpec observes output leaf 'reference_output' only.
+- This PairSpec observes output leaf 'compiled_output' only.
 - Proof relevance: `informational_only`.
 
 ## Declared formal predicates
 
+- `abi.Input0`: builtin / assumed (`TRUSTED_AXIOM`)
 - `abi.Output`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.X`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.lhs.arg1`: builtin / assumed (`TRUSTED_AXIOM`)
@@ -52,6 +54,7 @@
 - `binding.lhs.arg9`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.rhs.arg2`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.rhs.arg3`: builtin / assumed (`TRUSTED_AXIOM`)
+- `disjoint.0`: builtin / assumed (`TRUSTED_AXIOM`)
 
 ## Rewrite registry
 
@@ -66,6 +69,7 @@
 ## Trust boundary
 
 - Soundness level: `formal_under_declared_predicates`
+- Conditional on: declared predicate: abi.Input0
 - Conditional on: declared predicate: abi.Output
 - Conditional on: declared predicate: binding.X
 - Conditional on: declared predicate: binding.lhs.arg1
@@ -83,6 +87,7 @@
 - Conditional on: declared predicate: binding.lhs.arg9
 - Conditional on: declared predicate: binding.rhs.arg2
 - Conditional on: declared predicate: binding.rhs.arg3
+- Conditional on: declared predicate: disjoint.0
 - PairSpec role correspondence
 - PairSpec fixed shape/stride/launch bindings
 - PairSpec no-alias declarations

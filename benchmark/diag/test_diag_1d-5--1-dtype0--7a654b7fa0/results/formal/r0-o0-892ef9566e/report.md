@@ -12,13 +12,14 @@
 - `TRUSTED_AXIOM`: lhs.arg1 = 5 (PairSpec.predicates.side_bindings.lhs)
 - `TRUSTED_AXIOM`: lhs.arg3 = 1 (PairSpec.predicates.side_bindings.lhs)
 - `TRUSTED_AXIOM`: rhs.arg2 = 36 (PairSpec.predicates.side_bindings.rhs)
+- `TRUSTED_AXIOM`: disjoint(Input0, Output) (PairSpec.predicates.disjoint)
 
 ## LLM-only context
 
 - Both kernels were captured from the same specialized pytest node.
 - Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.
 - Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.
-- This PairSpec observes output leaf 'reference_output' only.
+- This PairSpec observes output leaf 'compiled_output' only.
 - Proof relevance: `informational_only`.
 
 ## Declared formal predicates
@@ -29,6 +30,7 @@
 - `binding.lhs.arg1`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.lhs.arg3`: builtin / assumed (`TRUSTED_AXIOM`)
 - `binding.rhs.arg2`: builtin / assumed (`TRUSTED_AXIOM`)
+- `disjoint.0`: builtin / assumed (`TRUSTED_AXIOM`)
 
 ## Rewrite registry
 
@@ -40,7 +42,7 @@
 | --- | --- | --- | --- |
 | `FRONTEND` | **PROVED** | STRUCTURAL | both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR |
 | `ABI` | **PROVED** | TRUSTED_AXIOM | physical parameters are aligned to explicit logical roles |
-| `CAST` | **UNKNOWN** | - | integer cast differences were preserved but no admitted rewrite established their equivalence |
+| `CAST` | **UNKNOWN** | - | cast differences were preserved but no admitted rewrite established their equivalence |
 
 ## Proof summary
 
@@ -54,6 +56,7 @@
 - Conditional on: declared predicate: binding.lhs.arg1
 - Conditional on: declared predicate: binding.lhs.arg3
 - Conditional on: declared predicate: binding.rhs.arg2
+- Conditional on: declared predicate: disjoint.0
 - PairSpec role correspondence
 - PairSpec fixed shape/stride/launch bindings
 - PairSpec no-alias declarations

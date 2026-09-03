@@ -49,16 +49,83 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 880"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
     {
+      "details": {
+        "lhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        },
+        "rhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        }
+      },
       "kind": "FRONTEND",
+      "proof_levels": [
+        "STRUCTURAL"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR"
+    },
+    {
+      "details": {
+        "roles": [
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            },
+            "logical": "Input0",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg5",
+              "offset": 0
+            },
+            "logical": "Output",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg1",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      "kind": "ABI",
+      "proof_levels": [
+        "TRUSTED_AXIOM"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "physical parameters are aligned to explicit logical roles"
+    },
+    {
+      "kind": "LIFT_EVAL",
       "proof_levels": [],
       "reason": "TTIR_UNDEFINED_LOAD_LANE",
       "required_for_final": true,
       "status": "UNKNOWN",
-      "summary": "a masked tt.load without 'other' is not guarded by the identical store mask"
+      "summary": "a masked tt.load without 'other' is reachable on an observed store lane"
     }
   ],
   "counterexample": null,
@@ -146,6 +213,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -159,12 +233,22 @@
     "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
   },
   "inputs": {
+    "frontends": {
+      "lhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      },
+      "rhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      }
+    },
     "lhs": "/data3/yelv.lh/ETV/benchmark/rsqrt/test_rsqrt-shape4-dtype4-cuda-0.001-0.001--b5b5b8f83f/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/rsqrt/test_rsqrt-shape4-dtype4-cuda-0.001-0.001--b5b5b8f83f/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
       "lhs": "3f1dddea347e3e18b43130ee3ffe0eac50b053448d0b32f1ab91479b32c3dd69",
-      "rhs": "2b313ca4c6d2a7cd3872c54d8f62f4c6ccd0b3056ecddc8ba3e9d58d44c1d00e",
-      "spec": "de7af97a9d22c02a40178b89b70727ab59d6cc560ceb4561362e1258efe3549e"
+      "rhs": "1638981fbb9e623fca3c7a22cf3a1a913bcb8e3cbc3646ec652bc120a7180ba1",
+      "spec": "59b8bed8c9574d1dbb7648265a2c59571a7e7111ee3e93cc45253b6d958531a3"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/rsqrt/test_rsqrt-shape4-dtype4-cuda-0.001-0.001--b5b5b8f83f/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -173,7 +257,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -202,7 +286,8 @@
       "declared predicate: binding.lhs.arg7",
       "declared predicate: binding.lhs.arg8",
       "declared predicate: binding.lhs.arg9",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -212,16 +297,17 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
     "PairSpec fixed shape/stride/launch bindings",
     "PairSpec no-alias declarations",
     "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
-    "ETV IR evaluator and memory-token model"
+    "ETV IR evaluator and memory-token model",
+    "ETV TTIR-to-semantic-IR lifting implementation"
   ],
   "unsupported": [
-    "a masked tt.load without 'other' is not guarded by the identical store mask"
+    "a masked tt.load without 'other' is reachable on an observed store lane"
   ]
 }

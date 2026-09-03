@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=36649eee1092 pair_id=build/upstream/ntops/tests/test_isinf.py::test_isinf[shape2-dtype2-cuda-0.001-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_CONSTANT_UNSUPPORTED", "error": "floating constant '0xFF800000' is not representable in ABSTRACT_FLOAT"}
+WARNING etv.verify [run_id=f5627887ba26 pair_id=build/upstream/ntops/tests/test_isinf.py::test_isinf[shape2-dtype2-cuda-0.001-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_CONSTANT_UNSUPPORTED", "error": "floating constant '0xFF800000' is not representable in ABSTRACT_FLOAT"}
 {
   "assumptions": [
     {
@@ -40,6 +40,11 @@ WARNING etv.verify [run_id=36649eee1092 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 390"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -123,6 +128,13 @@ WARNING etv.verify [run_id=36649eee1092 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -140,8 +152,8 @@ WARNING etv.verify [run_id=36649eee1092 pair_id=build/upstream/ntops/tests/test_
     "rhs": "/data3/yelv.lh/ETV/benchmark/isinf/test_isinf-shape2-dtype2-cuda-0.001-0.001--49d04c1e33/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
       "lhs": "e297ba424809e7114c45055c2e8e1d3f9d5ac90abad0f01d67b8267870e39d90",
-      "rhs": "5e7ab206f1cfca17dc00c6f344b57dc3a89a1a5394f8ddf21a9b50bff3a1e84d",
-      "spec": "d6e3f2927ad199412d20ca7edb617e2c00284a0d983540bac74d78769ff05661"
+      "rhs": "6eb147978c8a540c5d0f6709a2f820ef3d2edb39f70663a01ba1c9fd414b0409",
+      "spec": "dad2766c72a6c173cbb8e9e5c1f9543e9c3c1c196f00bedd4691c27927630bec"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/isinf/test_isinf-shape2-dtype2-cuda-0.001-0.001--49d04c1e33/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -150,7 +162,7 @@ WARNING etv.verify [run_id=36649eee1092 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -177,7 +189,8 @@ WARNING etv.verify [run_id=36649eee1092 pair_id=build/upstream/ntops/tests/test_
       "declared predicate: binding.lhs.arg5",
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg7",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -187,7 +200,7 @@ WARNING etv.verify [run_id=36649eee1092 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

@@ -1,18 +1,52 @@
 {
   "best_configs": [],
+  "capture_origin": "line_trace",
   "captured_output": {
     "device": "cuda:0",
     "dtype": "torch.float32",
     "kind": "tensor",
+    "provenance": {
+      "alias_group": "storage-0002",
+      "byte_offset": 0,
+      "storage_id": "storage-0002",
+      "storage_nbytes": 200,
+      "storage_offset": 0,
+      "tensor_id": "tensor-0002"
+    },
     "requires_grad": false,
     "shape": [
       50
     ],
-    "storage_offset": 0,
     "stride": [
       1
     ]
   },
+  "captured_output_leaves": [
+    {
+      "leaf_index": 0,
+      "path": "reference_output",
+      "value": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0002",
+          "byte_offset": 0,
+          "storage_id": "storage-0002",
+          "storage_nbytes": 200,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0002"
+        },
+        "requires_grad": false,
+        "shape": [
+          50
+        ],
+        "stride": [
+          1
+        ]
+      }
+    }
+  ],
   "error": "Unsupported('Dynamic shape operator\\n  Explanation: Operator `aten.bincount.default`\\'s output shape depends on input Tensor data.\\n  Hint: Enable tracing of dynamic shape operators with `torch._dynamo.config.capture_dynamic_output_shape_ops = True`\\n\\n  Developer debug context: aten.bincount.default\\n\\n\\nfrom user code:\\n   File \"<eval_with_key>.1 from /data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py:1301 in wrapped\", line 5, in forward\\n    bincount = torch.ops.aten.bincount.default(arg0_1, arg1_1, 10);  arg0_1 = arg1_1 = None\\n\\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you\\'re reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\\n')",
   "execution": 0,
   "expression": "torch.bincount(input_tensor, weights=weights, minlength=minlength)",
@@ -22,11 +56,18 @@
       "device": "cuda:0",
       "dtype": "torch.int32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0000",
+        "byte_offset": 0,
+        "storage_id": "storage-0000",
+        "storage_nbytes": 200,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0000"
+      },
       "requires_grad": false,
       "shape": [
         50
       ],
-      "storage_offset": 0,
       "stride": [
         1
       ]
@@ -35,11 +76,18 @@
       "device": "cuda:0",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0001",
+        "byte_offset": 0,
+        "storage_id": "storage-0001",
+        "storage_nbytes": 200,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0001"
+      },
       "requires_grad": false,
       "shape": [
         50
       ],
-      "storage_offset": 0,
       "stride": [
         1
       ]
@@ -57,7 +105,7 @@
   "target_names": [
     "ref_out"
   ],
-  "traceback": "Traceback (most recent call last):\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 635, in _compile_reference\n    compiled_output = compiled(*fresh_inputs)\n                      ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 375, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1773, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1784, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 745, in compile_wrapper\n    raise e.with_traceback(None) from e.__cause__  # User compiler error\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._dynamo.exc.Unsupported: Dynamic shape operator\n  Explanation: Operator `aten.bincount.default`'s output shape depends on input Tensor data.\n  Hint: Enable tracing of dynamic shape operators with `torch._dynamo.config.capture_dynamic_output_shape_ops = True`\n\n  Developer debug context: aten.bincount.default\n\n\nfrom user code:\n   File \"<eval_with_key>.1 from /data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py:1301 in wrapped\", line 5, in forward\n    bincount = torch.ops.aten.bincount.default(arg0_1, arg1_1, 10);  arg0_1 = arg1_1 = None\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
+  "traceback": "Traceback (most recent call last):\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 971, in _compile_reference\n    compiled_output = compiled(*fresh_inputs)\n                      ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 375, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1773, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1784, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 745, in compile_wrapper\n    raise e.with_traceback(None) from e.__cause__  # User compiler error\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._dynamo.exc.Unsupported: Dynamic shape operator\n  Explanation: Operator `aten.bincount.default`'s output shape depends on input Tensor data.\n  Hint: Enable tracing of dynamic shape operators with `torch._dynamo.config.capture_dynamic_output_shape_ops = True`\n\n  Developer debug context: aten.bincount.default\n\n\nfrom user code:\n   File \"<eval_with_key>.1 from /data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py:1301 in wrapped\", line 5, in forward\n    bincount = torch.ops.aten.bincount.default(arg0_1, arg1_1, 10);  arg0_1 = arg1_1 = None\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
   "ttir": [],
   "ttir_status": "unavailable"
 }

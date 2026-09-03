@@ -10,9 +10,61 @@
     },
     "padding": 2
   },
-  "format": "etv-benchmark-test-capture-v1",
+  "format": "etv-benchmark-test-capture-v2",
   "lhs_launches": [
     {
+      "compiler_signature": {
+        "arg_names": [
+          "ninetoothed_ninetoothed_tensor_0_pointer",
+          "ninetoothed_ninetoothed_tensor_0_size_0",
+          "ninetoothed_ninetoothed_tensor_0_size_1",
+          "ninetoothed_ninetoothed_tensor_0_size_2",
+          "ninetoothed_ninetoothed_tensor_0_stride_0",
+          "ninetoothed_ninetoothed_tensor_0_stride_1",
+          "ninetoothed_ninetoothed_tensor_0_stride_2",
+          "ninetoothed_ninetoothed_tensor_1_pointer",
+          "ninetoothed_ninetoothed_tensor_1_size_0",
+          "ninetoothed_ninetoothed_tensor_1_size_1",
+          "ninetoothed_ninetoothed_tensor_1_size_2",
+          "ninetoothed_ninetoothed_tensor_1_stride_0",
+          "ninetoothed_ninetoothed_tensor_1_stride_1",
+          "ninetoothed_ninetoothed_tensor_1_stride_2"
+        ],
+        "attributes": {
+          "(0,)": "[['tt.divisibility', 16]]",
+          "(10,)": "[]",
+          "(11,)": "[]",
+          "(12,)": "[]",
+          "(3,)": "[]",
+          "(4,)": "[]",
+          "(5,)": "[]",
+          "(7,)": "[['tt.divisibility', 16]]"
+        },
+        "constants": {
+          "(1,)": 1,
+          "(13,)": 1,
+          "(2,)": 1,
+          "(6,)": 1,
+          "(8,)": 1,
+          "(9,)": 1
+        },
+        "signature": {
+          "ninetoothed_ninetoothed_tensor_0_pointer": "*fp32",
+          "ninetoothed_ninetoothed_tensor_0_size_0": "constexpr",
+          "ninetoothed_ninetoothed_tensor_0_size_1": "constexpr",
+          "ninetoothed_ninetoothed_tensor_0_size_2": "i32",
+          "ninetoothed_ninetoothed_tensor_0_stride_0": "i32",
+          "ninetoothed_ninetoothed_tensor_0_stride_1": "i32",
+          "ninetoothed_ninetoothed_tensor_0_stride_2": "constexpr",
+          "ninetoothed_ninetoothed_tensor_1_pointer": "*fp32",
+          "ninetoothed_ninetoothed_tensor_1_size_0": "constexpr",
+          "ninetoothed_ninetoothed_tensor_1_size_1": "constexpr",
+          "ninetoothed_ninetoothed_tensor_1_size_2": "i32",
+          "ninetoothed_ninetoothed_tensor_1_stride_0": "i32",
+          "ninetoothed_ninetoothed_tensor_1_stride_1": "i32",
+          "ninetoothed_ninetoothed_tensor_1_stride_2": "constexpr"
+        }
+      },
       "grid": [
         1,
         1,
@@ -31,13 +83,22 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0000",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "scratch",
+              "storage_id": "storage-0000",
+              "storage_nbytes": 204,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0000"
+            },
             "requires_grad": false,
             "shape": [
               1,
               1,
               51
             ],
-            "storage_offset": 0,
             "stride": [
               51,
               51,
@@ -82,13 +143,24 @@
             "device": "cuda:0",
             "dtype": "torch.float32",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0001",
+              "byte_offset": 0,
+              "output_leaf_indices": [
+                0
+              ],
+              "runtime_role": "output",
+              "storage_id": "storage-0001",
+              "storage_nbytes": 100,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0001"
+            },
             "requires_grad": false,
             "shape": [
               1,
               1,
               25
             ],
-            "storage_offset": 0,
             "stride": [
               25,
               25,
@@ -132,6 +204,36 @@
       "ttir_sha256": "e4063892beb1bd8fed9797f3fd8e02fb2518a01367414df6b9ff75b3e5393a03"
     }
   ],
+  "lhs_output_leaves": [
+    {
+      "leaf_index": 0,
+      "path": "lhs_output:ntops_output",
+      "value": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0001",
+          "byte_offset": 0,
+          "storage_id": "storage-0001",
+          "storage_nbytes": 100,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0001"
+        },
+        "requires_grad": false,
+        "shape": [
+          1,
+          1,
+          25
+        ],
+        "stride": [
+          25,
+          25,
+          1
+        ]
+      }
+    }
+  ],
   "ninetoothed_sources": [
     {
       "path": "/data3/yelv.lh/ETV/benchmark/max_pool1d/test_max_pool1d-kernel_stride1-2-True--1b06fc6ea7/lhs/ninetoothed-source/45762f515a87f85be3388e921aeb8daa8dd26a0e51ad5f61f57bacd74b983dd3.py",
@@ -139,6 +241,61 @@
     }
   ],
   "nodeid": "build/upstream/ntops/tests/test_max_pool1d.py::test_max_pool1d[kernel_stride1-2-True]",
+  "provenance": {
+    "storages": [
+      {
+        "alias_group": "storage-0000",
+        "origins": [
+          "lhs.launch[0].arg[0]:ninetoothed_ninetoothed_tensor_0_pointer"
+        ],
+        "storage_id": "storage-0000"
+      },
+      {
+        "alias_group": "storage-0001",
+        "origins": [
+          "lhs.launch[0].arg[7]:ninetoothed_ninetoothed_tensor_1_pointer",
+          "lhs_output:ntops_output",
+          "test_local:ntops_output"
+        ],
+        "storage_id": "storage-0001"
+      },
+      {
+        "alias_group": "storage-0002",
+        "origins": [
+          "reference[0].input:input_tensor[0]",
+          "reference_input:input_tensor[0]",
+          "restored_reference_input[0]",
+          "test_local:input_tensor"
+        ],
+        "storage_id": "storage-0002"
+      }
+    ],
+    "tensors": [
+      {
+        "origins": [
+          "lhs.launch[0].arg[0]:ninetoothed_ninetoothed_tensor_0_pointer"
+        ],
+        "tensor_id": "tensor-0000"
+      },
+      {
+        "origins": [
+          "lhs.launch[0].arg[7]:ninetoothed_ninetoothed_tensor_1_pointer",
+          "lhs_output:ntops_output",
+          "test_local:ntops_output"
+        ],
+        "tensor_id": "tensor-0001"
+      },
+      {
+        "origins": [
+          "reference[0].input:input_tensor[0]",
+          "reference_input:input_tensor[0]",
+          "restored_reference_input[0]",
+          "test_local:input_tensor"
+        ],
+        "tensor_id": "tensor-0002"
+      }
+    ]
+  },
   "pytest_exception": null,
   "reference_executions": 1,
   "reference_recovered_after_exception": 0,
@@ -166,6 +323,7 @@
       "best_configs": [],
       "capture_origin": "line_trace",
       "captured_output": null,
+      "captured_output_leaves": [],
       "error": "RuntimeError('max_pool1d() padding should be at most half of kernel size, but got padding=2 and kernel_size=3')",
       "execution": 0,
       "expression": "torch.nn.functional.max_pool1d(input_tensor, kernel_size=kernel_size, stride=stride, padding=padding, ceil_mode=ceil_mode)",
@@ -175,13 +333,20 @@
           "device": "cuda:0",
           "dtype": "torch.float32",
           "kind": "tensor",
+          "provenance": {
+            "alias_group": "storage-0002",
+            "byte_offset": 0,
+            "storage_id": "storage-0002",
+            "storage_nbytes": 188,
+            "storage_offset": 0,
+            "tensor_id": "tensor-0002"
+          },
           "requires_grad": false,
           "shape": [
             1,
             1,
             47
           ],
-          "storage_offset": 0,
           "stride": [
             47,
             47,
@@ -200,7 +365,7 @@
       "target_names": [
         "reference_output"
       ],
-      "traceback": "Traceback (most recent call last):\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 615, in _compile_reference\n    graph_module = make_fx(callable_, tracing_mode=\"real\")(*example_inputs)\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2318, in wrapped\n    return make_fx_tracer.trace(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2250, in trace\n    return self._trace_inner(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2221, in _trace_inner\n    t = dispatch_trace(\n        ^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_compile.py\", line 53, in inner\n    return disable_fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 929, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1254, in dispatch_trace\n    graph = tracer.trace(root, concrete_args)  # type: ignore[arg-type]\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/_symbolic_trace.py\", line 850, in trace\n    (self.create_arg(fn(*args)),),\n                     ^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1312, in wrapped\n    out = f(*tensors)  # type:ignore[call-arg]\n          ^^^^^^^^^^^\n  File \"<string>\", line 1, in <lambda>\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 530, in reference_callable\n    return eval(site.code, test_globals, namespace)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/build/upstream/ntops/tests/test_max_pool1d.py\", line 39, in <module>\n    reference_output = torch.nn.functional.max_pool1d(\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_jit_internal.py\", line 627, in fn\n    return if_false(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/functional.py\", line 724, in _max_pool1d\n    return handle_torch_function(\n           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/overrides.py\", line 1725, in handle_torch_function\n    result = mode.__torch_function__(public_api, types, args, kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1360, in __torch_function__\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_jit_internal.py\", line 627, in fn\n    return if_false(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/functional.py\", line 737, in _max_pool1d\n    return torch.max_pool1d(input, kernel_size, stride, padding, dilation, ceil_mode)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: max_pool1d() padding should be at most half of kernel size, but got padding=2 and kernel_size=3\n",
+      "traceback": "Traceback (most recent call last):\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 949, in _compile_reference\n    graph_module = make_fx(callable_, tracing_mode=\"real\")(*example_inputs)\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2318, in wrapped\n    return make_fx_tracer.trace(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2250, in trace\n    return self._trace_inner(f, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 2221, in _trace_inner\n    t = dispatch_trace(\n        ^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_compile.py\", line 53, in inner\n    return disable_fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 929, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1254, in dispatch_trace\n    graph = tracer.trace(root, concrete_args)  # type: ignore[arg-type]\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/_symbolic_trace.py\", line 850, in trace\n    (self.create_arg(fn(*args)),),\n                     ^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1312, in wrapped\n    out = f(*tensors)  # type:ignore[call-arg]\n          ^^^^^^^^^^^\n  File \"<string>\", line 1, in <lambda>\n  File \"/data3/yelv.lh/ETV/tools/capture_benchmark_test.py\", line 860, in reference_callable\n    return eval(site.code, test_globals, namespace)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/build/upstream/ntops/tests/test_max_pool1d.py\", line 39, in <module>\n    reference_output = torch.nn.functional.max_pool1d(\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_jit_internal.py\", line 627, in fn\n    return if_false(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/functional.py\", line 724, in _max_pool1d\n    return handle_torch_function(\n           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/overrides.py\", line 1725, in handle_torch_function\n    result = mode.__torch_function__(public_api, types, args, kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/fx/experimental/proxy_tensor.py\", line 1360, in __torch_function__\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/_jit_internal.py\", line 627, in fn\n    return if_false(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/data3/yelv.lh/ETV/.venv-nt025/lib/python3.12/site-packages/torch/nn/functional.py\", line 737, in _max_pool1d\n    return torch.max_pool1d(input, kernel_size, stride, padding, dilation, ceil_mode)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: max_pool1d() padding should be at most half of kernel size, but got padding=2 and kernel_size=3\n",
       "ttir": [],
       "ttir_status": "unavailable"
     }
@@ -218,13 +383,20 @@
       "device": "cuda:0",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0002",
+        "byte_offset": 0,
+        "storage_id": "storage-0002",
+        "storage_nbytes": 188,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0002"
+      },
       "requires_grad": false,
       "shape": [
         1,
         1,
         47
       ],
-      "storage_offset": 0,
       "stride": [
         47,
         47,
@@ -244,13 +416,20 @@
       "device": "cuda:0",
       "dtype": "torch.float32",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0001",
+        "byte_offset": 0,
+        "storage_id": "storage-0001",
+        "storage_nbytes": 100,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0001"
+      },
       "requires_grad": false,
       "shape": [
         1,
         1,
         25
       ],
-      "storage_offset": 0,
       "stride": [
         25,
         25,

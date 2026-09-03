@@ -2,13 +2,13 @@
   "best_configs": [
     {
       "content": {
-        "XBLOCK": 256,
+        "XBLOCK": 128,
         "configs_hash": "1b2cc4dbebb9680d3ce31843331593b159e4046c056f195ca1ccf2464d5b37d1",
         "found_by_coordesc": false,
         "num_stages": 1,
         "num_warps": 4,
         "time_taken_ms": 12,
-        "triton_cache_hash": "WRW3NY4XG2IAL4FBUCYZ36SGN7MGJ5OUMZJU5CJ436KVDCATICNA"
+        "triton_cache_hash": "NYTETWNIE2WCE6MQSVSGJSVU4QYLBHC6VHX74ZUO2HK4HDIEFNAQ"
       },
       "path": "/data3/yelv.lh/ETV/benchmark/ne/test_ne-shape5-dtype5-cuda-0.01-0.01--16b920dc09/rhs/reference-000-000/torchinductor-cache/cg/4269885b03312b1c2750675b583be5e1d9a73efe894ec67331a22affae08d5c4.best_config"
     }
@@ -18,19 +18,56 @@
     "device": "cuda:0",
     "dtype": "torch.bool",
     "kind": "tensor",
+    "provenance": {
+      "alias_group": "storage-0003",
+      "byte_offset": 0,
+      "storage_id": "storage-0003",
+      "storage_nbytes": 784,
+      "storage_offset": 0,
+      "tensor_id": "tensor-0003"
+    },
     "requires_grad": false,
     "shape": [
       7,
       8,
       14
     ],
-    "storage_offset": 0,
     "stride": [
       112,
       14,
       1
     ]
   },
+  "captured_output_leaves": [
+    {
+      "leaf_index": 0,
+      "path": "reference_output",
+      "value": {
+        "device": "cuda:0",
+        "dtype": "torch.bool",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0003",
+          "byte_offset": 0,
+          "storage_id": "storage-0003",
+          "storage_nbytes": 784,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0003"
+        },
+        "requires_grad": false,
+        "shape": [
+          7,
+          8,
+          14
+        ],
+        "stride": [
+          112,
+          14,
+          1
+        ]
+      }
+    }
+  ],
   "checks": {
     "compiled_vs_captured_reference": {
       "leaf_count_actual": 1,
@@ -57,6 +94,30 @@
       ]
     }
   },
+  "compiled_output": {
+    "device": "cuda:0",
+    "dtype": "torch.bool",
+    "kind": "tensor",
+    "provenance": {
+      "alias_group": "storage-0004",
+      "byte_offset": 0,
+      "storage_id": "storage-0004",
+      "storage_nbytes": 784,
+      "storage_offset": 0,
+      "tensor_id": "tensor-0004"
+    },
+    "requires_grad": false,
+    "shape": [
+      7,
+      8,
+      14
+    ],
+    "stride": [
+      112,
+      14,
+      1
+    ]
+  },
   "execution": 0,
   "expression": "torch.ne(input, other)",
   "inductor_sources": [
@@ -74,13 +135,20 @@
       "device": "cuda:0",
       "dtype": "torch.float16",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0000",
+        "byte_offset": 0,
+        "storage_id": "storage-0000",
+        "storage_nbytes": 1568,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0000"
+      },
       "requires_grad": false,
       "shape": [
         7,
         8,
         14
       ],
-      "storage_offset": 0,
       "stride": [
         112,
         14,
@@ -91,13 +159,20 @@
       "device": "cuda:0",
       "dtype": "torch.float16",
       "kind": "tensor",
+      "provenance": {
+        "alias_group": "storage-0001",
+        "byte_offset": 0,
+        "storage_id": "storage-0001",
+        "storage_nbytes": 1568,
+        "storage_offset": 0,
+        "tensor_id": "tensor-0001"
+      },
       "requires_grad": false,
       "shape": [
         7,
         8,
         14
       ],
-      "storage_offset": 0,
       "stride": [
         112,
         14,
@@ -110,13 +185,44 @@
     "other[0]"
   ],
   "line": 16,
+  "output_leaves": [
+    {
+      "leaf_index": 0,
+      "path": "compiled_output",
+      "value": {
+        "device": "cuda:0",
+        "dtype": "torch.bool",
+        "kind": "tensor",
+        "provenance": {
+          "alias_group": "storage-0004",
+          "byte_offset": 0,
+          "storage_id": "storage-0004",
+          "storage_nbytes": 784,
+          "storage_offset": 0,
+          "tensor_id": "tensor-0004"
+        },
+        "requires_grad": false,
+        "shape": [
+          7,
+          8,
+          14
+        ],
+        "stride": [
+          112,
+          14,
+          1
+        ]
+      }
+    }
+  ],
   "runtime_launches": [
     {
-      "cache_hash": "WRW3NY4XG2IAL4FBUCYZ36SGN7MGJ5OUMZJU5CJ436KVDCATICNA",
+      "cache_hash": "NYTETWNIE2WCE6MQSVSGJSVU4QYLBHC6VHX74ZUO2HK4HDIEFNAQ",
+      "compiler_signature": null,
       "config": {
         "kind": "triton.Config",
         "kwargs": {
-          "XBLOCK": 256
+          "XBLOCK": 128
         },
         "maxnreg": null,
         "num_ctas": 1,
@@ -124,13 +230,13 @@
         "num_warps": 4
       },
       "grid": [
-        4,
+        7,
         1,
         1
       ],
       "index": 0,
       "kernel_name": "triton_poi_fused_ne_0",
-      "programs": 4,
+      "programs": 7,
       "runtime_arguments": [
         {
           "position": 0,
@@ -138,13 +244,22 @@
             "device": "cuda:0",
             "dtype": "torch.float16",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0000",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "input",
+              "storage_id": "storage-0000",
+              "storage_nbytes": 1568,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0000"
+            },
             "requires_grad": false,
             "shape": [
               7,
               8,
               14
             ],
-            "storage_offset": 0,
             "stride": [
               112,
               14,
@@ -158,13 +273,22 @@
             "device": "cuda:0",
             "dtype": "torch.float16",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0001",
+              "byte_offset": 0,
+              "output_leaf_indices": [],
+              "runtime_role": "input",
+              "storage_id": "storage-0001",
+              "storage_nbytes": 1568,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0001"
+            },
             "requires_grad": false,
             "shape": [
               7,
               8,
               14
             ],
-            "storage_offset": 0,
             "stride": [
               112,
               14,
@@ -178,13 +302,24 @@
             "device": "cuda:0",
             "dtype": "torch.bool",
             "kind": "tensor",
+            "provenance": {
+              "alias_group": "storage-0004",
+              "byte_offset": 0,
+              "output_leaf_indices": [
+                0
+              ],
+              "runtime_role": "output",
+              "storage_id": "storage-0004",
+              "storage_nbytes": 784,
+              "storage_offset": 0,
+              "tensor_id": "tensor-0004"
+            },
             "requires_grad": false,
             "shape": [
               7,
               8,
               14
             ],
-            "storage_offset": 0,
             "stride": [
               112,
               14,
@@ -204,9 +339,9 @@
     {
       "bytes": 5897,
       "path": "/data3/yelv.lh/ETV/benchmark/ne/test_ne-shape5-dtype5-cuda-0.01-0.01--16b920dc09/rhs/reference-000-000/selected-000.ttir",
-      "sha256": "2f9494a9fd7322bfcb8008eb5d28d9a70cd41b08478a86aa7c9c4ef99a721450",
+      "sha256": "cc2b80c98be366b95b2564a28d91d768fbb428fcf6bdbfbbccd0c70362220c1c",
       "source": "triton_cache",
-      "source_path": "/data3/yelv.lh/ETV/benchmark/ne/test_ne-shape5-dtype5-cuda-0.01-0.01--16b920dc09/rhs/reference-000-000/triton-cache/WRW3NY4XG2IAL4FBUCYZ36SGN7MGJ5OUMZJU5CJ436KVDCATICNA/triton_poi_fused_ne_0.ttir"
+      "source_path": "/data3/yelv.lh/ETV/benchmark/ne/test_ne-shape5-dtype5-cuda-0.01-0.01--16b920dc09/rhs/reference-000-000/triton-cache/NYTETWNIE2WCE6MQSVSGJSVU4QYLBHC6VHX74ZUO2HK4HDIEFNAQ/triton_poi_fused_ne_0.ttir"
     }
   ],
   "site_index": 0,

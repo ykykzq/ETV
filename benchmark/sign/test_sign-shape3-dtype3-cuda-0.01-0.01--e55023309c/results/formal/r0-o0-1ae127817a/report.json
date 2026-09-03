@@ -39,16 +39,144 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 305"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
     {
+      "details": {
+        "lhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        },
+        "rhs": {
+          "name": "libtriton",
+          "version": "3.7.1"
+        }
+      },
       "kind": "FRONTEND",
+      "proof_levels": [
+        "STRUCTURAL"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "both raw TTIR modules were parsed and verified by pinned libtriton before lifting into the common semantic IR"
+    },
+    {
+      "details": {
+        "roles": [
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            },
+            "logical": "Input0",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg0",
+              "offset": 0
+            }
+          },
+          {
+            "lhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg4",
+              "offset": 0
+            },
+            "logical": "Output",
+            "rhs": {
+              "index": 0,
+              "kind": "block",
+              "name": "arg1",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      "kind": "ABI",
+      "proof_levels": [
+        "TRUSTED_AXIOM"
+      ],
+      "required_for_final": true,
+      "status": "PROVED",
+      "summary": "physical parameters are aligned to explicit logical roles"
+    },
+    {
+      "details": {
+        "casts": {
+          "lhs": [
+            "sitofp[i32->f16](select(gt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), 1, select(lt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), -1, 0)))"
+          ],
+          "rhs": [
+            "sitofp[i8->f16](isub(zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float))), zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))))",
+            "zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float)))",
+            "zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))"
+          ]
+        },
+        "rule_admission": [],
+        "rule_matches": {},
+        "stats": {
+          "backend": {
+            "name": "egglog",
+            "version": "13.2.0"
+          },
+          "eclasses": 61,
+          "enodes": 61,
+          "iteration_trace": [
+            {
+              "after": {
+                "eclasses": 61,
+                "enodes": 61
+              },
+              "before": {
+                "eclasses": 61,
+                "enodes": 61
+              },
+              "iteration": 1,
+              "rule_matches": {},
+              "updated": false
+            }
+          ],
+          "iterations": 1,
+          "rule_applications": {},
+          "rule_matches": {},
+          "stop_reason": "SATURATED"
+        },
+        "status": "unresolved",
+        "unresolved": [
+          {
+            "expression": "sitofp[i32->f16](select(gt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), 1, select(lt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), -1, 0)))",
+            "side": "lhs"
+          },
+          {
+            "expression": "sitofp[i8->f16](isub(zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float))), zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))))",
+            "side": "rhs"
+          },
+          {
+            "expression": "zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float)))",
+            "side": "rhs"
+          },
+          {
+            "expression": "zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))",
+            "side": "rhs"
+          }
+        ],
+        "unverified_rule_uses": []
+      },
+      "kind": "CAST",
       "proof_levels": [],
-      "reason": "TTIR_OP_UNSUPPORTED",
+      "reason": "CAST_EQUIVALENCE_NOT_REWRITTEN",
       "required_for_final": true,
       "status": "UNKNOWN",
-      "summary": "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
+      "summary": "cast differences were preserved but no admitted rewrite established their equivalence"
     }
   ],
   "counterexample": null,
@@ -122,6 +250,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -135,12 +270,22 @@
     "establishes": "no equivalence or inequivalence conclusion; the reason identifies the first unmet obligation"
   },
   "inputs": {
+    "frontends": {
+      "lhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      },
+      "rhs": {
+        "name": "libtriton",
+        "version": "3.7.1"
+      }
+    },
     "lhs": "/data3/yelv.lh/ETV/benchmark/sign/test_sign-shape3-dtype3-cuda-0.01-0.01--e55023309c/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/sign/test_sign-shape3-dtype3-cuda-0.01-0.01--e55023309c/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "5f95152ba237f18cfd2d269a4d6d3fe2c883a13d35304de912cd9a14a9ca2ae2",
+      "lhs": "39255b5cec1439a35b17590558a3aa79be5d166193e72a09d3b432380d2a747d",
       "rhs": "e2827c571f7478e37a8b56a6891a6cf716164b32a1ea85aa87d0e2ad806ab6d3",
-      "spec": "7eaeb381f27d51584a04d81fc467a3ff4d5ba9ce9f61292eafffaa14593476cc"
+      "spec": "1ec5ff619df780550fda1738c8efd478328b2265163f87e32696654118a82bda"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/sign/test_sign-shape3-dtype3-cuda-0.01-0.01--e55023309c/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -149,14 +294,76 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
   },
   "pair_id": "build/upstream/ntops/tests/test_sign.py::test_sign[shape3-dtype3-cuda-0.01-0.01]::r000-e000-o000",
-  "proof": {},
-  "reason": "TTIR_OP_UNSUPPORTED",
+  "proof": {
+    "cast_rewrites": {
+      "casts": {
+        "lhs": [
+          "sitofp[i32->f16](select(gt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), 1, select(lt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), -1, 0)))"
+        ],
+        "rhs": [
+          "sitofp[i8->f16](isub(zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float))), zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))))",
+          "zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float)))",
+          "zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))"
+        ]
+      },
+      "rule_admission": [],
+      "rule_matches": {},
+      "stats": {
+        "backend": {
+          "name": "egglog",
+          "version": "13.2.0"
+        },
+        "eclasses": 61,
+        "enodes": 61,
+        "iteration_trace": [
+          {
+            "after": {
+              "eclasses": 61,
+              "enodes": 61
+            },
+            "before": {
+              "eclasses": 61,
+              "enodes": 61
+            },
+            "iteration": 1,
+            "rule_matches": {},
+            "updated": false
+          }
+        ],
+        "iterations": 1,
+        "rule_applications": {},
+        "rule_matches": {},
+        "stop_reason": "SATURATED"
+      },
+      "status": "unresolved",
+      "unresolved": [
+        {
+          "expression": "sitofp[i32->f16](select(gt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), 1, select(lt(load(arg0, iadd(0, iadd(imul(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg3)), irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)))), and(and(and(and(and(and(and(and(and(lt(var(pid), iadd(idiv(isub(imul(var(arg1), var(arg2)), 1), 128), 1)), ge(var(pid), 0)), lt(iadd(0, var(lane)), 128)), ge(iadd(0, var(lane)), 0)), lt(iadd(imul(var(pid), 128), iadd(0, var(lane))), imul(var(arg1), var(arg2)))), ge(iadd(imul(var(pid), 128), iadd(0, var(lane))), 0)), lt(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg1))), ge(idiv(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), lt(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), var(arg2))), ge(irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), var(arg2)), 0)), undefined_float), 0), -1, 0)))",
+          "side": "lhs"
+        },
+        {
+          "expression": "sitofp[i8->f16](isub(zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float))), zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))))",
+          "side": "rhs"
+        },
+        {
+          "expression": "zext[i1->i8](lt(0, load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float)))",
+          "side": "rhs"
+        },
+        {
+          "expression": "zext[i1->i8](lt(load(arg0, iadd(0, iadd(imul(var(pid), 256), iadd(0, var(lane)))), lt(iadd(imul(var(pid), 256), iadd(0, var(lane))), 305), undefined_float), 0))",
+          "side": "rhs"
+        }
+      ],
+      "unverified_rule_uses": []
+    }
+  },
+  "reason": "CAST_EQUIVALENCE_NOT_REWRITTEN",
   "rewrite_registry": {
     "builtin": "validated_builtin_rules",
     "inline_legacy_rules": [],
@@ -176,7 +383,8 @@
       "declared predicate: binding.lhs.arg5",
       "declared predicate: binding.lhs.arg6",
       "declared predicate: binding.lhs.arg7",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -186,16 +394,15 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
     "PairSpec fixed shape/stride/launch bindings",
     "PairSpec no-alias declarations",
     "ABSTRACT_FLOAT interprets floating operations over exact mathematical values",
-    "ETV IR evaluator and memory-token model"
+    "ETV IR evaluator and memory-token model",
+    "ETV TTIR-to-semantic-IR lifting implementation"
   ],
-  "unsupported": [
-    "operation arith.cmpf is valid TTIR but has no ETV IR lifting rule"
-  ]
+  "unsupported": []
 }

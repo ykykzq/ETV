@@ -19,6 +19,11 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg2 = 225"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -89,8 +94,8 @@
         "casts": {
           "lhs": [],
           "rhs": [
-            "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))",
-            "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))"
+            "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))",
+            "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))"
           ]
         },
         "rule_admission": [],
@@ -125,11 +130,11 @@
         "status": "unresolved",
         "unresolved": [
           {
-            "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))",
+            "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))",
             "side": "rhs"
           },
           {
-            "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))",
+            "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))",
             "side": "rhs"
           }
         ],
@@ -140,7 +145,7 @@
       "reason": "CAST_EQUIVALENCE_NOT_REWRITTEN",
       "required_for_final": true,
       "status": "UNKNOWN",
-      "summary": "integer cast differences were preserved but no admitted rewrite established their equivalence"
+      "summary": "cast differences were preserved but no admitted rewrite established their equivalence"
     }
   ],
   "counterexample": null,
@@ -186,6 +191,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -212,9 +224,9 @@
     "lhs": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10--5-dtype1--7c6b969eec/lhs/launch-000.ttir",
     "rhs": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10--5-dtype1--7c6b969eec/rhs/reference-000-000/selected-000.ttir",
     "sha256": {
-      "lhs": "8291ff3f4499a7393ea461e668e7deca9e17960b1a211f9b266e71988e65c060",
-      "rhs": "3e025aacacc6eac9d6782aff00368aec48668c22f90e537979b1a61e53a8bce0",
-      "spec": "69d50fb4192b68a1759756ca96d6f4bac1cc17125a02e40a83ff1b9ac2c9a7f4"
+      "lhs": "658882ae87b560e49f0df6f8a1f0f057972747a33d160155d3afd3903cdfa36a",
+      "rhs": "48c6006c1e6726c7336bea67baf22031ca77c00e0d5c9fadf4e87616737afba5",
+      "spec": "4f94edcda4f162b8899373b0961e9ec3227a440cdd2939fa7e8d1930b1d2cb75"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-10--5-dtype1--7c6b969eec/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -223,7 +235,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -234,8 +246,8 @@
       "casts": {
         "lhs": [],
         "rhs": [
-          "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))",
-          "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))"
+          "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))",
+          "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))"
         ]
       },
       "rule_admission": [],
@@ -270,11 +282,11 @@
       "status": "unresolved",
       "unresolved": [
         {
-          "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))",
+          "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))",
           "side": "rhs"
         },
         {
-          "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 128), iadd(0, var(lane))), 15))",
+          "expression": "sext[i32->i64](irem(iadd(imul(var(pid), 256), iadd(0, var(lane))), 15))",
           "side": "rhs"
         }
       ],
@@ -297,7 +309,8 @@
       "declared predicate: binding.X",
       "declared predicate: binding.lhs.arg1",
       "declared predicate: binding.lhs.arg3",
-      "declared predicate: binding.rhs.arg2"
+      "declared predicate: binding.rhs.arg2",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -307,7 +320,7 @@
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

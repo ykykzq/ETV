@@ -1,4 +1,4 @@
-WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_layer_norm.py::test_layer_norm[shape0-dtype0-cuda-0.001-0.001-True-False-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation scf.for is parsed but not yet lifted"}
+WARNING etv.verify [run_id=fdca69c44062 pair_id=build/upstream/ntops/tests/test_layer_norm.py::test_layer_norm[shape0-dtype0-cuda-0.001-0.001-True-False-0.001]::r000-e000-o000 phase=frontend]: program frontend rejected the input event=frontend_failed fields={"code": "TTIR_REGION_SEMANTICS_UNSUPPORTED", "error": "region operation scf.for is parsed but not yet lifted"}
 {
   "assumptions": [
     {
@@ -30,6 +30,11 @@ WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.side_bindings.rhs",
       "text": "rhs.arg3 = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -47,13 +52,6 @@ WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_
     {
       "evidence": "TRUSTED_AXIOM",
       "id": "abi.Input0",
-      "kind": "builtin",
-      "source": "PairSpec.predicates",
-      "status": "assumed"
-    },
-    {
-      "evidence": "TRUSTED_AXIOM",
-      "id": "abi.Input1",
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
@@ -106,6 +104,13 @@ WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -124,7 +129,7 @@ WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_
     "sha256": {
       "lhs": "f57a0f474c2d92869c3ccad6edf06f038c8e2f0789a7a024aa797f31bea26995",
       "rhs": "e11da45d7350a22b72ca9a898806d74e57aa4ec845f781644159f3568f2a5de4",
-      "spec": "33a25f929b507fe45e4f302979f79aa92f022442bbbab7549770ce4fdb0d6f7b"
+      "spec": "07790fccdf20f6e84af8a827f30458de01ea7af2c76368ddc54e9b1de6f6c4a3"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/layer_norm/test_layer_norm-shape0-dtype0-cuda-0.001-0.001-True-False-0.001--22ad28ae16/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -133,7 +138,7 @@ WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'inferred_single_rhs_store_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -152,14 +157,14 @@ WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_
   "soundness": {
     "conditional_on": [
       "declared predicate: abi.Input0",
-      "declared predicate: abi.Input1",
       "declared predicate: abi.Output",
       "declared predicate: binding.X",
       "declared predicate: binding.lhs.arg1",
       "declared predicate: binding.lhs.arg3",
       "declared predicate: binding.lhs.arg5",
       "declared predicate: binding.lhs.arg7",
-      "declared predicate: binding.rhs.arg3"
+      "declared predicate: binding.rhs.arg3",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -169,7 +174,7 @@ WARNING etv.verify [run_id=0dafaf7acfc8 pair_id=build/upstream/ntops/tests/test_
   "status": "UNKNOWN",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",

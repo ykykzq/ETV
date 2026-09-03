@@ -4,6 +4,11 @@
       "evidence": "TRUSTED_AXIOM",
       "source": "PairSpec.predicates.bindings",
       "text": "X = 1"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "source": "PairSpec.predicates.disjoint",
+      "text": "disjoint(Input0, Output)"
     }
   ],
   "blocks": [
@@ -202,6 +207,13 @@
       "kind": "builtin",
       "source": "PairSpec.predicates",
       "status": "assumed"
+    },
+    {
+      "evidence": "TRUSTED_AXIOM",
+      "id": "disjoint.0",
+      "kind": "builtin",
+      "source": "PairSpec.predicates",
+      "status": "assumed"
     }
   ],
   "guarantees": {
@@ -230,7 +242,7 @@
     "sha256": {
       "lhs": "f762c9bc0563c1d5ba2cec9b5131e47e703f601f13f03cc9f7cc9e9cf5d2f7fe",
       "rhs": "b29ca5ca2133a67284cf29c5422b45be67952f77f12de6064fe050623576b21a",
-      "spec": "c080aeaa78e937082fac5249fcc2046fd9d10752736bc0298806d8e29bd29167"
+      "spec": "6c5594b9ae0c802f0795af50eebc04da9dd6265d40eba86f77621f4f08dc8f42"
     },
     "spec": "/data3/yelv.lh/ETV/benchmark/diag/test_diag_1d-1-0-dtype1--8d670fe987/pairspec/pairs/pair-r000-e000-o000.json"
   },
@@ -239,7 +251,7 @@
       "Both kernels were captured from the same specialized pytest node.",
       "Input roles are aligned by captured tensor/storage provenance when available, otherwise by exact runtime tensor signatures; endpoint offsets normalize tensor views to their logical storage bases.",
       "Selected-store dependencies without a reliable counterpart are left unmapped and must prevent a proof if they affect the observation.",
-      "This PairSpec observes output leaf 'reference_output' only."
+      "This PairSpec observes output leaf 'compiled_output' only."
     ],
     "proof_relevance": "informational_only",
     "warning": "Natural-language assumptions are not formal predicates and do not establish equivalence."
@@ -2099,7 +2111,8 @@
     "conditional_on": [
       "declared predicate: abi.Input0",
       "declared predicate: abi.Output",
-      "declared predicate: binding.X"
+      "declared predicate: binding.X",
+      "declared predicate: disjoint.0"
     ],
     "level": "formal_under_declared_predicates",
     "non_formal_assistance": [
@@ -2109,7 +2122,7 @@
   "status": "PROVED",
   "tool": {
     "name": "ETV",
-    "version": "0.6.1"
+    "version": "0.7.0"
   },
   "trusted_axioms": [
     "PairSpec role correspondence",
