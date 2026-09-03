@@ -67,6 +67,55 @@ def _cast_module(operation_name: str, source_type: str, result_type: str) -> TTI
     )
 
 
+def _numeric_cast_module(
+    operation_name: str, source_type: str, result_type: str
+) -> TTIRModule:
+    output = TTIRValue(1, "!tt.ptr<f32>")
+    source = TTIRValue(2, source_type)
+    casted = TTIRValue(3, result_type)
+    return TTIRModule(
+        source=ROOT / "tests/fixtures/synthetic_numeric_cast.ttir",
+        source_sha256="0" * 64,
+        parser="test",
+        parser_version=REQUIRED_TRITON_VERSION,
+        function="numeric_cast_kernel",
+        arguments=(TTIRArgument(0, output), TTIRArgument(1, source)),
+        operations=(
+            TTIROperation(
+                index=0,
+                name=operation_name,
+                operands=(source,),
+                results=(casted,),
+                block_id=0,
+                regions=0,
+                attributes={},
+                assembly=None,
+            ),
+            TTIROperation(
+                index=1,
+                name="tt.store",
+                operands=(output, casted),
+                results=(),
+                block_id=0,
+                regions=0,
+                attributes={},
+                assembly=None,
+            ),
+            TTIROperation(
+                index=2,
+                name="tt.func",
+                operands=(),
+                results=(),
+                block_id=0,
+                regions=0,
+                attributes={"sym_name": "numeric_cast_kernel"},
+                assembly=None,
+            ),
+        ),
+        canonical_assembly="",
+    )
+
+
 def _find_expr(expression: Expr, op: str):
     if expression.op == op:
         return expression
@@ -101,6 +150,21 @@ def test_lifter_preserves_integer_cast_operators(
     assert cast is not None
     assert cast.data == (source_type, result_type)
     assert cast.sort == Sort.INT
+
+
+@pytest.mark.parametrize(
+    ("operation_name", "semantic_op"),
+    [("arith.sitofp", "sitofp"), ("arith.uitofp", "uitofp")],
+)
+def test_lifter_preserves_integer_to_float_cast_operators(operation_name, semantic_op):
+    program = lift_ttir(
+        _numeric_cast_module(operation_name, "i32", "f32"), int_const(1)
+    )
+
+    cast = program.stores[0].value
+    assert cast.op == semantic_op
+    assert cast.data == ("i32", "f32")
+    assert cast.sort == Sort.FLOAT
 
 
 def test_lifter_selects_one_store_from_multi_output_ttir():
@@ -275,6 +339,24 @@ def test_raw_ttir_mul_add_and_fma_are_proved_by_the_same_frontend():
     assert report["inputs"]["frontends"]["lhs"]["name"] == "libtriton"
     assert report["inputs"]["frontends"]["rhs"]["name"] == "libtriton"
     assert "fma_def" in report["proof"]["egraph"]["stats"]["rule_matches"]
+
+
+@pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
+def test_extended_benchmark_dialect_ops_are_lifted_and_proved():
+    root = ROOT / "tests/fixtures/ttir"
+    lhs = parse_ttir(root / "extended_ops_lhs.ttir")
+    rhs = parse_ttir(root / "extended_ops_rhs.ttir")
+
+    assert {"tt.clampf", "math.exp", "math.erf"} <= {
+        operation.name for operation in lhs.operations
+    }
+    assert {"arith.cmpf", "arith.ori", "tt.extern_elementwise"} <= {
+        operation.name for operation in rhs.operations
+    }
+
+    report = verify_spec(root / "extended_ops_pair.json")
+    assert report["status"] == Status.PROVED.value
+    assert report["reason"] == "OBSERVABLE_MEMORY_EQUIVALENT"
 
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")

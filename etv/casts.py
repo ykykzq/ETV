@@ -6,12 +6,17 @@ import re
 from typing import Any, Tuple
 
 INTEGER_CAST_OPS = frozenset({"sext", "zext", "trunc", "index_cast", "index_castui"})
+INT_TO_FLOAT_CAST_OPS = frozenset({"sitofp", "uitofp"})
 TTIR_INTEGER_CAST_OPS = {
     "arith.extsi": "sext",
     "arith.extui": "zext",
     "arith.trunci": "trunc",
     "arith.index_cast": "index_cast",
     "arith.index_castui": "index_castui",
+}
+TTIR_INT_TO_FLOAT_CAST_OPS = {
+    "arith.sitofp": "sitofp",
+    "arith.uitofp": "uitofp",
 }
 
 _INTEGER_TYPE = re.compile(r"^i([1-9][0-9]*)$")

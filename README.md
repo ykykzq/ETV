@@ -35,6 +35,12 @@ structure mismatch must be eliminated by an admitted rewrite that actually
 fires; otherwise the result is `UNKNOWN(CAST_EQUIVALENCE_NOT_REWRITTEN)`. An
 undeclared target-dependent `index` width likewise produces `UNKNOWN`.
 
+The pointwise frontend also covers floating comparisons, min/max/clamp,
+common `math` operations, selected pure libdevice `extern_elementwise` calls,
+and explicit signed/unsigned integer-to-float casts. Unsupported bit-level,
+region, reduction, and non-floating-memory semantics remain `UNKNOWN`; see
+[Operator Semantic Support](docs/operator_support.md).
+
 ## Installation
 
 ```bash
@@ -167,7 +173,7 @@ verifying partitions in dependency order. The LLM never decides equivalence.
 
 ```text
 etv/ir.py                     Common semantic IR lifted from TT IR
-etv/casts.py                  Integer cast type metadata and finite-width semantics
+etv/casts.py                  Explicit cast metadata and finite-width integer semantics
 etv/ttir/libtriton.py         Pinned libtriton parsing, verification, and snapshots
 etv/ttir/lift.py              Semantic lifting from TT IR to ETV IR
 etv/schema.py                 TT IR PairSpec and internal test-fixture schemas

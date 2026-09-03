@@ -11,7 +11,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
-from .casts import INTEGER_CAST_OPS
+from .casts import INTEGER_CAST_OPS, INT_TO_FLOAT_CAST_OPS
 from .egraph import EGraph
 from .evaluator import SideRoles, eval_expr, evaluate_program
 from .ir import Expr, Program, Sort
@@ -38,7 +38,6 @@ from .schema import load_internal_pair_spec, load_pair_spec, load_program
 from .parametric import ParametricFailure, verify_parametric_pair
 from .ttir import load_program_artifact
 from .z3_validator import admitted_rules
-
 
 LOGGER = get_logger(__name__)
 
@@ -404,6 +403,8 @@ def _constant_abstract(expr: Expr) -> Optional[Fraction]:
         return concrete[0] / concrete[1]
     if expr.op == "fneg":
         return -concrete[0]
+    if expr.op == "fabs":
+        return abs(concrete[0])
     if expr.op == "fma":
         return concrete[0] * concrete[1] + concrete[2]
     return None
@@ -436,6 +437,37 @@ def _definedness_issue(expr: Expr) -> Optional[dict]:
                     "radicand is a provably nonnegative exact constant"
                     if expr.op == "fsqrt"
                     else "radicand is a provably positive exact constant"
+                ),
+            }
+    if expr.op == "flog":
+        argument = _constant_abstract(expr.args[0])
+        if argument is None or argument <= 0:
+            return {
+                "operation": "flog",
+                "expression": expr.render(),
+                "required": "argument is a provably positive exact constant",
+            }
+    if expr.op == "facosh":
+        argument = _constant_abstract(expr.args[0])
+        if argument is None or argument < 1:
+            return {
+                "operation": "facosh",
+                "expression": expr.render(),
+                "required": "argument is a provably >= 1 exact constant",
+            }
+    if expr.op == "fpow":
+        base = _constant_abstract(expr.args[0])
+        exponent = _constant_abstract(expr.args[1])
+        positive_integer_exponent = (
+            exponent is not None and exponent.denominator == 1 and exponent > 0
+        )
+        if not ((base is not None and base > 0) or positive_integer_exponent):
+            return {
+                "operation": "fpow",
+                "expression": expr.render(),
+                "required": (
+                    "base is a provably positive exact constant or exponent is a "
+                    "provably positive integer constant"
                 ),
             }
     return None
@@ -529,11 +561,11 @@ def _expected_numel(spec: PairSpec) -> int:
     return value
 
 
-def _integer_casts(program: Program) -> list[Expr]:
+def _casts(program: Program) -> list[Expr]:
     casts: list[Expr] = []
 
     def visit(expression: Expr) -> None:
-        if expression.op in INTEGER_CAST_OPS:
+        if expression.op in INTEGER_CAST_OPS | INT_TO_FLOAT_CAST_OPS:
             casts.append(expression)
         for argument in expression.args:
             visit(argument)
@@ -554,8 +586,8 @@ def _cast_descriptor(expression: Expr) -> tuple[str, Any]:
 def _cast_rewrite_audit(spec: PairSpec, lhs: Program, rhs: Program) -> dict:
     """Require rewrites for cast-shape differences before bounded evaluation."""
 
-    lhs_casts = _integer_casts(lhs)
-    rhs_casts = _integer_casts(rhs)
+    lhs_casts = _casts(lhs)
+    rhs_casts = _casts(rhs)
     lhs_counts = Counter(_cast_descriptor(item) for item in lhs_casts)
     rhs_counts = Counter(_cast_descriptor(item) for item in rhs_casts)
     summary = {
@@ -1488,7 +1520,7 @@ def _verify_lifted_pair(
                 _block(
                     "CAST",
                     Status.UNKNOWN,
-                    "integer cast differences were preserved but no admitted rewrite "
+                    "cast differences were preserved but no admitted rewrite "
                     "established their equivalence",
                     reason="CAST_EQUIVALENCE_NOT_REWRITTEN",
                     details=cast_audit,
@@ -1504,19 +1536,19 @@ def _verify_lifted_pair(
                 item["id"] for item in cast_audit["unverified_rule_uses"]
             )
             report["trusted_axioms"].append(
-                f"unverified applied integer-cast rewrite rule(s): {trusted_ids}"
+                f"unverified applied cast rewrite rule(s): {trusted_ids}"
             )
             report["guarantees"]["does_not_prove"].append(
-                "soundness of integer-cast rules admitted without validation"
+                "soundness of cast rules admitted without validation"
             )
         report["blocks"].append(
             _block(
                 "CAST",
                 Status.PROVED,
                 (
-                    "integer cast operators are structurally aligned on both sides"
+                    "cast operators are structurally aligned on both sides"
                     if cast_audit["status"] == "structurally_aligned"
-                    else "all differing integer cast operators were discharged by admitted rewrites"
+                    else "all differing cast operators were discharged by admitted rewrites"
                 ),
                 levels,
                 details=cast_audit,

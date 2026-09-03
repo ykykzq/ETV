@@ -156,8 +156,9 @@ def _sha256(path: Path) -> str:
 def _json_value(value: Any, *, origin: str | None = None) -> Any:
     try:
         import torch
-        from triton.runtime.autotuner import Config
-
+    except (ImportError, AttributeError):
+        pass
+    else:
         if isinstance(value, torch.Tensor):
             return {
                 "kind": "tensor",
@@ -172,17 +173,23 @@ def _json_value(value: Any, *, origin: str | None = None) -> Any:
             return {"kind": "torch.dtype", "value": str(value)}
         if isinstance(value, torch.device):
             return {"kind": "torch.device", "value": str(value)}
-        if isinstance(value, Config):
-            return {
-                "kind": "triton.Config",
-                "kwargs": value.kwargs,
-                "num_warps": value.num_warps,
-                "num_ctas": value.num_ctas,
-                "num_stages": value.num_stages,
-                "maxnreg": value.maxnreg,
-            }
+    try:
+        from triton.runtime.autotuner import Config
     except (ImportError, AttributeError):
         pass
+    else:
+        if isinstance(value, Config):
+            try:
+                return {
+                    "kind": "triton.Config",
+                    "kwargs": value.kwargs,
+                    "num_warps": value.num_warps,
+                    "num_ctas": value.num_ctas,
+                    "num_stages": value.num_stages,
+                    "maxnreg": value.maxnreg,
+                }
+            except AttributeError:
+                pass
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, (list, tuple)):

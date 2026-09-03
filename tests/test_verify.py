@@ -6,7 +6,7 @@ import pytest
 import z3
 
 from etv.llm import LLMAssistance
-from etv.ir import Expr, Sort
+from etv.ir import Expr, Sort, int_const
 from etv.model import ProofLevel, Status
 from etv.parametric import ParametricFailure, SMTContext
 from etv.reporting import write_report
@@ -79,6 +79,27 @@ def test_bounded_verifier_does_not_silently_discharge_integer_cast():
     cast_block = next(block for block in report["blocks"] if block["kind"] == "CAST")
     assert cast_block["status"] == Status.UNKNOWN.value
     assert "sext[i8->i32]" in cast_block["details"]["unresolved"][0]["expression"]
+
+
+def test_bounded_verifier_does_not_silently_discharge_integer_to_float_cast():
+    spec = load_internal_pair_spec(FIXTURES / "specs/add_proved.json")
+    lhs = load_program(spec.lhs_path)
+    rhs = load_program(spec.rhs_path)
+    store = lhs.stores[0]
+    cast = Expr(
+        "sitofp",
+        args=(int_const(1),),
+        data=("i32", "f32"),
+        sort=Sort.FLOAT,
+    )
+    lhs = replace(lhs, stores=(replace(store, value=cast),))
+
+    report = verify_internal_pair(spec, lhs, rhs)
+
+    assert report["status"] == Status.UNKNOWN.value
+    assert report["reason"] == "CAST_EQUIVALENCE_NOT_REWRITTEN"
+    cast_block = next(block for block in report["blocks"] if block["kind"] == "CAST")
+    assert "sitofp[i32->f32]" in cast_block["details"]["unresolved"][0]["expression"]
 
 
 def test_bounded_verifier_reports_unmapped_load_as_unknown():

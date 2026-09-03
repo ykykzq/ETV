@@ -29,6 +29,11 @@ store；它不是 e-graph。证明阶段才把 ETV IR 中的表达式编码进 e
 `UNKNOWN(CAST_EQUIVALENCE_NOT_REWRITTEN)`。目标相关 `index` 位宽未声明时同样返回
 `UNKNOWN`。
 
+逐点前端还支持浮点比较、min/max/clamp、常用 `math` 运算、白名单内的纯 libdevice
+`extern_elementwise` 调用，以及保留类型的有符号/无符号整数到浮点 cast。位级操作、
+region、归约和非浮点内存语义仍返回 `UNKNOWN`；完整矩阵见
+[算子语义支持](docs/operator_support.md)。
+
 ## 安装
 
 ```bash
@@ -143,7 +148,7 @@ LLM 新增的非代数规则可按当前策略作为可信规则准入，但若�
 
 ```text
 etv/ir.py                     TT IR 提升后的共同语义 IR
-etv/casts.py                  整数 cast 类型元数据与有限位宽语义
+etv/casts.py                  显式 cast 元数据与有限位宽整数语义
 etv/ttir/libtriton.py         固定版本 libtriton 解析、验证与快照
 etv/ttir/lift.py              TT IR 到 ETV IR 的语义提升
 etv/schema.py                 TT IR PairSpec 与内部测试夹具 schema

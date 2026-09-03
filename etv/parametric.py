@@ -8,7 +8,12 @@ from typing import Any, Mapping, Optional, Sequence
 
 import z3
 
-from .casts import INTEGER_CAST_OPS, integer_width, normalize_cast_data
+from .casts import (
+    INTEGER_CAST_OPS,
+    INT_TO_FLOAT_CAST_OPS,
+    integer_width,
+    normalize_cast_data,
+)
 from .evaluator import SideRoles, build_side_roles
 from .ir import Expr, Program, Sort, bool_const, int_const
 from .model import (
@@ -218,6 +223,8 @@ class SMTContext:
             return SMTTerm(z3.And(values[0], values[1]), conditions)
         if op == "or":
             return SMTTerm(z3.Or(values[0], values[1]), conditions)
+        if op == "xor":
+            return SMTTerm(z3.Xor(values[0], values[1]), conditions)
         if op == "not":
             return SMTTerm(z3.Not(values[0]), conditions)
         if op == "select":
@@ -373,9 +380,40 @@ class SymbolicValueRewriter:
         self.rules.append(rule)
         self.admissions.append(admission)
 
+    def predicate(self, expression: Expr) -> Expr:
+        op = expression.op
+        if op == "const_bool":
+            return expression
+        if op in {"lt", "le", "gt", "ge", "eq", "ne"}:
+            if any(argument.sort == Sort.FLOAT for argument in expression.args):
+                arguments = tuple(self.value(argument) for argument in expression.args)
+            else:
+                arguments = tuple(
+                    _substitute(argument, self.expr_env) for argument in expression.args
+                )
+            return Expr(op, args=arguments, sort=Sort.BOOL)
+        if op in {"and", "or", "xor"}:
+            return Expr(
+                op,
+                args=tuple(self.predicate(argument) for argument in expression.args),
+                sort=Sort.BOOL,
+            )
+        if op == "not":
+            return Expr(
+                "not",
+                args=(self.predicate(expression.args[0]),),
+                sort=Sort.BOOL,
+            )
+        raise ParametricFailure(
+            "COMPUTE",
+            "SYMBOLIC_VALUE_PREDICATE_UNSUPPORTED",
+            f"symbolic value predicate {op!r} is unsupported",
+            {"expression": expression.render(), "side": self.side},
+        )
+
     def value(self, expression: Expr) -> Expr:
         op = expression.op
-        if op == "const_float":
+        if op in {"const_float", "undefined_float"}:
             return expression
         if op == "scalar":
             logical = self.roles.scalars.get(str(expression.data))
@@ -403,6 +441,13 @@ class SymbolicValueRewriter:
                 evidence=ProofLevel.TRUSTED_AXIOM,
             )
             return physical
+        if op in INT_TO_FLOAT_CAST_OPS:
+            return Expr(
+                op,
+                args=(_substitute(expression.args[0], self.expr_env),),
+                data=expression.data,
+                sort=Sort.FLOAT,
+            )
         if op == "load":
             offset = self.context.term(expression.args[0], self.smt_env)
             mask = self.context.term(expression.args[1], self.smt_env)
@@ -483,46 +528,44 @@ class SymbolicValueRewriter:
             )
             return physical
         if op == "select":
-            condition = self.context.term(expression.args[0], self.smt_env)
-            self._defined(condition, "select-condition")
             true_branch = self.value(expression.args[1])
             false_branch = self.value(expression.args[2])
             physical = Expr(
                 "select",
                 args=(
-                    _substitute(expression.args[0], self.expr_env),
+                    self.predicate(expression.args[0]),
                     true_branch,
                     false_branch,
                 ),
                 sort=expression.sort,
             )
-            for expected, selected, bad in (
-                (True, true_branch, z3.Not(condition.value)),
-                (False, false_branch, condition.value),
-            ):
-                proof = self.prover.check_bad(
-                    f"{self.side}:select-constant:{str(expected).lower()}",
-                    z3.And(self.antecedent, bad),
-                )
-                if proof["result"] == "unsat":
-                    self._add_rule(
-                        "select",
-                        physical,
-                        selected,
-                        {
-                            "result": "unsat",
-                            "condition_value": expected,
-                            "proof": proof,
-                        },
-                    )
-                    return physical
-            raise ParametricFailure(
-                "COMPUTE",
-                "SYMBOLIC_SELECT_UNSUPPORTED",
-                "a floating select condition varies over the symbolic output domain",
-                {"expression": expression.render(), "side": self.side},
-            )
-        if op in {"fadd", "fsub", "fmul", "fdiv", "fneg", "fsqrt", "frsqrt", "fma"}:
+            return physical
+        if op in {
+            "fabs",
+            "facosh",
+            "fadd",
+            "fatan",
+            "fceil",
+            "fcos",
+            "fcosh",
+            "fdiv",
+            "ferf",
+            "fexp",
+            "fexp2",
+            "fexpm1",
+            "ffloor",
+            "flog",
+            "fma",
+            "fmul",
+            "fnearbyint",
+            "fneg",
+            "fpow",
+            "frsqrt",
+            "fsin",
+            "fsqrt",
+            "fsub",
+            "ftanh",
+        }:
             return Expr(
                 op,
                 args=tuple(self.value(arg) for arg in expression.args),

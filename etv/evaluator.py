@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Dict, Mapping, Tuple, Union
 
-from .casts import INTEGER_CAST_OPS, apply_integer_cast
+from .casts import INTEGER_CAST_OPS, INT_TO_FLOAT_CAST_OPS, apply_integer_cast
 from .ir import Expr, Program, Sort, bool_const, float_const, int_const
 from .model import (
     Evaluation,
@@ -59,6 +59,18 @@ def _as_float(value: Concrete, where: str) -> Expr:
     return value
 
 
+def _as_expr(value: Concrete, sort: Sort, where: str) -> Expr:
+    if isinstance(value, Expr):
+        if value.sort != sort:
+            raise InputError(f"{where} has an inconsistent operand sort", "TYPE_ERROR")
+        return value
+    if sort == Sort.BOOL and isinstance(value, bool):
+        return bool_const(value)
+    if sort == Sort.INT and isinstance(value, int) and not isinstance(value, bool):
+        return int_const(value)
+    raise InputError(f"{where} cannot preserve a {sort.value} operand", "TYPE_ERROR")
+
+
 def _i32(value: int, where: str) -> int:
     if value < I32_MIN or value > I32_MAX:
         raise UnsupportedSemantics(
@@ -94,6 +106,11 @@ def eval_expr(
         return bool(expr.data)
     if op == "const_float":
         return expr
+    if op == "undefined_float":
+        raise UnsupportedSemantics(
+            "a masked tt.load without 'other' is reachable on an observed store lane",
+            "TTIR_UNDEFINED_LOAD_LANE",
+        )
     if op == "var":
         if expr.data in env:
             return _i32(int(env[expr.data]), f"variable {expr.data}")
@@ -110,9 +127,22 @@ def eval_expr(
         return Expr("input", data=logical, sort=Sort.FLOAT)
 
     if op == "select":
-        condition = _as_bool(eval_expr(expr.args[0], env, facts, roles), "select")
-        branch = expr.args[1] if condition else expr.args[2]
-        return eval_expr(branch, env, facts, roles)
+        condition = eval_expr(expr.args[0], env, facts, roles)
+        if isinstance(condition, bool):
+            branch = expr.args[1] if condition else expr.args[2]
+            return eval_expr(branch, env, facts, roles)
+        condition_expr = _as_expr(condition, Sort.BOOL, "select condition")
+        true_value = eval_expr(expr.args[1], env, facts, roles)
+        false_value = eval_expr(expr.args[2], env, facts, roles)
+        true_expr = _as_expr(true_value, expr.sort, "select true branch")
+        false_expr = _as_expr(false_value, expr.sort, "select false branch")
+        if true_expr == false_expr:
+            return true_expr
+        return Expr(
+            "select",
+            args=(condition_expr, true_expr, false_expr),
+            sort=expr.sort,
+        )
 
     if op == "load":
         offset = _as_int(eval_expr(expr.args[0], env, facts, roles), "load offset")
@@ -153,19 +183,54 @@ def eval_expr(
             ) from exc
         return result if isinstance(result, bool) else _i32(result, op)
 
-    if op in {"and", "or"}:
-        lhs = _as_bool(eval_expr(expr.args[0], env, facts, roles), op)
-        rhs = _as_bool(eval_expr(expr.args[1], env, facts, roles), op)
-        return lhs and rhs if op == "and" else lhs or rhs
+    if op in INT_TO_FLOAT_CAST_OPS:
+        value = eval_expr(expr.args[0], env, facts, roles)
+        if isinstance(value, Expr):
+            raise UnsupportedSemantics(
+                f"symbolic operand for numeric cast {op!r} is unsupported",
+                "SYMBOLIC_NUMERIC_CAST_UNSUPPORTED",
+            )
+        argument = bool_const(value) if isinstance(value, bool) else int_const(value)
+        return Expr(op, args=(argument,), data=expr.data, sort=Sort.FLOAT)
+
+    if op in {"and", "or", "xor"}:
+        lhs = eval_expr(expr.args[0], env, facts, roles)
+        rhs = eval_expr(expr.args[1], env, facts, roles)
+        if isinstance(lhs, bool) and isinstance(rhs, bool):
+            if op == "and":
+                return lhs and rhs
+            if op == "or":
+                return lhs or rhs
+            return lhs != rhs
+        return Expr(
+            op,
+            args=(
+                _as_expr(lhs, Sort.BOOL, op),
+                _as_expr(rhs, Sort.BOOL, op),
+            ),
+            sort=Sort.BOOL,
+        )
     if op == "not":
-        return not _as_bool(eval_expr(expr.args[0], env, facts, roles), op)
+        value = eval_expr(expr.args[0], env, facts, roles)
+        if isinstance(value, bool):
+            return not value
+        return Expr(
+            "not",
+            args=(_as_expr(value, Sort.BOOL, op),),
+            sort=Sort.BOOL,
+        )
     if op in {"lt", "le", "gt", "ge", "eq", "ne"}:
         lhs = eval_expr(expr.args[0], env, facts, roles)
         rhs = eval_expr(expr.args[1], env, facts, roles)
         if isinstance(lhs, Expr) or isinstance(rhs, Expr):
-            raise UnsupportedSemantics(
-                f"symbolic comparison {op} is outside the MVP",
-                "SYMBOLIC_MASK_UNSUPPORTED",
+            operand_sort = expr.args[0].sort
+            return Expr(
+                op,
+                args=(
+                    _as_expr(lhs, operand_sort, op),
+                    _as_expr(rhs, operand_sort, op),
+                ),
+                sort=Sort.BOOL,
             )
         if op == "lt":
             return lhs < rhs
@@ -201,7 +266,32 @@ def eval_expr(
             result = (lhs + rhs - 1) // rhs
         return _i32(result, op)
 
-    if op in {"fadd", "fsub", "fmul", "fdiv", "fneg", "fsqrt", "frsqrt", "fma"}:
+    if op in {
+        "fabs",
+        "facosh",
+        "fadd",
+        "fatan",
+        "fceil",
+        "fcos",
+        "fcosh",
+        "fdiv",
+        "ferf",
+        "fexp",
+        "fexp2",
+        "fexpm1",
+        "ffloor",
+        "flog",
+        "fma",
+        "fmul",
+        "fnearbyint",
+        "fneg",
+        "fpow",
+        "frsqrt",
+        "fsin",
+        "fsqrt",
+        "fsub",
+        "ftanh",
+    }:
         args = tuple(
             _as_float(eval_expr(arg, env, facts, roles), op) for arg in expr.args
         )

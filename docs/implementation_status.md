@@ -7,7 +7,7 @@
 | 正式输入边界 | 已完成 | 两侧只接受 raw `.ttir`/`.mlir`，必须显式入口与 launch |
 | libtriton 前端 | 已完成基础路径 | 固定 3.7.1，parse、verify、完整遍历和稳定快照 |
 | 共同内部 IR | 已完成 | 独立 `etv/ir.py`，与 PairSpec model、e-graph 分离 |
-| TT IR 语义提升 | 已完成逐点子集 | program/lane、指针、mask、可选单 store 观察、显式整数 cast、整数和浮点表达式 |
+| TT IR 语义提升 | 已完成扩展逐点子集 | program/lane、指针、mask、可选单 store 观察、显式 cast、浮点比较/极值/常用数学函数/纯外部函数 |
 | PairSpec v2 | 已完成 | metadata、LLM assumptions、统一 predicates、observation 和外部 rewrites |
 | 固定规模验证 | 已完成 | 有限 launch/lane 枚举、地址/mask/覆盖与抽象值反例 |
 | 参数化验证 | 已完成基础路径 | 固定 rank 符号 shape、launch、`a*b=c` 等 SMT 关系 |
@@ -36,7 +36,9 @@ TorchInductor kernel 对任意 shape 通用，而是专门构造的符号 TT IR 
 
 在 macOS arm64、Python 3.12.13、源码构建的 libtriton 3.7.1 环境中，正式固定例和
 参数化例均返回 `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`，参数化报告包含 45 个 SMT
-检查。当前完整环境中的 88 个 ETV 测试全部通过。
+检查。当前完整环境中的 100 个 ETV 测试全部通过；新增回归会把
+`tt.clampf + math.exp + math.erf` 与 TorchInductor 风格的
+`cmpf + ori + select + extern_elementwise(__nv_erff)` 证明为等价。
 
 内部 JSON 夹具覆盖正确、错误 stride、错误 mask、错误计算、FMA、规则策略、LLM 和
 子图划分。它们只测试证明核心，不属于生产前端。
@@ -51,6 +53,8 @@ TorchInductor kernel 对任意 shape 通用，而是专门构造的符号 TT IR 
 - 多维 program grid 的完整语义；
 - buffer 分配大小与 GPU 内存安全；
 - IEEE-754、快速数学、容差和位级等价；
+- `tt.bitcast` 的位级值语义、跨元素类型指针解释，以及整数/布尔内存观察；
+- `isnan/isinf/signbit` 等依赖 IEEE 特殊值或位级表示的外部函数；
 - 独立 proof certificate；
 - 自动证明 TT IR 到内部 IR 提升器本身正确。
 - target data layout 驱动的 `index` 位宽与相应 cast 语义。
@@ -80,11 +84,17 @@ libtriton 能解析但提升器不支持的合法 TT IR 返回 `UNKNOWN`。这�
 
 ## 当前测试证据
 
-在 macOS arm64、Python 3.12.13 的隔离环境中执行：
+在 macOS arm64、Python 3.12.13 的 libtriton 3.7.1 隔离环境中执行：
 
 ```text
-88 passed
+100 passed
 ```
+
+对仓库内 1230 个已生成 PairSpec 做只读重放后，通用 `TTIR_OP_UNSUPPORTED` 从历史报告
+中的 236 个降为 67 个，剩余 67 个均首先遇到刻意未建模的 `tt.bitcast`。这表示更多程序
+已越过前端并进入 mask、ABI、cast、内存或计算义务，不表示它们自动成为 `PROVED`；当前
+重放仍只有原有 3 个 `PROVED`，后续主要阻塞是 region/归约（848 个）以及现有 PairSpec
+和内存模型问题。详见[算子语义支持](operator_support.md)。
 
 固定 ntops 提交包含 76 个算子测试模块和 2102 个参数化 CUDA 用例。本机无 CUDA，
 这些上游数值测试全部跳过，不能计为通过。离线 TorchInductor 探针对每个模块测试一个

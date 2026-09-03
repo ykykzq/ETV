@@ -8,7 +8,11 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Callable, Dict, List, Tuple, Union
 
-from ..casts import TTIR_INTEGER_CAST_OPS, integer_element_type
+from ..casts import (
+    TTIR_INTEGER_CAST_OPS,
+    TTIR_INT_TO_FLOAT_CAST_OPS,
+    integer_element_type,
+)
 from ..ir import (
     Expr,
     Program,
@@ -247,6 +251,36 @@ _FLOAT_BINARY = {
     "arith.mulf": "fmul",
     "arith.divf": "fdiv",
 }
+_FLOAT_UNARY = {
+    "arith.negf": "fneg",
+    "math.absf": "fabs",
+    "math.ceil": "fceil",
+    "math.cos": "fcos",
+    "math.erf": "ferf",
+    "math.exp": "fexp",
+    "math.exp2": "fexp2",
+    "math.floor": "ffloor",
+    "math.log": "flog",
+    "math.rsqrt": "frsqrt",
+    "math.sin": "fsin",
+    "math.sqrt": "fsqrt",
+}
+_EXTERN_FLOAT_OPS = {
+    "__nv_acosh": ("facosh", 1),
+    "__nv_acoshf": ("facosh", 1),
+    "__nv_atan": ("fatan", 1),
+    "__nv_atanf": ("fatan", 1),
+    "__nv_ceilf": ("fceil", 1),
+    "__nv_coshf": ("fcosh", 1),
+    "__nv_erff": ("ferf", 1),
+    "__nv_expm1f": ("fexpm1", 1),
+    "__nv_floorf": ("ffloor", 1),
+    "__nv_nearbyintf": ("fnearbyint", 1),
+    "__nv_powf": ("fpow", 2),
+    "__nv_rsqrtf": ("frsqrt", 1),
+    "__nv_sqrtf": ("fsqrt", 1),
+    "__nv_tanhf": ("ftanh", 1),
+}
 _PREDICATES = {
     0: "eq",
     1: "ne",
@@ -262,6 +296,41 @@ _PREDICATES = {
     "sge": "ge",
 }
 
+_FLOAT_PREDICATES = {
+    0: False,
+    1: "eq",
+    2: "gt",
+    3: "ge",
+    4: "lt",
+    5: "le",
+    6: "ne",
+    7: True,
+    8: "eq",
+    9: "gt",
+    10: "ge",
+    11: "lt",
+    12: "le",
+    13: "ne",
+    14: False,
+    15: True,
+    "false": False,
+    "oeq": "eq",
+    "ogt": "gt",
+    "oge": "ge",
+    "olt": "lt",
+    "ole": "le",
+    "one": "ne",
+    "ord": True,
+    "ueq": "eq",
+    "ugt": "gt",
+    "uge": "ge",
+    "ult": "lt",
+    "ule": "le",
+    "une": "ne",
+    "uno": False,
+    "true": True,
+}
+
 
 def _predicate(operation: TTIROperation) -> str:
     raw = operation.attributes.get("predicate")
@@ -273,6 +342,87 @@ def _predicate(operation: TTIROperation) -> str:
     raise UnsupportedSemantics(
         "only signed integer comparisons are lifted", "TTIR_PREDICATE_UNSUPPORTED"
     )
+
+
+def _float_predicate(operation: TTIROperation) -> str | bool:
+    raw = operation.attributes.get("predicate")
+    if raw in _FLOAT_PREDICATES:
+        return _FLOAT_PREDICATES[raw]
+    match = re.search(r'\barith\.cmpf\s+"?([a-z]+)"?\s*,', operation.assembly or "")
+    if match is not None and match.group(1) in _FLOAT_PREDICATES:
+        return _FLOAT_PREDICATES[match.group(1)]
+    raise UnsupportedSemantics(
+        "floating comparison predicate is not supported",
+        "TTIR_PREDICATE_UNSUPPORTED",
+    )
+
+
+def _boolean_binary(name: str, lhs: Expr, rhs: Expr) -> Expr:
+    if name == "and":
+        if lhs.op == "const_bool":
+            return rhs if lhs.data else lhs
+        if rhs.op == "const_bool":
+            return lhs if rhs.data else rhs
+    elif name == "or":
+        if lhs.op == "const_bool":
+            return lhs if lhs.data else rhs
+        if rhs.op == "const_bool":
+            return rhs if rhs.data else lhs
+    elif name == "xor":
+        if lhs.op == "const_bool":
+            return Expr("not", args=(rhs,), sort=Sort.BOOL) if lhs.data else rhs
+        if rhs.op == "const_bool":
+            return Expr("not", args=(lhs,), sort=Sort.BOOL) if rhs.data else lhs
+        if lhs == rhs:
+            return bool_const(False)
+    return _op(name, lhs, rhs, sort=Sort.BOOL)
+
+
+def _compare(predicate: str | bool, lhs: Expr, rhs: Expr) -> Expr:
+    if isinstance(predicate, bool):
+        return bool_const(predicate)
+    if lhs == rhs:
+        return bool_const(predicate in {"eq", "le", "ge"})
+    return _op(predicate, lhs, rhs, sort=Sort.BOOL)
+
+
+def _select(condition: Expr, true_value: Expr, false_value: Expr, sort: Sort) -> Expr:
+    if condition.op == "const_bool":
+        return true_value if condition.data else false_value
+    if true_value == false_value:
+        return true_value
+    return _op("select", condition, true_value, false_value, sort=sort)
+
+
+def _maximum(lhs: Expr, rhs: Expr) -> Expr:
+    return _select(_compare("gt", lhs, rhs), lhs, rhs, Sort.FLOAT)
+
+
+def _minimum(lhs: Expr, rhs: Expr) -> Expr:
+    return _select(_compare("lt", lhs, rhs), lhs, rhs, Sort.FLOAT)
+
+
+def _string_attribute(operation: TTIROperation, name: str) -> str:
+    raw = operation.attributes.get(name)
+    if isinstance(raw, str):
+        return raw.strip('"')
+    match = re.search(rf'\b{name}\s*=\s*"([^"]+)"', operation.assembly or "")
+    if match is None:
+        raise InputError(
+            f"libtriton output omitted {name!r} on {operation.name}",
+            "TTIR_ATTRIBUTE_ERROR",
+        )
+    return match.group(1)
+
+
+def _floating_element_type(type_text: str) -> str:
+    matches = re.findall(r"(?:^|x)(f[1-9][0-9]*|bf16)(?=[,>]|$)", type_text)
+    if len(matches) != 1:
+        raise UnsupportedSemantics(
+            f"cannot determine one floating element type from {type_text!r}",
+            "TTIR_CAST_TYPE_UNSUPPORTED",
+        )
+    return matches[0]
 
 
 def _function_operations(module: TTIRModule) -> Tuple[TTIROperation, ...]:
@@ -359,7 +509,6 @@ def lift_ttir(
             )
 
     stores: List[Tuple[TTIROperation, PointerValue, TensorValue, TensorValue]] = []
-    masked_loads_without_other: List[int] = []
 
     def operand(operation: TTIROperation, index: int) -> Value:
         try:
@@ -478,7 +627,7 @@ def lift_ttir(
         elif (
             name in _INTEGER_BINARY
             or name in _FLOAT_BINARY
-            or name in {"arith.andi", "arith.ori"}
+            or name in {"arith.andi", "arith.ori", "arith.xori"}
         ):
             lhs = _require_tensor(operand(operation, 0), name)
             rhs = _require_tensor(operand(operation, 1), name)
@@ -488,52 +637,131 @@ def lift_ttir(
             elif name in _FLOAT_BINARY:
                 semantic_name, sort = _FLOAT_BINARY[name], Sort.FLOAT
             else:
-                semantic_name, sort = (
-                    "and" if name == "arith.andi" else "or"
-                ), Sort.BOOL
-                if lhs.sort != Sort.BOOL or rhs.sort != Sort.BOOL:
-                    raise UnsupportedSemantics(
-                        f"integer bitwise {name} is not lifted", "TTIR_OP_UNSUPPORTED"
-                    )
+                semantic_name = {
+                    "arith.andi": "and",
+                    "arith.ori": "or",
+                    "arith.xori": "xor",
+                }[name]
+                sort = Sort.BOOL
+            if lhs.sort != sort or rhs.sort != sort:
+                raise UnsupportedSemantics(
+                    f"{name} operands do not match its supported {sort.value} semantics",
+                    "TTIR_TYPE_ERROR",
+                )
             result = TensorValue(
                 shape,
                 sort,
-                lambda indices, lhs=lhs, rhs=rhs, shape=shape, semantic_name=semantic_name, sort=sort: _op(
-                    semantic_name,
-                    _tensor_at(lhs, shape, indices),
-                    _tensor_at(rhs, shape, indices),
-                    sort=sort,
+                lambda indices, lhs=lhs, rhs=rhs, shape=shape, semantic_name=semantic_name, sort=sort: (
+                    _boolean_binary(
+                        semantic_name,
+                        _tensor_at(lhs, shape, indices),
+                        _tensor_at(rhs, shape, indices),
+                    )
+                    if sort == Sort.BOOL
+                    else _op(
+                        semantic_name,
+                        _tensor_at(lhs, shape, indices),
+                        _tensor_at(rhs, shape, indices),
+                        sort=sort,
+                    )
                 ),
             )
         elif name == "arith.cmpi":
             lhs = _require_tensor(operand(operation, 0), name)
             rhs = _require_tensor(operand(operation, 1), name)
+            if lhs.sort != Sort.INT or rhs.sort != Sort.INT:
+                raise UnsupportedSemantics(
+                    "arith.cmpi currently requires integer operands", "TTIR_TYPE_ERROR"
+                )
             shape = _result_shape(operation)
             predicate = _predicate(operation)
             result = TensorValue(
                 shape,
                 Sort.BOOL,
-                lambda indices, lhs=lhs, rhs=rhs, shape=shape, predicate=predicate: _op(
+                lambda indices, lhs=lhs, rhs=rhs, shape=shape, predicate=predicate: _compare(
                     predicate,
                     _tensor_at(lhs, shape, indices),
                     _tensor_at(rhs, shape, indices),
-                    sort=Sort.BOOL,
+                ),
+            )
+        elif name == "arith.cmpf":
+            lhs = _require_tensor(operand(operation, 0), name)
+            rhs = _require_tensor(operand(operation, 1), name)
+            if lhs.sort != Sort.FLOAT or rhs.sort != Sort.FLOAT:
+                raise UnsupportedSemantics(
+                    "arith.cmpf requires floating operands", "TTIR_TYPE_ERROR"
+                )
+            shape = _result_shape(operation)
+            predicate = _float_predicate(operation)
+            result = TensorValue(
+                shape,
+                Sort.BOOL,
+                lambda indices, lhs=lhs, rhs=rhs, shape=shape, predicate=predicate: _compare(
+                    predicate,
+                    _tensor_at(lhs, shape, indices),
+                    _tensor_at(rhs, shape, indices),
                 ),
             )
         elif name == "arith.select":
             condition = _require_tensor(operand(operation, 0), name)
             true_value = _require_tensor(operand(operation, 1), name)
             false_value = _require_tensor(operand(operation, 2), name)
+            if condition.sort != Sort.BOOL or true_value.sort != false_value.sort:
+                raise UnsupportedSemantics(
+                    "arith.select condition or branch types are inconsistent",
+                    "TTIR_TYPE_ERROR",
+                )
             shape = _result_shape(operation)
             result = TensorValue(
                 shape,
                 true_value.sort,
-                lambda indices, condition=condition, true_value=true_value, false_value=false_value, shape=shape: _op(
-                    "select",
+                lambda indices, condition=condition, true_value=true_value, false_value=false_value, shape=shape: _select(
                     _tensor_at(condition, shape, indices),
                     _tensor_at(true_value, shape, indices),
                     _tensor_at(false_value, shape, indices),
-                    sort=true_value.sort,
+                    true_value.sort,
+                ),
+            )
+        elif name in {"arith.maxnumf", "arith.minnumf"}:
+            lhs = _require_tensor(operand(operation, 0), name)
+            rhs = _require_tensor(operand(operation, 1), name)
+            if lhs.sort != Sort.FLOAT or rhs.sort != Sort.FLOAT:
+                raise UnsupportedSemantics(
+                    f"{name} requires floating operands", "TTIR_TYPE_ERROR"
+                )
+            shape = _result_shape(operation)
+            combine = _maximum if name == "arith.maxnumf" else _minimum
+            result = TensorValue(
+                shape,
+                Sort.FLOAT,
+                lambda indices, lhs=lhs, rhs=rhs, shape=shape, combine=combine: combine(
+                    _tensor_at(lhs, shape, indices),
+                    _tensor_at(rhs, shape, indices),
+                ),
+            )
+        elif name == "tt.clampf":
+            operands = tuple(
+                _require_tensor(operand(operation, index), name) for index in range(3)
+            )
+            if any(value.sort != Sort.FLOAT for value in operands):
+                raise UnsupportedSemantics(
+                    "tt.clampf requires floating operands", "TTIR_TYPE_ERROR"
+                )
+            if not re.search(r"\bpropagateNan\s*=\s*none\b", operation.assembly or ""):
+                raise UnsupportedSemantics(
+                    "only tt.clampf with propagateNan = none is lifted",
+                    "TTIR_FLOAT_NAN_MODE_UNSUPPORTED",
+                )
+            shape = _result_shape(operation)
+            result = TensorValue(
+                shape,
+                Sort.FLOAT,
+                lambda indices, operands=operands, shape=shape: _minimum(
+                    _maximum(
+                        _tensor_at(operands[0], shape, indices),
+                        _tensor_at(operands[1], shape, indices),
+                    ),
+                    _tensor_at(operands[2], shape, indices),
                 ),
             )
         elif name in TTIR_INTEGER_CAST_OPS:
@@ -561,6 +789,34 @@ def lift_ttir(
                     sort=result_sort,
                 ),
             )
+        elif name in TTIR_INT_TO_FLOAT_CAST_OPS:
+            source = _require_tensor(operand(operation, 0), name)
+            if source.sort not in {Sort.INT, Sort.BOOL}:
+                raise UnsupportedSemantics(
+                    f"{name} requires an integer input", "TTIR_TYPE_ERROR"
+                )
+            shape = _result_shape(operation)
+            try:
+                cast_data = (
+                    integer_element_type(operation.operands[0].type),
+                    _floating_element_type(operation.results[0].type),
+                )
+            except ValueError as exc:
+                raise UnsupportedSemantics(
+                    f"cannot preserve numeric cast types for {name}: {exc}",
+                    "TTIR_CAST_TYPE_UNSUPPORTED",
+                ) from exc
+            semantic_name = TTIR_INT_TO_FLOAT_CAST_OPS[name]
+            result = TensorValue(
+                shape,
+                Sort.FLOAT,
+                lambda indices, source=source, shape=shape, semantic_name=semantic_name, cast_data=cast_data: Expr(
+                    semantic_name,
+                    args=(_tensor_at(source, shape, indices),),
+                    data=cast_data,
+                    sort=Sort.FLOAT,
+                ),
+            )
         elif name in {"arith.extf", "arith.truncf"}:
             source = _require_tensor(operand(operation, 0), name)
             result = TensorValue(
@@ -568,19 +824,63 @@ def lift_ttir(
                 _sort(operation.results[0].type),
                 source.element,
             )
-        elif name in {"arith.negf", "math.sqrt", "math.rsqrt"}:
+        elif name in _FLOAT_UNARY:
             source = _require_tensor(operand(operation, 0), name)
+            if (
+                source.sort != Sort.FLOAT
+                or _sort(operation.results[0].type) != Sort.FLOAT
+            ):
+                raise UnsupportedSemantics(
+                    f"{name} requires a floating input and result", "TTIR_TYPE_ERROR"
+                )
             shape = _result_shape(operation)
-            semantic_name = {
-                "arith.negf": "fneg",
-                "math.sqrt": "fsqrt",
-                "math.rsqrt": "frsqrt",
-            }[name]
+            semantic_name = _FLOAT_UNARY[name]
             result = TensorValue(
                 shape,
                 Sort.FLOAT,
                 lambda indices, source=source, shape=shape, semantic_name=semantic_name: _op(
                     semantic_name, _tensor_at(source, shape, indices), sort=Sort.FLOAT
+                ),
+            )
+        elif name == "tt.extern_elementwise":
+            symbol = _string_attribute(operation, "symbol")
+            semantic = _EXTERN_FLOAT_OPS.get(symbol)
+            if semantic is None:
+                raise UnsupportedSemantics(
+                    f"pure external symbol {symbol!r} has no ETV semantic model",
+                    "TTIR_EXTERN_SYMBOL_UNSUPPORTED",
+                )
+            if not re.search(r"\bpure\s*=\s*true\b", operation.assembly or ""):
+                raise UnsupportedSemantics(
+                    f"external symbol {symbol!r} is not declared pure",
+                    "TTIR_EXTERN_EFFECT_UNSUPPORTED",
+                )
+            semantic_name, arity = semantic
+            if len(operation.operands) != arity:
+                raise InputError(
+                    f"external symbol {symbol!r} expects {arity} operands",
+                    "TTIR_VERIFY_ERROR",
+                )
+            operands = tuple(
+                _require_tensor(operand(operation, index), name)
+                for index in range(arity)
+            )
+            if (
+                any(value.sort != Sort.FLOAT for value in operands)
+                or _sort(operation.results[0].type) != Sort.FLOAT
+            ):
+                raise UnsupportedSemantics(
+                    f"external symbol {symbol!r} requires floating inputs and output",
+                    "TTIR_EXTERN_TYPE_UNSUPPORTED",
+                )
+            shape = _result_shape(operation)
+            result = TensorValue(
+                shape,
+                Sort.FLOAT,
+                lambda indices, operands=operands, shape=shape, semantic_name=semantic_name: _op(
+                    semantic_name,
+                    *(_tensor_at(value, shape, indices) for value in operands),
+                    sort=Sort.FLOAT,
                 ),
             )
         elif name == "math.fma":
@@ -628,10 +928,10 @@ def lift_ttir(
                 other = _require_tensor(operand(operation, 2), name)
             else:
                 other = TensorValue(
-                    (), Sort.FLOAT, lambda _indices: float_const(Fraction(0))
+                    (),
+                    Sort.FLOAT,
+                    lambda _indices: Expr("undefined_float", sort=Sort.FLOAT),
                 )
-                if len(operation.operands) == 2:
-                    masked_loads_without_other.append(operation.operands[1].id)
             result = TensorValue(
                 shape,
                 Sort.FLOAT,
@@ -686,15 +986,7 @@ def lift_ttir(
             f"requested tt.store index {selected_store}, but function has {len(stores)} stores",
             "TTIR_STORE_INDEX_OUT_OF_RANGE",
         )
-    store_operation, pointer, value, mask = stores[selected_store]
-    store_mask_id = (
-        store_operation.operands[2].id if len(store_operation.operands) >= 3 else None
-    )
-    if any(mask_id != store_mask_id for mask_id in masked_loads_without_other):
-        raise UnsupportedSemantics(
-            "a masked tt.load without 'other' is not guarded by the identical store mask",
-            "TTIR_UNDEFINED_LOAD_LANE",
-        )
+    _store_operation, pointer, value, mask = stores[selected_store]
     lanes = math.prod(pointer.shape) if pointer.shape else 1
     lane = Expr("var", data="lane", sort=Sort.INT)
     indices = _indices_for(pointer.shape, lane)

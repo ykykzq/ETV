@@ -64,10 +64,17 @@ load(base,
 store 提升为 `StoreTemplate(logical_index, offset, mask, value)`。完整 Program 是普通不可变
 语义对象，不包含等价类；后续有限求值、SMT、划分和 egglog 都读取它。
 
-整数 cast 不做前端恒等归一化。`arith.extsi/extui/trunci/index_cast/index_castui` 提升为
-携带源/目标类型的 `sext/zext/trunc/index_cast/index_castui` 节点。于是
-`sext[i8->i32](x)` 与 `x` 是两个不同的内部 IR term；除非显式规则被准入并实际命中，
-egglog 不会合并它们。两侧完全相同的 cast 节点仍可由结构相等与同余闭包处理。
+cast 不做前端恒等归一化。`arith.extsi/extui/trunci/index_cast/index_castui` 提升为
+携带源/目标类型的 `sext/zext/trunc/index_cast/index_castui` 节点；
+`arith.sitofp/uitofp` 同样保留为 `sitofp/uitofp[iN->fN]`。于是
+`sext[i8->i32](x)`、`sitofp[i32->f32](x)` 与 `x` 都是不同的内部 IR term；除非显式规则
+被准入并实际命中，egglog 不会合并它们。两侧完全相同的 cast 节点仍可由结构相等与
+同余闭包处理。
+
+无 `other` 的 masked `tt.load` 被提升为带 `undefined_float` 默认分支的 load，而不是
+假定为零。固定规模路径仅在某个活动 store lane 实际走到该分支时返回
+`TTIR_UNDEFINED_LOAD_LANE`；参数化路径则必须用 SMT 证明相应 load mask 在观察域恒真。
+因此语义等价但 SSA 身份不同的 load/store mask 可以继续验证，同时越界读取不会被掩盖。
 
 合法但未建模的 TT IR 返回 `UNKNOWN`，例如 region、循环、归约、原子操作或不支持的
 类型。`UNKNOWN` 表示没有结论，而不是不等价。
@@ -79,7 +86,11 @@ egglog 不会合并它们。两侧完全相同的 cast 节点仍可由结构相�
 - 浮点常量解释为精确有理数；
 - `fadd/fsub/fmul/fdiv/fma` 等解释为数学实数运算；
 - 不模拟舍入、NaN、无穷、signed zero、flush-to-zero 或 fast-math；
-- `div/sqrt/rsqrt` 等部分函数必须证明定义域，否则返回 `UNKNOWN`。
+- `cmpf` 的 ordered/unordered 差异在该不含 NaN 的实数域中消失；
+- `maxnumf/minnumf/clampf` 降为实数比较和 select，`propagateNan` 仅支持 `none`；
+- `div/sqrt/rsqrt/log/acosh/pow` 等部分函数必须证明定义域，否则返回 `UNKNOWN`；
+- 其他已建模数学函数作为确定的纯函数保留，系统目前只使用结构相等和同余，不擅自加入
+  超越函数代数恒等式。
 
 整数用于地址和 shape。固定规模求值检查 signed i32 范围与除零；参数化路径通过 Z3
 加入定义性/范围义务。显式 `iN` cast 按低位截断、符号扩展或零扩展解释，不会直接返回
