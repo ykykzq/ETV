@@ -469,6 +469,17 @@ def _scalar_compatible(type_text: str, value: Any) -> bool:
     return False
 
 
+def _specialized_away(value: Any) -> bool:
+    """Return whether Triton folded a runtime scalar into a constexpr.
+
+    Triton specializes integer arguments equal to 1 into constexprs, removing
+    them from the compiled TTIR signature (for example contiguous strides).
+    Such values must not consume a slot when aligning TTIR scalar arguments
+    with the wrapper-level runtime argument list.
+    """
+    return type(value) is int and value == 1
+
+
 def _side_bindings(module: Any, runtime_arguments: Any) -> dict[str, Any]:
     scalar_arguments = [
         argument
@@ -479,6 +490,7 @@ def _side_bindings(module: Any, runtime_arguments: Any) -> dict[str, Any]:
         item.get("value")
         for item in _runtime_values(runtime_arguments)
         if isinstance(item.get("value"), (bool, int, float))
+        and not _specialized_away(item.get("value"))
     ]
     bindings: dict[str, Any] = {}
     cursor = 0
