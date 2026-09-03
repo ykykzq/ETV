@@ -55,7 +55,9 @@ masked `tt.load` 缺少 `other` 时不会默认返回零。其默认分支是显
 - `tt.bitcast`，因为它需要位级浮点/整数表示和 target data layout；
 - 非 `i1` 的按位整数算术、整数/布尔 load/store、跨元素类型指针观察；
 - `isnan/isinf/signbit` 等依赖 IEEE 特殊值或位表示的外部函数；
-- atomics、shared memory、barrier、多 store 顺序 effect 和多 kernel orchestration；
+- atomics、shared memory、barrier、单 kernel 内多 store 顺序 effect、参数化或双侧
+  多 launch，以及跨 stream/event orchestration；固定规模单侧有序多 launch 由
+  PairSpec `metadata.launches` 支持；
 - 多维 program grid、动态 rank 和完整 TTGIR layout encoding。
 
 这些 operation 即使能被 libtriton 解析，也会由专门错误码或

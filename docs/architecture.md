@@ -2,8 +2,9 @@
 
 ## 分层设计
 
-ETV 的正式输入是两份 raw TT IR 和一份 PairSpec。前端、共同语义表示与证明数据结构
-是三个不同层次：
+ETV 的正式输入是两侧 raw TT IR artifact 和一份 PairSpec。通常每侧一个 artifact；固定
+规模验证也允许其中一侧是显式有序的多 launch artifact 序列。前端、共同语义表示与
+证明数据结构是三个不同层次：
 
 ```text
 文件层            解析层             语义层             证明层
@@ -14,6 +15,10 @@ pair.json     ->  PairSpec v2   ->  predicates/observation -> proof obligations
 这一区分很重要：内部 IR 不是 e-graph。`Program`、`StoreTemplate` 和 `Expr` 是不可变、
 类型化的程序语义；e-graph 是验证过程中临时建立的等价类数据结构。同一内部 IR 表达式
 可以被有限枚举器、SMT 编码器、子图划分器和 egglog 后端共同消费。
+
+一个 `Program` 仍只表示一个 kernel launch。`etv/multilaunch.py` 在 Program 层之上按
+PairSpec 声明的 step 建立顺序内存状态：同一 step 的 store 读取共同的旧状态并同时
+提交，后一 step 才能看到其写入。这一组合层不是 e-graph，也不会把不同地址的值合并。
 
 ## 双 TT IR 前端
 
@@ -90,6 +95,8 @@ PairSpec 的内部唯一事实源是 `PredicateSet`。`spec.roles` 与 `spec.fac
 模块使用的只读兼容视图，不是另一份状态。v2 提供 TT IR 本身缺少的跨程序关系：
 
 - `metadata`：两侧文件、入口、launch、可选观察 store、limits、LLM 与划分配置；
+- `metadata.launches`：可选的单侧有序 launch/store 组件、execution step、局部 ABI 与
+  局部整数 binding；
 - `assumptions.for_llm`：非形式化自然语言上下文；
 - `predicates.abi`：物理 block/scalar/scalar-block 到逻辑角色；block endpoint 可携带
   storage-base 元素偏移以归一化 tensor view；
@@ -166,12 +173,23 @@ PairSpec 谓词、自然语言上下文和计算根发送给 LLM 一次。模型
 通过检查后按子到父建立独立 e-graph。只有子图已证明，父图才能把它替换成共同的
 类型化边界输入。提案无效或局部证明失败时回退整图验证，LLM 不直接提供等价公理。
 
+若 PairSpec 显式声明一侧为多 launch，该侧在上述自由划分之前已经具有固定边界。ETV
+先有限枚举每个 launch，用逻辑存储角色和精确元素 offset 解析 store-to-load 边，并从
+最终 Output 反向形成 launch DAG。LLM 只能为 DAG 中每个固定节点选择另一侧的表达式路径；
+不能移动 launch 边界、改依赖或删节点。机器检查完整 anchor 覆盖、路径唯一和父子拓扑，
+再沿 DAG 从子到父证明。API 或提案失败时可把已解析的中间 store 精确代入后验证组合整图。
+
+该路径当前只支持固定 binding、仅一侧为多 launch、每个序列项一个选定 store。未到达
+观察 Output 的 launch 对本次 observation 是不可观察的，并会在报告中列出；这不是对其
+其他副作用作等价结论。
+
 ## 结果和信任边界
 
 正式报告包含输入及哈希、libtriton 版本、全部前提、SMT 查询结果、规则准入/应用、
 egglog 状态、可选划分审计和反例。当前可信计算基包括：
 
 - PairSpec 声明的角色、shape、launch 和 no-alias 事实；
+- 多 launch PairSpec 声明的执行顺序、局部 ABI 和逻辑存储身份；
 - libtriton parser/verifier；
 - TT IR 到 ETV IR 提升器；
 - ETV 整数/内存语义与 SMT 编码；

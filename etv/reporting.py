@@ -96,10 +96,33 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         lines.extend(["", "## Proof summary", ""])
         finite = proof.get("finite_domain")
         if finite:
+            if finite.get("prepartitioned_side"):
+                lines.append(
+                    f"Finite domain: {finite.get('active_output_elements')} active outputs; "
+                    f"pre-partitioned side `{finite.get('prepartitioned_side')}` has "
+                    f"{finite.get('launches')} launch components."
+                )
+            else:
+                lines.append(
+                    f"Finite domain: {finite.get('active_output_elements')} active outputs, "
+                    f"{finite.get('lhs_lanes')} lhs lanes, {finite.get('rhs_lanes')} rhs lanes."
+                )
+        launch_sequence = proof.get("launch_sequence")
+        if launch_sequence:
+            lines.extend(["", "### Launch Sequence", ""])
             lines.append(
-                f"Finite domain: {finite.get('active_output_elements')} active outputs, "
-                f"{finite.get('lhs_lanes')} lhs lanes, {finite.get('rhs_lanes')} rhs lanes."
+                f"Pre-partitioned side: `{launch_sequence.get('prepartitioned_side')}`; "
+                f"ordered components: "
+                f"{', '.join(f'`{item}`' for item in launch_sequence.get('ordered_launches', []))}; "
+                f"memory edges: {launch_sequence.get('memory_edges', 0)}."
             )
+            unobserved = launch_sequence.get("unobserved_launches", [])
+            if unobserved:
+                lines.append(
+                    "Unobserved components: "
+                    + ", ".join(f"`{item}`" for item in unobserved)
+                    + "."
+                )
         parametric = proof.get("parametric_domain")
         if parametric:
             parameter_names = ", ".join(sorted(parametric.get("parameters", {})))
@@ -167,7 +190,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             relational = [
                 item
                 for item in egraph.get("rule_application", [])
-                if item.get("used") and str(item.get("id", "")).startswith("parametric_")
+                if item.get("used")
+                and str(item.get("id", "")).startswith("parametric_")
             ]
             if relational:
                 lines.extend(["", "### Applied Relational Rewrites", ""])
@@ -190,10 +214,13 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 for item in trace:
                     before = item.get("before", {})
                     after = item.get("after", {})
-                    matched = ", ".join(
-                        f"{name} x{count}"
-                        for name, count in item.get("rule_matches", {}).items()
-                    ) or "none"
+                    matched = (
+                        ", ".join(
+                            f"{name} x{count}"
+                            for name, count in item.get("rule_matches", {}).items()
+                        )
+                        or "none"
+                    )
                     lines.append(
                         f"| {item.get('phase', stats.get('phase', 'UNSPECIFIED'))} "
                         f"#{item.get('iteration')} | "

@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from .llm import DeepSeekClient, LLMError, _nodes, _resolve
 from .ir import Expr, Program, Sort
 from .model import PairSpec
+from .multilaunch import (
+    LaunchNode,
+    SequenceEvaluation,
+    flatten_launch_tree,
+    launch_tree_topology,
+    replace_launch_dependencies,
+)
 from .observability import get_logger, log_event
 
 _PARTITION_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
@@ -577,3 +584,426 @@ def propose_partition_plan(
         families=len(families),
     )
     return plan
+
+
+@dataclass(frozen=True)
+class _LaunchFamily:
+    family_id: str
+    members: Tuple[Tuple[Any, LaunchNode, Expr], ...]
+
+
+@dataclass(frozen=True)
+class _LaunchMatch:
+    partition_id: str
+    family_id: str
+    anchor_key: str
+    semantic: str
+    counterpart_path: str
+
+
+def _launch_families(
+    roots: Sequence[Tuple[Any, LaunchNode, Expr]],
+) -> Tuple[_LaunchFamily, ...]:
+    grouped: dict[tuple, list[Tuple[Any, LaunchNode, Expr]]] = {}
+    for item in roots:
+        grouped.setdefault(
+            (launch_tree_topology(item[1]), _topology(item[2])), []
+        ).append(item)
+    return tuple(
+        _LaunchFamily(f"family_{index}", tuple(members))
+        for index, members in enumerate(grouped.values())
+    )
+
+
+def _launch_parent_map(root: LaunchNode) -> Mapping[str, Optional[str]]:
+    result: dict[str, Optional[str]] = {root.key: None}
+
+    def visit(node: LaunchNode) -> None:
+        for dependency in node.dependencies:
+            result[dependency.child.key] = node.key
+            visit(dependency.child)
+
+    visit(root)
+    return result
+
+
+def _validate_launch_matches(
+    response: Mapping[str, Any],
+    families: Sequence[_LaunchFamily],
+    spec: PairSpec,
+) -> Tuple[_LaunchMatch, ...]:
+    if sorted(set(response) - {"partitions"}):
+        raise PartitionError("launch partition response has unknown top-level fields")
+    raw = response.get("partitions")
+    if not isinstance(raw, list):
+        raise PartitionError("launch partition response must contain a partitions list")
+    expected_count = sum(
+        len(flatten_launch_tree(family.members[0][1])) for family in families
+    )
+    if len(raw) != expected_count:
+        raise PartitionError(
+            f"launch partition response has {len(raw)} entries; expected {expected_count}"
+        )
+    if not spec.partition.min_partitions <= len(raw) <= spec.partition.max_partitions:
+        raise PartitionError(
+            "launch partition count is outside PairSpec partition limits: "
+            f"got {len(raw)}, expected {spec.partition.min_partitions}.."
+            f"{spec.partition.max_partitions}"
+        )
+    family_by_id = {family.family_id: family for family in families}
+    result: list[_LaunchMatch] = []
+    ids: set[str] = set()
+    anchors: set[tuple[str, str]] = set()
+    paths: set[tuple[str, str]] = set()
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise PartitionError(f"partitions[{index}] must be an object")
+        unknown = sorted(
+            set(item) - {"id", "family", "anchor", "semantic", "counterpart_path"}
+        )
+        if unknown:
+            raise PartitionError(
+                f"partitions[{index}] has unknown fields: {', '.join(unknown)}"
+            )
+        partition_id = item.get("id")
+        family_id = item.get("family")
+        anchor = item.get("anchor")
+        semantic = item.get("semantic")
+        counterpart_path = item.get("counterpart_path")
+        if not isinstance(partition_id, str) or not _PARTITION_ID.fullmatch(
+            partition_id
+        ):
+            raise PartitionError(f"partitions[{index}].id is not a stable identifier")
+        if partition_id in ids:
+            raise PartitionError(f"duplicate partition id {partition_id!r}")
+        if not isinstance(family_id, str) or family_id not in family_by_id:
+            raise PartitionError(f"partition {partition_id!r} names an unknown family")
+        family = family_by_id[family_id]
+        node_by_key = {
+            node.key: node for node in flatten_launch_tree(family.members[0][1])
+        }
+        if not isinstance(anchor, str) or anchor not in node_by_key:
+            raise PartitionError(f"partition {partition_id!r} names an unknown anchor")
+        if not isinstance(semantic, str) or not semantic.strip():
+            raise PartitionError(f"partition {partition_id!r} needs a semantic label")
+        if not isinstance(counterpart_path, str):
+            raise PartitionError(
+                f"partition {partition_id!r}.counterpart_path must be a string"
+            )
+        anchor_node = node_by_key[anchor]
+        counterpart = _resolve(family.members[0][2], counterpart_path)
+        if counterpart.sort != anchor_node.value.sort:
+            raise PartitionError(
+                f"partition {partition_id!r} crosses a typed boundary: "
+                f"anchor is {anchor_node.value.sort.value}, counterpart is "
+                f"{counterpart.sort.value}"
+            )
+        anchor_key = (family_id, anchor)
+        path_key = (family_id, counterpart_path)
+        if anchor_key in anchors:
+            raise PartitionError(f"anchor {family_id}:{anchor} is selected twice")
+        if path_key in paths:
+            raise PartitionError(
+                f"counterpart path {family_id}:{counterpart_path} is selected twice"
+            )
+        anchors.add(anchor_key)
+        paths.add(path_key)
+        ids.add(partition_id)
+        result.append(
+            _LaunchMatch(
+                partition_id=partition_id,
+                family_id=family_id,
+                anchor_key=anchor,
+                semantic=semantic.strip(),
+                counterpart_path=counterpart_path,
+            )
+        )
+
+    by_family_anchor = {(item.family_id, item.anchor_key): item for item in result}
+    for family in families:
+        parents = _launch_parent_map(family.members[0][1])
+        root_match = by_family_anchor[(family.family_id, "root")]
+        if root_match.counterpart_path != "root":
+            raise PartitionError(
+                f"{family.family_id} final launch output must match counterpart root"
+            )
+        matches = [item for item in result if item.family_id == family.family_id]
+        for item in matches:
+            expected_parent = parents[item.anchor_key]
+            if expected_parent is None:
+                continue
+            ancestors = [
+                candidate
+                for candidate in matches
+                if candidate.anchor_key != item.anchor_key
+                and _is_ancestor(candidate.counterpart_path, item.counterpart_path)
+            ]
+            actual_parent = (
+                max(ancestors, key=lambda value: _path_depth(value.counterpart_path))
+                if ancestors
+                else None
+            )
+            if actual_parent is None or actual_parent.anchor_key != expected_parent:
+                raise PartitionError(
+                    f"partition {item.partition_id!r} does not preserve the "
+                    "pre-partitioned launch dependency topology"
+                )
+    return tuple(result)
+
+
+def _build_launch_batches(
+    matches: Sequence[_LaunchMatch],
+    families: Sequence[_LaunchFamily],
+    anchor_side: str,
+) -> Tuple[SubgraphBatch, ...]:
+    match_by_anchor = {(item.family_id, item.anchor_key): item for item in matches}
+    family_by_id = {family.family_id: family for family in families}
+    ordered: list[_LaunchMatch] = []
+
+    def visit(family_id: str, node: LaunchNode) -> None:
+        for dependency in node.dependencies:
+            visit(family_id, dependency.child)
+        ordered.append(match_by_anchor[(family_id, node.key)])
+
+    for family in families:
+        visit(family.family_id, family.members[0][1])
+
+    batches: list[SubgraphBatch] = []
+    for match in ordered:
+        family = family_by_id[match.family_id]
+        pairs: list[Tuple[str, Expr, Expr]] = []
+        representative_nodes = {
+            node.key: node for node in flatten_launch_tree(family.members[0][1])
+        }
+        representative = representative_nodes[match.anchor_key]
+        dependency_ids = tuple(
+            match_by_anchor[(match.family_id, item.child.key)].partition_id
+            for item in representative.dependencies
+        )
+        for member_index, (label, anchor_root, counterpart_root) in enumerate(
+            family.members
+        ):
+            node_by_key = {node.key: node for node in flatten_launch_tree(anchor_root)}
+            anchor = node_by_key[match.anchor_key]
+            anchor_replacements: dict[str, Expr] = {}
+            counterpart_replacements: dict[str, Expr] = {}
+            for dependency in anchor.dependencies:
+                dependency_match = match_by_anchor[
+                    (match.family_id, dependency.child.key)
+                ]
+                token = Expr(
+                    "input",
+                    data=(
+                        f"launch_partition:{match.family_id}:"
+                        f"{dependency_match.partition_id}:{member_index}"
+                    ),
+                    sort=dependency.child.value.sort,
+                )
+                anchor_replacements[dependency.expression_path] = token
+                counterpart_replacements[dependency_match.counterpart_path] = token
+            anchor_expression = replace_launch_dependencies(anchor, anchor_replacements)
+            counterpart_expression = _subgraph_expression(
+                counterpart_root,
+                match.counterpart_path,
+                counterpart_replacements,
+            )
+            lhs, rhs = (
+                (anchor_expression, counterpart_expression)
+                if anchor_side == "lhs"
+                else (counterpart_expression, anchor_expression)
+            )
+            pairs.append((f"{match.family_id}:{match.partition_id}:{label}", lhs, rhs))
+        synthetic = f"launch:{representative.launch_id}:{match.anchor_key}"
+        batches.append(
+            SubgraphBatch(
+                partition_id=match.partition_id,
+                family_id=match.family_id,
+                semantic=match.semantic,
+                lhs_path=(
+                    synthetic if anchor_side == "lhs" else match.counterpart_path
+                ),
+                rhs_path=(
+                    match.counterpart_path if anchor_side == "lhs" else synthetic
+                ),
+                dependencies=dependency_ids,
+                root_pairs=tuple(pairs),
+            )
+        )
+    return tuple(batches)
+
+
+def propose_launch_partition_plan(
+    spec: PairSpec,
+    sequence: SequenceEvaluation,
+    counterpart_program: Program,
+    roots: Sequence[Tuple[Any, LaunchNode, Expr]],
+    client: Optional[DeepSeekClient] = None,
+) -> PartitionPlan:
+    """Match fixed launch boundaries to subexpressions on the other side.
+
+    The model can choose only counterpart paths.  Launch boundaries, dataflow,
+    proof order, and all equivalence decisions are computed by ETV.
+    """
+
+    if not spec.partition.enabled:
+        raise PartitionError("partitioning is disabled")
+    if not roots:
+        raise PartitionError("there are no launch-sequence compute roots")
+    families = _launch_families(roots)
+    semantics = {item.launch_id: item.semantic for item in sequence.launches}
+    payload = {
+        "task": (
+            "Match the fixed semantic launch subgraphs on the pre-partitioned "
+            f"{sequence.side} side to expression paths in the complete counterpart."
+        ),
+        "pair": _pair_context(spec),
+        "prepartitioned_side": sequence.side,
+        "launches": [
+            {
+                "id": launch.launch_id,
+                "step": launch.step,
+                "semantic": launch.semantic,
+                "frontend": {
+                    "kind": launch.frontend.kind,
+                    "function": launch.frontend.function,
+                    "programs": (
+                        None
+                        if launch.frontend.programs is None
+                        else launch.frontend.programs.to_json()
+                    ),
+                    "store_index": launch.frontend.store_index,
+                },
+                "abi": {
+                    logical: {
+                        "kind": endpoint.kind,
+                        "name": endpoint.name,
+                        "index": endpoint.index,
+                        "offset": endpoint.offset,
+                    }
+                    for logical, endpoint in sorted(launch.roles.items())
+                },
+                "bindings": {
+                    name: value if isinstance(value, int) else value.to_json()
+                    for name, value in sorted(launch.bindings.items())
+                },
+                "program": _program_json(program),
+            }
+            for launch, program in zip(
+                sequence.launches, sequence.programs, strict=True
+            )
+        ],
+        "counterpart": _program_json(counterpart_program),
+        "root_families": [],
+        "output_schema": {
+            "partitions": [
+                {
+                    "id": "stable_unique_identifier",
+                    "family": "family_0",
+                    "anchor": "root.dep[0]",
+                    "semantic": "short semantic operation name",
+                    "counterpart_path": "root.args[1]",
+                }
+            ]
+        },
+        "requirements": [
+            "Return JSON only and use every supplied anchor exactly once.",
+            "The root anchor must map to counterpart path root.",
+            "Do not change launch boundaries or their dependency edges.",
+            "Preserve the launch parent-child topology in counterpart paths.",
+            "Do not assert equivalence; ETV proves every matched pair.",
+        ],
+    }
+    for family in families:
+        representative = family.members[0]
+        nodes = []
+        parent_by_key = _launch_parent_map(representative[1])
+        for node in flatten_launch_tree(representative[1]):
+            replacements = {
+                dependency.expression_path: Expr(
+                    "input",
+                    data=f"dependency:{dependency.child.key}",
+                    sort=dependency.child.value.sort,
+                )
+                for dependency in node.dependencies
+            }
+            nodes.append(
+                {
+                    "anchor": node.key,
+                    "launch_id": node.launch_id,
+                    "declared_semantic": semantics[node.launch_id],
+                    "parent": parent_by_key[node.key],
+                    "dependencies": [item.child.key for item in node.dependencies],
+                    "expression_nodes": _nodes(
+                        replace_launch_dependencies(node, replacements)
+                    ),
+                }
+            )
+        payload["root_families"].append(
+            {
+                "id": family.family_id,
+                "member_count": len(family.members),
+                "member_labels": [str(item[0]) for item in family.members],
+                "fixed_launch_anchors": nodes,
+                "counterpart_nodes": _nodes(representative[2]),
+            }
+        )
+
+    client = client or DeepSeekClient(spec)
+    response, call_audit = client.complete_json(
+        "launch_partition_matching",
+        (
+            "Return JSON only. Match fixed launch boundaries to counterpart "
+            "paths; ETV checks topology and proves equivalence."
+        ),
+        payload,
+    )
+    if not isinstance(response, dict):
+        raise PartitionError(
+            "launch partition response must be a JSON object",
+            {"whole_program_calls": 1, "call": call_audit},
+        )
+    try:
+        matches = _validate_launch_matches(response, families, spec)
+        batches = _build_launch_batches(matches, families, sequence.side)
+    except LLMError as exc:
+        raise PartitionError(
+            str(exc), {"whole_program_calls": 1, "call": call_audit}
+        ) from exc
+    definitions = [
+        {
+            "id": batch.partition_id,
+            "family": batch.family_id,
+            "semantic": batch.semantic,
+            "lhs_path": batch.lhs_path,
+            "rhs_path": batch.rhs_path,
+            "dependencies": list(batch.dependencies),
+            "instances": len(batch.root_pairs),
+        }
+        for batch in batches
+    ]
+    return PartitionPlan(
+        batches=batches,
+        audit={
+            "enabled": True,
+            "status": "validated",
+            "mode": "prepartitioned_launch_sequence",
+            "prepartitioned_side": sequence.side,
+            "provider": spec.llm.provider,
+            "configured_model": spec.llm.model,
+            "whole_program_calls": 1,
+            "call": call_audit,
+            "root_families": [
+                {"id": family.family_id, "members": len(family.members)}
+                for family in families
+            ],
+            "machine_checks": {
+                "fixed_launch_boundaries": True,
+                "complete_anchor_coverage": True,
+                "unique_counterpart_paths": True,
+                "matching_dependency_topology": True,
+                "acyclic_launch_order": True,
+                "float_compute_roots": True,
+            },
+            "partitions": definitions,
+        },
+    )

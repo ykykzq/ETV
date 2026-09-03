@@ -360,6 +360,42 @@ def test_extended_benchmark_dialect_ops_are_lifted_and_proved():
 
 
 @pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
+def test_raw_ttir_multilaunch_side_is_prepartitioned_and_proved(monkeypatch):
+    def fake_complete(self, purpose, system, payload):
+        assert purpose == "launch_partition_matching"
+        assert payload["prepartitioned_side"] == "lhs"
+        return {
+            "partitions": [
+                {
+                    "id": "multiply",
+                    "family": "family_0",
+                    "anchor": "root.dep[0]",
+                    "semantic": "scale Other by Alpha",
+                    "counterpart_path": "root.args[1]",
+                },
+                {
+                    "id": "output",
+                    "family": "family_0",
+                    "anchor": "root",
+                    "semantic": "add Input and store Output",
+                    "counterpart_path": "root",
+                },
+            ]
+        }, {"purpose": purpose, "provider": "deepseek", "model": "fake"}
+
+    monkeypatch.setattr("etv.partition.DeepSeekClient.complete_json", fake_complete)
+    report = verify_spec(ROOT / "tests/fixtures/ttir/multilaunch_pair.json")
+
+    assert report["status"] == Status.PROVED.value
+    assert report["reason"] == "OBSERVABLE_MEMORY_EQUIVALENT"
+    assert report["proof"]["partitioning"]["mode"] == ("prepartitioned_launch_sequence")
+    assert [item["launch_id"] for item in report["inputs"]["frontends"]["lhs"]] == [
+        "multiply",
+        "add",
+    ]
+
+
+@pytest.mark.skipif(not HAS_LIBTRITON, reason="requires Triton/libtriton 3.7.1")
 def test_parametric_raw_ttir_pair_is_lifted_and_proved():
     report = verify_spec(ROOT / "examples/add/pair_parametric.json")
 

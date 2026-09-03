@@ -24,6 +24,7 @@ from .model import (
     Contract,
     FrontendSpec,
     InputError,
+    LaunchSpec,
     LLMConfig,
     Limits,
     Parameter,
@@ -731,6 +732,7 @@ def _load_pair_spec_v2(
             "rule_policy",
             "llm",
             "partition",
+            "launches",
         },
         f"{path}.metadata",
     )
@@ -780,12 +782,34 @@ def _load_pair_spec_v2(
         raise InputError(f"{path}.observation must be an object")
     # The proof core calls this section Contract; the public v2 spelling is
     # observation to make the distinction from assumptions explicit.
+    launches_raw = metadata.get("launches", {})
+    if not isinstance(launches_raw, dict):
+        raise InputError(f"{path}.metadata.launches must be an object")
+    _only_keys(launches_raw, {"lhs", "rhs"}, f"{path}.metadata.launches")
+
+    def launch_fallback(side: str, key: str) -> Any:
+        values = launches_raw.get(side)
+        if not isinstance(values, list) or not values:
+            return None
+        first = values[0]
+        return first.get(key) if isinstance(first, dict) else None
+
+    frontends = metadata.get("frontends", {})
+    if not isinstance(frontends, dict):
+        raise InputError(f"{path}.metadata.frontends must be an object")
+    normalized_frontends = dict(frontends)
+    for side in ("lhs", "rhs"):
+        if side not in normalized_frontends:
+            fallback = launch_fallback(side, "frontend")
+            if fallback is not None:
+                normalized_frontends[side] = fallback
+
     normalized = {
         "format": FORMAT_PAIR,
         "pair_id": metadata.get("pair_id"),
-        "lhs": metadata.get("lhs"),
-        "rhs": metadata.get("rhs"),
-        "frontends": metadata.get("frontends", {}),
+        "lhs": metadata.get("lhs", launch_fallback("lhs", "file")),
+        "rhs": metadata.get("rhs", launch_fallback("rhs", "file")),
+        "frontends": normalized_frontends,
         "semantic_mode": metadata.get("semantic_mode"),
         "roles": abi,
         "facts": facts_raw,
@@ -800,6 +824,9 @@ def _load_pair_spec_v2(
     )
     normalized["rewrite_rules"] = []
     spec = _load_pair_spec(path, require_ttir, _raw=normalized)
+    launch_sequences = _parse_launch_sequences(
+        path, launches_raw, require_ttir=require_ttir
+    )
     predicate_set = PredicateSet(
         abi=spec.roles,
         bindings=spec.predicates.bindings,
@@ -823,7 +850,179 @@ def _load_pair_spec_v2(
         assumptions=assumptions,
         rewrite_rules=rewrite_rules,
         rewrite_sources=rewrite_sources,
+        launch_sequences=launch_sequences,
     )
+
+
+def _parse_launch_sequences(
+    path: Path,
+    raw: Mapping[str, Any],
+    *,
+    require_ttir: bool,
+) -> Mapping[str, Tuple[LaunchSpec, ...]]:
+    sequences: Dict[str, Tuple[LaunchSpec, ...]] = {}
+    for side in ("lhs", "rhs"):
+        values = raw.get(side)
+        if values is None:
+            continue
+        where = f"{path}.metadata.launches.{side}"
+        if not isinstance(values, list) or len(values) < 2:
+            raise InputError(f"{where} must contain at least two ordered launches")
+        launches: list[LaunchSpec] = []
+        seen_ids: set[str] = set()
+        for index, item in enumerate(values):
+            item_where = f"{where}[{index}]"
+            if not isinstance(item, dict):
+                raise InputError(f"{item_where} must be an object")
+            _only_keys(
+                item,
+                {
+                    "id",
+                    "file",
+                    "frontend",
+                    "semantic",
+                    "abi",
+                    "bindings",
+                    "step",
+                },
+                item_where,
+            )
+            launch_id = item.get("id")
+            if not isinstance(launch_id, str) or not _RULE_ID.fullmatch(launch_id):
+                raise InputError(f"{item_where}.id must be a stable identifier")
+            if launch_id in seen_ids:
+                raise InputError(f"duplicate launch id {launch_id!r} in {where}")
+            seen_ids.add(launch_id)
+            relative = item.get("file")
+            if not isinstance(relative, str) or not relative:
+                raise InputError(f"{item_where}.file must be a relative path string")
+            artifact = (path.parent / relative).resolve()
+            expected_suffixes = {".ttir", ".mlir"} if require_ttir else {".json"}
+            if artifact.suffix not in expected_suffixes:
+                expected = ".ttir/.mlir" if require_ttir else ".json"
+                raise InputError(
+                    f"{item_where}.file must reference {expected}",
+                    "TTIR_PAIR_REQUIRED" if require_ttir else "INVALID_INPUT",
+                )
+            if not artifact.is_file():
+                raise InputError(
+                    f"{item_where}.file does not exist: {artifact}", "READ_ERROR"
+                )
+
+            frontend_raw = item.get("frontend")
+            if not isinstance(frontend_raw, dict):
+                raise InputError(f"{item_where}.frontend must be an object")
+            _only_keys(
+                frontend_raw,
+                {"kind", "function", "programs", "store_index"},
+                f"{item_where}.frontend",
+            )
+            expected_kind = "ttir" if require_ttir else "semantic_json"
+            kind = frontend_raw.get("kind")
+            if kind != expected_kind:
+                raise InputError(
+                    f"{item_where}.frontend.kind must be {expected_kind}",
+                    "TTIR_PAIR_REQUIRED" if require_ttir else "INVALID_INPUT",
+                )
+            function = frontend_raw.get("function")
+            programs_raw = frontend_raw.get("programs")
+            store_index = frontend_raw.get("store_index")
+            if require_ttir:
+                if not isinstance(function, str) or not function:
+                    raise InputError(
+                        f"{item_where}.frontend.function must name the TTIR entry"
+                    )
+                if programs_raw is None:
+                    raise InputError(
+                        f"{item_where}.frontend.programs is required because TTIR "
+                        "does not encode the host launch grid"
+                    )
+            elif any(
+                value is not None for value in (function, programs_raw, store_index)
+            ):
+                raise InputError(
+                    f"{item_where}.frontend semantic fixtures accept only kind"
+                )
+            if store_index is not None and (
+                not isinstance(store_index, int)
+                or isinstance(store_index, bool)
+                or store_index < 0
+            ):
+                raise InputError(
+                    f"{item_where}.frontend.store_index must be non-negative"
+                )
+            programs = (
+                None
+                if programs_raw is None
+                else parse_expr(programs_raw, f"{item_where}.frontend.programs")
+            )
+            if programs is not None and programs.sort != Sort.INT:
+                raise InputError(
+                    f"{item_where}.frontend.programs must be an integer expression"
+                )
+
+            semantic = item.get("semantic", launch_id)
+            if not isinstance(semantic, str) or not semantic.strip():
+                raise InputError(f"{item_where}.semantic must be a non-empty string")
+            step = item.get("step", index)
+            if not isinstance(step, int) or isinstance(step, bool) or step < 0:
+                raise InputError(f"{item_where}.step must be a non-negative integer")
+            if launches and step < launches[-1].step:
+                raise InputError(f"{where} steps must be nondecreasing")
+            abi_raw = item.get("abi")
+            if not isinstance(abi_raw, dict) or not abi_raw:
+                raise InputError(f"{item_where}.abi must be a non-empty object")
+            roles: Dict[str, RoleEndpoint] = {}
+            endpoints: set[tuple[str, str]] = set()
+            for logical, endpoint_raw in sorted(abi_raw.items()):
+                if not isinstance(logical, str) or not logical:
+                    raise InputError(f"{item_where}.abi role names must be non-empty")
+                endpoint = _endpoint(endpoint_raw, f"{item_where}.abi.{logical}")
+                key = (endpoint.kind, endpoint.name)
+                if key in endpoints:
+                    raise InputError(
+                        f"physical endpoint is mapped more than once in {item_where}.abi"
+                    )
+                endpoints.add(key)
+                roles[logical] = endpoint
+
+            bindings_raw = item.get("bindings", {})
+            if not isinstance(bindings_raw, dict):
+                raise InputError(f"{item_where}.bindings must be an object")
+            bindings: Dict[str, int | Expr] = {}
+            for name, value in bindings_raw.items():
+                if not isinstance(name, str) or not name:
+                    raise InputError(
+                        f"{item_where}.bindings names must be non-empty strings"
+                    )
+                if isinstance(value, int) and not isinstance(value, bool):
+                    bindings[name] = value
+                else:
+                    expression = parse_expr(value, f"{item_where}.bindings.{name}")
+                    if expression.sort != Sort.INT:
+                        raise InputError(
+                            f"{item_where}.bindings.{name} must be an integer expression"
+                        )
+                    bindings[name] = expression
+
+            launches.append(
+                LaunchSpec(
+                    launch_id=launch_id,
+                    path=artifact,
+                    frontend=FrontendSpec(
+                        kind=kind,
+                        function=function,
+                        programs=programs,
+                        store_index=store_index,
+                    ),
+                    semantic=semantic.strip(),
+                    roles=roles,
+                    bindings=bindings,
+                    step=step,
+                )
+            )
+        sequences[side] = tuple(launches)
+    return sequences
 
 
 def _load_pair_spec(

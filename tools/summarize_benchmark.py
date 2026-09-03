@@ -45,8 +45,7 @@ def _reference_self_check(case_dir: Path) -> bool | None:
                 check
                 and check.get("structure_equal")
                 and all(
-                    leaf.get("allclose_1e-3")
-                    for leaf in check.get("tensor_leaves", [])
+                    leaf.get("allclose_1e-3") for leaf in check.get("tensor_leaves", [])
                 )
             )
         )
@@ -66,12 +65,18 @@ def _pairspec_reason_group(reason: str | None) -> str:
     if text.startswith("requires one captured LHS launch"):
         return "LHS TTIR is absent or has multiple launches"
     if text.startswith("requires one selected RHS TTIR and one runtime launch"):
-        return "RHS reference has zero or multiple kernels/launches"
+        return "legacy results predate multi-launch PairSpec generation"
+    if "storage provenance" in text:
+        return "multi-launch capture lacks storage provenance"
+    if "runtime launch" in text and "selected TTIR" in text:
+        return "runtime launches cannot be associated with selected TTIR"
+    if "final RHS launch store" in text:
+        return "multi-launch final output store is ambiguous"
     if text.startswith("ETV requires one tt.store"):
         return "legacy single-store frontend rejected multiple stores"
-    if text.startswith("requires at least one reference with RHS TTIR") or text.startswith(
-        "requires one reference with RHS TTIR"
-    ):
+    if text.startswith(
+        "requires at least one reference with RHS TTIR"
+    ) or text.startswith("requires one reference with RHS TTIR"):
         return "RHS TTIR is absent"
     if text.startswith("cannot align TTIR pointer arguments"):
         return "TTIR/runtime pointer ABI cannot be aligned"
@@ -87,7 +92,10 @@ def _pairspec_reason_group(reason: str | None) -> str:
         "cannot associate output leaf"
     ):
         return "stores cannot be associated with output leaves"
-    if text.startswith("reference output has no tensor leaves") or "empty or not a tensor" in text:
+    if (
+        text.startswith("reference output has no tensor leaves")
+        or "empty or not a tensor" in text
+    ):
         return "reference output has no verifiable tensor leaf"
     if text.startswith("RHS compiled-vs-FX self-check did not pass"):
         return "captured RHS failed compiled-vs-FX self-check"
@@ -129,9 +137,7 @@ def main() -> int:
     collection = json.loads(
         (root / "collection-summary.json").read_text(encoding="utf-8")
     )
-    pairspec = json.loads(
-        (root / "pairspec-summary.json").read_text(encoding="utf-8")
-    )
+    pairspec = json.loads((root / "pairspec-summary.json").read_text(encoding="utf-8"))
     formal = json.loads((root / "formal-summary.json").read_text(encoding="utf-8"))
 
     collection_records = collection["records"]
@@ -274,7 +280,9 @@ def main() -> int:
             "case_counts": pairspec["counts"],
             "generated_observations": len(generated_observations),
             "recovered_case_counts": recovered_case_counts,
-            "unavailable_reason_groups": dict(sorted(unavailable_reason_groups.items())),
+            "unavailable_reason_groups": dict(
+                sorted(unavailable_reason_groups.items())
+            ),
             "failed_reference_attempt_reason_groups": dict(
                 sorted(failed_attempt_reason_groups.items())
             ),
@@ -287,7 +295,9 @@ def main() -> int:
             "observation_counts": dict(sorted(formal_counts.items())),
             "cases_with_etv_results": len(cases_with_etv),
             "cases_with_conclusive_results": len(cases_with_conclusive),
-            "unknown_or_runner_reason_groups": dict(sorted(formal_reason_groups.items())),
+            "unknown_or_runner_reason_groups": dict(
+                sorted(formal_reason_groups.items())
+            ),
             "disproved": disproved,
         },
         "by_operator": operator_rows,
@@ -468,10 +478,7 @@ def main() -> int:
     _write_text(root / "REPORT.md", "\n".join(lines))
     print(
         json.dumps(
-            {
-                key: summary[key]
-                for key in ("numeric", "capture", "pairspec", "formal")
-            },
+            {key: summary[key] for key in ("numeric", "capture", "pairspec", "formal")},
             indent=2,
             sort_keys=True,
         )

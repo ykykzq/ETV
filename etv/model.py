@@ -76,6 +76,24 @@ class FrontendSpec:
 
 
 @dataclass(frozen=True)
+class LaunchSpec:
+    """One ordered launch in a pre-partitioned program side.
+
+    ``roles`` is launch-local: it maps global logical storage/scalar names to
+    the physical arguments of this particular kernel.  ``bindings`` similarly
+    overrides side-wide integer facts for this launch only.
+    """
+
+    launch_id: str
+    path: Path
+    frontend: FrontendSpec
+    semantic: str
+    roles: Mapping[str, "RoleEndpoint"]
+    bindings: Mapping[str, int | Expr] = field(default_factory=dict)
+    step: int = 0
+
+
+@dataclass(frozen=True)
 class RoleEndpoint:
     kind: str
     name: str
@@ -323,6 +341,7 @@ class PairSpec:
     llm: LLMConfig = LLMConfig()
     partition: PartitionConfig = PartitionConfig()
     rewrite_sources: Tuple["RewriteSource", ...] = ()
+    launch_sequences: Mapping[str, Tuple[LaunchSpec, ...]] = field(default_factory=dict)
 
     @property
     def facts(self) -> FactContext:
@@ -339,6 +358,11 @@ class PairSpec:
             if role.logical == logical:
                 return role
         raise InputError(f"missing role mapping for {logical!r}", "MISSING_ROLE")
+
+    def launches(self, side: str) -> Tuple[LaunchSpec, ...]:
+        if side not in {"lhs", "rhs"}:
+            raise ValueError(f"invalid pair side {side!r}")
+        return self.launch_sequences.get(side, ())
 
 
 @dataclass(frozen=True)

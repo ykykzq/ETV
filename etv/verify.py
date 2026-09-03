@@ -14,8 +14,14 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, 
 from .casts import INTEGER_CAST_OPS, INT_TO_FLOAT_CAST_OPS
 from .egraph import EGraph
 from .evaluator import SideRoles, eval_expr, evaluate_program
-from .ir import Expr, Program, Sort
+from .ir import Expr, Program, Sort, int_const
 from .llm import LLMError, propose_rules
+from .multilaunch import (
+    build_launch_tree,
+    compose_launch_value,
+    evaluate_launch_sequence,
+    flatten_launch_tree,
+)
 from .model import (
     Evaluation,
     InputError,
@@ -33,7 +39,12 @@ from .observability import (
     log_event,
     new_run_id,
 )
-from .partition import PartitionError, PartitionPlan, propose_partition_plan
+from .partition import (
+    PartitionError,
+    PartitionPlan,
+    propose_launch_partition_plan,
+    propose_partition_plan,
+)
 from .schema import load_internal_pair_spec, load_pair_spec, load_program
 from .parametric import ParametricFailure, verify_parametric_pair
 from .ttir import load_program_artifact
@@ -126,6 +137,16 @@ def _base_report(spec: PairSpec) -> dict:
         }
         for group in spec.facts.disjoint_groups
     )
+    assumptions.extend(
+        {
+            "text": (f"{side}.{launch.launch_id}.{name} = {binding_text(value)}"),
+            "evidence": ProofLevel.TRUSTED_AXIOM.value,
+            "source": f"PairSpec.metadata.launches.{side}.bindings",
+        }
+        for side in ("lhs", "rhs")
+        for launch in spec.launches(side)
+        for name, value in sorted(launch.bindings.items())
+    )
     custom_by_id = {
         declaration.predicate_id: declaration for declaration in spec.predicates.custom
     }
@@ -151,17 +172,57 @@ def _base_report(spec: PairSpec) -> dict:
         }
         for predicate_id in spec.predicates.predicate_ids
     ]
+    formal_predicates.extend(
+        {
+            "id": f"abi.{side}.{launch.launch_id}.{logical}",
+            "kind": "launch_abi",
+            "status": "assumed",
+            "evidence": ProofLevel.TRUSTED_AXIOM.value,
+            "source": f"PairSpec.metadata.launches.{side}.abi",
+        }
+        for side in ("lhs", "rhs")
+        for launch in spec.launches(side)
+        for logical in sorted(launch.roles)
+    )
+    formal_predicates.extend(
+        {
+            "id": f"launch_order.{side}.{launch.launch_id}.step",
+            "kind": "launch_order",
+            "status": "assumed",
+            "evidence": ProofLevel.TRUSTED_AXIOM.value,
+            "source": f"PairSpec.metadata.launches.{side}.step",
+        }
+        for side in ("lhs", "rhs")
+        for launch in spec.launches(side)
+    )
+    launch_inputs = {
+        side: [
+            {
+                "id": launch.launch_id,
+                "path": str(launch.path),
+                "sha256": _hash(launch.path),
+                "semantic": launch.semantic,
+            }
+            for launch in spec.launches(side)
+        ]
+        for side in ("lhs", "rhs")
+        if spec.launches(side)
+    }
     return {
         "schema_version": 5,
-        "tool": {"name": "ETV", "version": "0.6.1"},
+        "tool": {"name": "ETV", "version": "0.7.0"},
         "pair_id": spec.pair_id,
         "status": Status.UNKNOWN.value,
         "reason": "NOT_RUN",
         "semantic_mode": spec.semantic_mode,
         "scope": (
-            "fixed-rank symbolic-shape single-store parametric translation validation"
-            if spec.facts.parameters
-            else "fixed-specialization single-store bounded translation validation"
+            "fixed-specialization ordered multi-launch translation validation"
+            if launch_inputs
+            else (
+                "fixed-rank symbolic-shape single-store parametric translation validation"
+                if spec.facts.parameters
+                else "fixed-specialization single-store bounded translation validation"
+            )
         ),
         "inputs": {
             "spec": str(spec.source),
@@ -172,6 +233,7 @@ def _base_report(spec: PairSpec) -> dict:
                 "lhs": _hash(spec.lhs_path),
                 "rhs": _hash(spec.rhs_path),
             },
+            **({"launches": launch_inputs} if launch_inputs else {}),
         },
         "assumptions": assumptions,
         "llm_context": {
@@ -286,7 +348,7 @@ def _finish(
 def _invalid_report(path: Path, exc: Exception) -> dict:
     return {
         "schema_version": 5,
-        "tool": {"name": "ETV", "version": "0.6.1"},
+        "tool": {"name": "ETV", "version": "0.7.0"},
         "pair_id": path.stem,
         "status": Status.UNKNOWN.value,
         "reason": getattr(exc, "code", "INVALID_INPUT"),
@@ -1315,6 +1377,545 @@ def _complete_compute_proof(
     )
 
 
+def _aggregate_programs(side: str, programs: Sequence[Program]) -> Program:
+    return Program(
+        name=f"{side}_launch_sequence",
+        source=programs[0].source,
+        programs=int_const(1),
+        lanes=1,
+        stores=tuple(store for program in programs for store in program.stores),
+        frontend=programs[0].frontend,
+        frontend_version=programs[0].frontend_version,
+    )
+
+
+def _sequence_role_details(spec: PairSpec) -> list[dict]:
+    details = []
+    for role in spec.roles:
+        details.append(
+            {
+                "logical": role.logical,
+                "lhs": {
+                    "kind": role.lhs.kind,
+                    "name": role.lhs.name,
+                    "index": role.lhs.index,
+                    "offset": role.lhs.offset,
+                },
+                "rhs": {
+                    "kind": role.rhs.kind,
+                    "name": role.rhs.name,
+                    "index": role.rhs.index,
+                    "offset": role.rhs.offset,
+                },
+                "scope": "pair",
+            }
+        )
+    for side in ("lhs", "rhs"):
+        for launch in spec.launches(side):
+            details.extend(
+                {
+                    "logical": logical,
+                    side: {
+                        "kind": endpoint.kind,
+                        "name": endpoint.name,
+                        "index": endpoint.index,
+                        "offset": endpoint.offset,
+                    },
+                    "scope": "launch",
+                    "launch_id": launch.launch_id,
+                }
+                for logical, endpoint in sorted(launch.roles.items())
+            )
+    return details
+
+
+def _rewrite_sequence_store_block(report: dict) -> None:
+    for block in report["blocks"]:
+        if block["kind"] != "STORE" or block["status"] != Status.PROVED.value:
+            continue
+        block["summary"] = (
+            "sequential launch composition yields equal final observed Output memory"
+        )
+        block["details"] = {
+            "memory_model": (
+                "each launch reads the prior memory state and its active stores "
+                "become visible to the next launch"
+            ),
+            "observation": (
+                "only observation.output_role is compared; intermediate storage "
+                "is an explicit launch boundary and is otherwise unobserved"
+            ),
+        }
+
+
+def _verify_lifted_launch_pair(
+    report: dict,
+    spec: PairSpec,
+    sequence_side: str,
+    sequence_programs: Sequence[Program],
+    counterpart_program: Program,
+    require_ttir: bool,
+) -> dict:
+    launches = spec.launches(sequence_side)
+    counterpart_side = "rhs" if sequence_side == "lhs" else "lhs"
+    all_programs = tuple(sequence_programs) + (counterpart_program,)
+    report["inputs"]["frontends"] = {
+        sequence_side: [
+            {
+                "launch_id": launch.launch_id,
+                "name": program.frontend,
+                "version": program.frontend_version,
+            }
+            for launch, program in zip(launches, sequence_programs, strict=True)
+        ],
+        counterpart_side: {
+            "name": counterpart_program.frontend,
+            "version": counterpart_program.frontend_version,
+        },
+    }
+    if require_ttir and any(
+        program.frontend != "libtriton" for program in all_programs
+    ):
+        raise InputError(
+            "multi-launch verification requires every program to be lifted from raw TTIR",
+            "TTIR_PAIR_REQUIRED",
+        )
+    if require_ttir:
+        report["trusted_axioms"].append(
+            "ETV TTIR-to-semantic-IR lifting implementation"
+        )
+        report["blocks"].append(
+            _block(
+                "FRONTEND",
+                Status.PROVED,
+                "all raw TTIR launch modules were parsed and verified by pinned libtriton",
+                (ProofLevel.STRUCTURAL,),
+                details=report["inputs"]["frontends"],
+            )
+        )
+
+    if spec.semantic_mode != "abstract_float":
+        report["unsupported"].append(
+            f"semantic mode {spec.semantic_mode!r}; MVP supports only abstract_float"
+        )
+        report["blocks"].append(
+            _block(
+                "SEMANTICS",
+                Status.UNKNOWN,
+                "requested numeric semantics are not implemented",
+                reason="UNSUPPORTED_SEMANTIC_MODE",
+            )
+        )
+        return _finish(report, Status.UNKNOWN, "UNSUPPORTED_SEMANTIC_MODE")
+    if spec.facts.parameters:
+        report["unsupported"].append(
+            "ordered multi-launch verification currently requires fixed bindings"
+        )
+        report["blocks"].append(
+            _block(
+                "LAUNCH_SEQUENCE",
+                Status.UNKNOWN,
+                "parametric sequential memory composition is not implemented",
+                reason="MULTILAUNCH_PARAMETRIC_UNSUPPORTED",
+            )
+        )
+        return _finish(report, Status.UNKNOWN, "MULTILAUNCH_PARAMETRIC_UNSUPPORTED")
+
+    missing_alias = [
+        (lhs, rhs)
+        for lhs, rhs in pairwise(spec.contract.require_disjoint)
+        if not spec.facts.disjoint(lhs, rhs)
+    ]
+    if missing_alias:
+        report["blocks"].append(
+            _block(
+                "ABI",
+                Status.UNKNOWN,
+                "required no-alias facts are missing",
+                reason="MISSING_ALIAS_FACT",
+                details={"missing_pairs": [list(pair) for pair in missing_alias]},
+            )
+        )
+        return _finish(report, Status.UNKNOWN, "MISSING_ALIAS_FACT")
+    report["blocks"].append(
+        _block(
+            "ABI",
+            Status.PROVED,
+            "pair-wide and launch-local physical parameters have explicit logical roles",
+            (ProofLevel.TRUSTED_AXIOM,),
+            details={"roles": _sequence_role_details(spec)},
+        )
+    )
+
+    sequence_aggregate = _aggregate_programs(sequence_side, sequence_programs)
+    counterpart_aggregate = _aggregate_programs(
+        counterpart_side, (counterpart_program,)
+    )
+    lhs_cast_program, rhs_cast_program = (
+        (sequence_aggregate, counterpart_aggregate)
+        if sequence_side == "lhs"
+        else (counterpart_aggregate, sequence_aggregate)
+    )
+    cast_audit = _cast_rewrite_audit(spec, lhs_cast_program, rhs_cast_program)
+    if cast_audit["casts"]["lhs"] or cast_audit["casts"]["rhs"]:
+        report["proof"]["cast_rewrites"] = cast_audit
+        if cast_audit["status"] == "unresolved":
+            report["blocks"].append(
+                _block(
+                    "CAST",
+                    Status.UNKNOWN,
+                    "cast differences were preserved but no admitted rewrite established equivalence",
+                    reason="CAST_EQUIVALENCE_NOT_REWRITTEN",
+                    details=cast_audit,
+                )
+            )
+            return _finish(report, Status.UNKNOWN, "CAST_EQUIVALENCE_NOT_REWRITTEN")
+
+    try:
+        log_event(
+            LOGGER,
+            logging.INFO,
+            "launch_sequence_started",
+            "enumerating the pre-partitioned launch sequence",
+            side=sequence_side,
+            launches=len(launches),
+        )
+        expected_numel = _expected_numel(spec)
+        sequence = evaluate_launch_sequence(
+            spec, sequence_side, launches, sequence_programs
+        )
+        counterpart = evaluate_program(counterpart_program, spec, counterpart_side)
+    except (UnsupportedSemantics, InputError) as exc:
+        report["unsupported"].append(str(exc))
+        report["blocks"].append(
+            _block(
+                "LAUNCH_SEQUENCE",
+                Status.UNKNOWN,
+                str(exc),
+                reason=getattr(exc, "code", "INVALID_LAUNCH_SEQUENCE"),
+            )
+        )
+        return _finish(
+            report,
+            Status.UNKNOWN,
+            getattr(exc, "code", "INVALID_LAUNCH_SEQUENCE"),
+        )
+
+    counterpart_map, duplicate = _active_map(counterpart)
+    if duplicate:
+        report["blocks"].append(
+            _block(
+                "INDEX",
+                Status.UNKNOWN,
+                "the counterpart assigns a logical output element more than once",
+                reason="DUPLICATE_LOGICAL_WRITE",
+                details=duplicate,
+            )
+        )
+        return _finish(report, Status.UNKNOWN, "DUPLICATE_LOGICAL_WRITE", duplicate)
+    report["blocks"].append(
+        _block(
+            "INDEX",
+            Status.PROVED,
+            "all ordered launches, programs, and lanes were exhaustively enumerated",
+            (ProofLevel.BOUNDED_EXHAUSTIVE, ProofLevel.DECOMPOSITION),
+            details={
+                sequence_side: [
+                    {
+                        "launch_id": launch.launch_id,
+                        "programs": evaluation.program_count,
+                        "lanes": evaluation.program.lanes,
+                        "enumerated": len(evaluation.records),
+                    }
+                    for launch, evaluation in zip(
+                        launches, sequence.evaluations, strict=True
+                    )
+                ],
+                counterpart_side: {
+                    "programs": counterpart.program_count,
+                    "lanes": counterpart.program.lanes,
+                    "enumerated": len(counterpart.records),
+                },
+            },
+        )
+    )
+
+    sequence_domain = set(sequence.final)
+    counterpart_domain = set(counterpart_map)
+    if sequence_domain != counterpart_domain:
+        differing = sorted(sequence_domain.symmetric_difference(counterpart_domain))[0]
+        witness = {
+            "kind": "MASK_DOMAIN_MISMATCH",
+            "logical_index": differing,
+            sequence_side + "_active": differing in sequence_domain,
+            counterpart_side + "_active": differing in counterpart_domain,
+        }
+        report["blocks"].append(
+            _block(
+                "MASK",
+                Status.DISPROVED,
+                "the final active logical output domains differ",
+                (ProofLevel.BOUNDED_EXHAUSTIVE,),
+                reason="MASK_MISMATCH",
+                details=witness,
+            )
+        )
+        return _finish(report, Status.DISPROVED, "MASK_MISMATCH", witness)
+    report["blocks"].append(
+        _block(
+            "MASK",
+            Status.PROVED,
+            "the final launch sequence and counterpart select the same output domain",
+            (ProofLevel.BOUNDED_EXHAUSTIVE,),
+            details={"active_elements": len(sequence_domain)},
+        )
+    )
+    expected_domain = set(range(expected_numel))
+    if spec.contract.require_full_coverage and sequence_domain != expected_domain:
+        details = {
+            "missing": sorted(expected_domain - sequence_domain)[:16],
+            "extra": sorted(sequence_domain - expected_domain)[:16],
+            "expected_numel": expected_numel,
+        }
+        report["blocks"].append(
+            _block(
+                "COVERAGE",
+                Status.UNKNOWN,
+                "the final memory does not establish full-output coverage",
+                (ProofLevel.BOUNDED_EXHAUSTIVE,),
+                reason="INCOMPLETE_COVERAGE",
+                details=details,
+            )
+        )
+        return _finish(report, Status.UNKNOWN, "INCOMPLETE_COVERAGE")
+    report["blocks"].append(
+        _block(
+            "COVERAGE",
+            Status.PROVED,
+            "the final memory covers every contracted output element exactly once",
+            (ProofLevel.BOUNDED_EXHAUSTIVE,),
+            details={"output_numel": expected_numel},
+        )
+    )
+    race = _race(counterpart)
+    if race:
+        report["blocks"].append(
+            _block(
+                "RACE_FREEDOM",
+                Status.UNKNOWN,
+                "the counterpart has multiple active lanes targeting one address",
+                reason="RACE_FREEDOM_NOT_PROVED",
+                details=race,
+            )
+        )
+        return _finish(report, Status.UNKNOWN, "RACE_FREEDOM_NOT_PROVED", race)
+    report["blocks"].append(
+        _block(
+            "RACE_FREEDOM",
+            Status.PROVED,
+            "each launch and the counterpart have injective active store addresses",
+            (ProofLevel.BOUNDED_EXHAUSTIVE,),
+        )
+    )
+
+    for logical_index in sorted(sequence_domain):
+        produced = sequence.final[logical_index]
+        other = counterpart_map[logical_index]
+        if (
+            other.output_role != spec.contract.output_role
+            or produced.offset != other.offset
+        ):
+            lhs_value, rhs_value = (
+                (
+                    {"role": produced.output_role, "offset": produced.offset},
+                    {"role": other.output_role, "offset": other.offset},
+                )
+                if sequence_side == "lhs"
+                else (
+                    {"role": other.output_role, "offset": other.offset},
+                    {"role": produced.output_role, "offset": produced.offset},
+                )
+            )
+            witness = {
+                "kind": "OUTPUT_ADDRESS_MISMATCH",
+                "logical_index": logical_index,
+                "lhs": lhs_value,
+                "rhs": rhs_value,
+            }
+            report["blocks"].append(
+                _block(
+                    "ADDRESS",
+                    Status.DISPROVED,
+                    "corresponding logical outputs have different final addresses",
+                    (ProofLevel.BOUNDED_EXHAUSTIVE,),
+                    reason="OUTPUT_ADDRESS_MISMATCH",
+                    details=witness,
+                )
+            )
+            return _finish(report, Status.DISPROVED, "OUTPUT_ADDRESS_MISMATCH", witness)
+    report["blocks"].append(
+        _block(
+            "ADDRESS",
+            Status.PROVED,
+            "all corresponding final logical outputs have the same Output offsets",
+            (ProofLevel.BOUNDED_EXHAUSTIVE,),
+        )
+    )
+
+    semantics = {launch.launch_id: launch.semantic for launch in launches}
+    launch_roots = []
+    composed_roots = []
+    reachable_launches: set[str] = set()
+    for logical_index in sorted(sequence_domain):
+        produced = sequence.final[logical_index]
+        tree = build_launch_tree(produced, semantics)
+        reachable_launches.update(node.launch_id for node in flatten_launch_tree(tree))
+        other = counterpart_map[logical_index].value
+        launch_roots.append((logical_index, tree, other))
+        composed = compose_launch_value(produced)
+        lhs_value, rhs_value = (
+            (composed, other) if sequence_side == "lhs" else (other, composed)
+        )
+        composed_roots.append((logical_index, lhs_value, rhs_value))
+
+    dead_launches = [
+        launch.launch_id
+        for launch in launches
+        if launch.launch_id not in reachable_launches
+    ]
+    report["proof"]["launch_sequence"] = {
+        "prepartitioned_side": sequence_side,
+        "ordered_launches": [launch.launch_id for launch in launches],
+        "reachable_launches": sorted(reachable_launches),
+        "unobserved_launches": dead_launches,
+        "memory_edges": sum(
+            len(node.dependencies)
+            for _, root, _ in launch_roots
+            for node in flatten_launch_tree(root)
+        ),
+        "composition": "prior stores are substituted only at matching logical-role offsets",
+    }
+    log_event(
+        LOGGER,
+        logging.INFO,
+        "launch_sequence_built",
+        "reconstructed ordered intermediate-memory dependencies",
+        side=sequence_side,
+        reachable_launches=len(reachable_launches),
+        unobserved_launches=len(dead_launches),
+        memory_edges=report["proof"]["launch_sequence"]["memory_edges"],
+    )
+    report["trusted_axioms"].append(
+        "PairSpec launch order and launch-local logical storage identities"
+    )
+    report["blocks"].append(
+        _block(
+            "LAUNCH_SEQUENCE",
+            Status.PROVED,
+            "ordered launch boundaries and intermediate memory dependencies were reconstructed",
+            (ProofLevel.BOUNDED_EXHAUSTIVE, ProofLevel.DECOMPOSITION),
+            details=report["proof"]["launch_sequence"],
+        )
+    )
+    report["proof"]["finite_domain"] = {
+        "prepartitioned_side": sequence_side,
+        "launches": len(launches),
+        "counterpart_lanes": len(counterpart.records),
+        "active_output_elements": len(sequence_domain),
+        "output_numel": expected_numel,
+        "complete_for_specialization": True,
+    }
+
+    store_levels = (
+        ProofLevel.BOUNDED_EXHAUSTIVE,
+        ProofLevel.CONGRUENCE,
+        ProofLevel.DECOMPOSITION,
+    )
+    if spec.partition.enabled and len(reachable_launches) > 1:
+        try:
+            log_event(
+                LOGGER,
+                logging.INFO,
+                "launch_partition_started",
+                "matching fixed launch boundaries on the counterpart",
+                side=sequence_side,
+                roots=len(launch_roots),
+            )
+            plan = propose_launch_partition_plan(
+                spec, sequence, counterpart_program, launch_roots
+            )
+            partitioned = _prove_partition_plan(
+                report, spec, plan, store_levels, (), ()
+            )
+            if partitioned is not None:
+                log_event(
+                    LOGGER,
+                    logging.INFO,
+                    "launch_partition_proved",
+                    "all fixed launch subgraphs were matched and proved",
+                    partitions=len(plan.batches),
+                )
+                _rewrite_sequence_store_block(partitioned)
+                return partitioned
+            report["proof"]["partitioning"]["fallback"] = "composed_whole_program"
+            for block in report["blocks"]:
+                if block["kind"] == "SUBGRAPH_PARTITION" and not block.get(
+                    "required_for_final", True
+                ):
+                    block.setdefault("details", {})[
+                        "fallback"
+                    ] = "composed_whole_program"
+        except (LLMError, InputError) as exc:
+            log_event(
+                LOGGER,
+                logging.WARNING,
+                "launch_partition_fallback",
+                "launch matching was rejected; verifying the composed whole program",
+                error=str(exc),
+            )
+            failure_audit = exc.audit if isinstance(exc, PartitionError) else {}
+            report["proof"]["partitioning"] = {
+                "enabled": True,
+                "mode": "prepartitioned_launch_sequence",
+                "prepartitioned_side": sequence_side,
+                "status": "proposal_rejected",
+                **failure_audit,
+                "error": str(exc),
+                "fallback": "composed_whole_program",
+            }
+            report["blocks"].append(
+                _block(
+                    "SUBGRAPH_PARTITION",
+                    Status.UNKNOWN,
+                    "counterpart launch matching failed machine checks; using composed whole-program verification",
+                    reason="LAUNCH_PARTITION_REJECTED",
+                    details={
+                        "error": str(exc),
+                        "fallback": "composed_whole_program",
+                    },
+                    required_for_final=False,
+                )
+            )
+    elif len(reachable_launches) <= 1:
+        report["proof"]["partitioning"] = {
+            "enabled": spec.partition.enabled,
+            "mode": "prepartitioned_launch_sequence",
+            "status": "not_needed",
+            "reason": "only one launch contributes to the observed output",
+        }
+
+    result = _complete_whole_compute_proof(
+        report,
+        spec,
+        composed_roots,
+        store_levels,
+        (),
+        (),
+    )
+    _rewrite_sequence_store_block(result)
+    return result
+
+
 def verify_pair(spec: PairSpec) -> dict:
     current = context_values()
     with log_context(
@@ -1333,23 +1934,68 @@ def verify_pair(spec: PairSpec) -> dict:
             rhs_frontend=spec.rhs_frontend,
         )
         report = _base_report(spec)
+        sequence_sides = [side for side in ("lhs", "rhs") if spec.launches(side)]
+        if len(sequence_sides) > 1:
+            report["unsupported"].append(
+                "both sides declare launch sequences; one side must remain the partition target"
+            )
+            report["blocks"].append(
+                _block(
+                    "LAUNCH_SEQUENCE",
+                    Status.UNKNOWN,
+                    "matching two independently pre-partitioned launch DAGs is not implemented",
+                    reason="DUAL_MULTILAUNCH_UNSUPPORTED",
+                )
+            )
+            return _finish(report, Status.UNKNOWN, "DUAL_MULTILAUNCH_UNSUPPORTED")
         try:
+            if sequence_sides:
+                sequence_side = sequence_sides[0]
+                sequence_programs = tuple(
+                    load_program_artifact(launch.path, launch.frontend)
+                    for launch in spec.launches(sequence_side)
+                )
+                counterpart_side = "rhs" if sequence_side == "lhs" else "lhs"
+                counterpart_program = load_program_artifact(
+                    spec.rhs_path if counterpart_side == "rhs" else spec.lhs_path,
+                    (
+                        spec.rhs_frontend
+                        if counterpart_side == "rhs"
+                        else spec.lhs_frontend
+                    ),
+                )
+                with log_context(phase="verification"):
+                    return _verify_lifted_launch_pair(
+                        report,
+                        spec,
+                        sequence_side,
+                        sequence_programs,
+                        counterpart_program,
+                        require_ttir=True,
+                    )
             lhs_program = load_program_artifact(spec.lhs_path, spec.lhs_frontend)
             rhs_program = load_program_artifact(spec.rhs_path, spec.rhs_frontend)
-        except UnsupportedSemantics as exc:
+        except (UnsupportedSemantics, InputError) as exc:
             log_event(
                 LOGGER,
                 logging.WARNING,
                 "frontend_failed",
                 "program frontend rejected the input",
-                code=exc.code,
+                code=getattr(exc, "code", "INVALID_INPUT"),
                 error=str(exc),
             )
             report["unsupported"].append(str(exc))
             report["blocks"].append(
-                _block("FRONTEND", Status.UNKNOWN, str(exc), reason=exc.code)
+                _block(
+                    "FRONTEND",
+                    Status.UNKNOWN,
+                    str(exc),
+                    reason=getattr(exc, "code", "INVALID_INPUT"),
+                )
             )
-            return _finish(report, Status.UNKNOWN, exc.code)
+            return _finish(
+                report, Status.UNKNOWN, getattr(exc, "code", "INVALID_INPUT")
+            )
         log_event(
             LOGGER,
             logging.INFO,
@@ -1847,6 +2493,38 @@ def verify_internal_spec(path: Path) -> dict:
         )
         try:
             spec = load_internal_pair_spec(path)
+            sequence_sides = [side for side in ("lhs", "rhs") if spec.launches(side)]
+            if len(sequence_sides) > 1:
+                report = _base_report(spec)
+                report["unsupported"].append(
+                    "both sides declare launch sequences; one side must remain the partition target"
+                )
+                report["blocks"].append(
+                    _block(
+                        "LAUNCH_SEQUENCE",
+                        Status.UNKNOWN,
+                        "matching two independently pre-partitioned launch DAGs is not implemented",
+                        reason="DUAL_MULTILAUNCH_UNSUPPORTED",
+                    )
+                )
+                return _finish(report, Status.UNKNOWN, "DUAL_MULTILAUNCH_UNSUPPORTED")
+            if sequence_sides:
+                sequence_side = sequence_sides[0]
+                sequence_programs = tuple(
+                    load_program(launch.path) for launch in spec.launches(sequence_side)
+                )
+                counterpart_side = "rhs" if sequence_side == "lhs" else "lhs"
+                counterpart_program = load_program(
+                    spec.rhs_path if counterpart_side == "rhs" else spec.lhs_path
+                )
+                return _verify_lifted_launch_pair(
+                    _base_report(spec),
+                    spec,
+                    sequence_side,
+                    sequence_programs,
+                    counterpart_program,
+                    require_ttir=False,
+                )
             lhs_program = load_program(spec.lhs_path)
             rhs_program = load_program(spec.rhs_path)
             return verify_internal_pair(spec, lhs_program, rhs_program)

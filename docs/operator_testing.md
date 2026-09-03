@@ -53,13 +53,13 @@ pyproject 声明的依赖仍由 `--locked` 强制匹配 `uv.lock`。
 核心 uv 环境未安装 libtriton 时：
 
 ```text
-81 passed, 7 skipped
+101 passed, 9 skipped
 ```
 
-7 项全部是显式要求 Triton/libtriton 3.7.1 的 raw TT IR 前端测试。源码构建环境中：
+9 项全部是显式要求 Triton/libtriton 3.7.1 的 raw TT IR 前端测试。源码构建环境中：
 
 ```text
-88 passed, 0 skipped, 0 failed
+110 passed, 0 skipped, 0 failed
 ```
 
 因此当前仓库测试在完整前端环境中全部通过；前一组的 skip 不能算作通过。
@@ -156,6 +156,13 @@ TorchInductor 收集 RHS TTIR。生成器按 reference 与 tensor output leaf �
 并记录 pointer storage/tensor provenance、view offset、alias、scratch 与未映射依赖。
 
 完整数值、采集、PairSpec 和形式化统计以 `benchmark/summary.json`、
-`benchmark/REPORT.md` 为准。多 kernel orchestration、LHS 多 launch、store 间顺序
-effect，以及 `scf.for`/`tt.reduce` 等 TTIR 语义仍不在当前验证器支持范围；相关用例
-必须如实记为未运行或 `UNKNOWN`，不能从原数值测试通过外推为形式化证明。
+`benchmark/REPORT.md` 为准。capture-v2 中一次 Torch reference 调用产生的多 launch
+现在会按 storage provenance 从最终 output leaf 反向切片，生成
+`metadata.launches.rhs`，并由验证器把它作为固定预划分 DAG；LHS 单 kernel 的对应路径由
+LLM 提议、机器检查和 egglog/Z3 验证。旧 capture-v1 缺少可靠 storage identity，仍需在
+CUDA 环境重新采集，不能猜测中间边。
+
+LHS 采集目前覆盖整个 pytest test，多个记录可能来自重复调用而非同一次 orchestration，
+因此 benchmark 生成器仍要求一个 LHS launch；手工 PairSpec 可以在任一侧声明序列。
+参数化/双侧多 launch、store 间顺序 effect，以及 `scf.for`/`tt.reduce` 等 TTIR 语义仍
+返回 `UNKNOWN`，不能从原数值测试通过外推为形式化证明。

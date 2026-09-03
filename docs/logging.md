@@ -43,6 +43,8 @@ etv parse kernel.ttir --log-level DEBUG --log-file build/parse.log
 - `egraph_saturation_started`、`egraph_saturation_finished`；
 - `llm_request_started`、`llm_request_finished`、`llm_rule_proposal_finished`；
 - `partition_request_finished`、`partition_fallback`。
+- `launch_sequence_started`、`launch_sequence_built`；
+- `launch_partition_started`、`launch_partition_proved`、`launch_partition_fallback`。
 
 日志不是证明证据，也不会改变验证结论。完整规则、谓词、SMT 查询摘要、输入哈希和
 soundness 仍以正式报告为准。日志不会记录 API key 或完整 LLM payload，只记录用途、模型、

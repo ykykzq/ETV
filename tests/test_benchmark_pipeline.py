@@ -31,12 +31,14 @@ def test_snapshot_preserves_storage_alias_and_view_offsets(tmp_path, monkeypatch
 
     base_description = capture._json_value(base, origin="base")
     view_description = capture._json_value(view, origin="view")
-    snapshot = capture.ValueSnapshot.capture(
-        ["values"], {"values": (base, view)}
-    )
+    snapshot = capture.ValueSnapshot.capture(["values"], {"values": (base, view)})
     restored_base, restored_view = snapshot.restore()["values"]
-    restored_base_description = capture._json_value(restored_base, origin="restored_base")
-    restored_view_description = capture._json_value(restored_view, origin="restored_view")
+    restored_base_description = capture._json_value(
+        restored_base, origin="restored_base"
+    )
+    restored_view_description = capture._json_value(
+        restored_view, origin="restored_view"
+    )
 
     base_provenance = base_description["provenance"]
     view_provenance = view_description["provenance"]
@@ -44,9 +46,18 @@ def test_snapshot_preserves_storage_alias_and_view_offsets(tmp_path, monkeypatch
     assert base_provenance["tensor_id"] != view_provenance["tensor_id"]
     assert base_provenance["storage_offset"] == 0
     assert view_provenance["storage_offset"] == 3
-    assert restored_base_description["provenance"]["storage_id"] == base_provenance["storage_id"]
-    assert restored_view_description["provenance"]["storage_id"] == view_provenance["storage_id"]
-    assert restored_view_description["provenance"]["tensor_id"] == view_provenance["tensor_id"]
+    assert (
+        restored_base_description["provenance"]["storage_id"]
+        == base_provenance["storage_id"]
+    )
+    assert (
+        restored_view_description["provenance"]["storage_id"]
+        == view_provenance["storage_id"]
+    )
+    assert (
+        restored_view_description["provenance"]["tensor_id"]
+        == view_provenance["tensor_id"]
+    )
     assert restored_view.storage_offset() == 3
 
 
@@ -101,9 +112,7 @@ def test_pairspec_uses_selected_dependencies_not_total_pointer_count(tmp_path):
     )
     common_rhs = PointerInfo(
         0,
-        _tensor_description(
-            tensor_id="tensor-input", storage_id="storage-input"
-        ),
+        _tensor_description(tensor_id="tensor-input", storage_id="storage-input"),
     )
     lhs_output = PointerInfo(
         2,
@@ -121,9 +130,7 @@ def test_pairspec_uses_selected_dependencies_not_total_pointer_count(tmp_path):
             role="output",
         ),
     )
-    lhs_module = _module(
-        "lhs", ("!tt.ptr<f32>", "!tt.ptr<f32>", "!tt.ptr<f32>")
-    )
+    lhs_module = _module("lhs", ("!tt.ptr<f32>", "!tt.ptr<f32>", "!tt.ptr<f32>"))
     rhs_module = _module("rhs", ("!tt.ptr<f32>", "!tt.ptr<f32>"))
     lhs_launch = {
         "programs": 1,
@@ -198,3 +205,99 @@ def test_runner_expands_multiple_observation_specs(tmp_path):
 
     assert [task["pair_id"] for task in tasks] == ["pair-0", "pair-1"]
     assert all(task["kind"] == "pairspec" for task in tasks)
+
+
+def test_multilaunch_generator_emits_prepartitioned_rhs_sequence(tmp_path):
+    from tools.generate_benchmark_pairspecs import (
+        PointerInfo,
+        StoreInfo,
+        _multilaunch_pair_spec,
+    )
+
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    lhs_path = case_dir / "lhs.ttir"
+    rhs0_path = case_dir / "rhs0.ttir"
+    rhs1_path = case_dir / "rhs1.ttir"
+    for path in (lhs_path, rhs0_path, rhs1_path):
+        path.write_text(path.stem, encoding="utf-8")
+
+    bias = _tensor_description(tensor_id="bias", storage_id="bias")
+    x = _tensor_description(tensor_id="x", storage_id="x")
+    y = _tensor_description(tensor_id="y", storage_id="y")
+    lhs_out = _tensor_description(
+        tensor_id="lhs-out", storage_id="lhs-out", role="output"
+    )
+    tmp = _tensor_description(tensor_id="tmp", storage_id="tmp", role="scratch")
+    rhs_out = _tensor_description(
+        tensor_id="rhs-out", storage_id="rhs-out", role="output"
+    )
+    lhs_module = _module("lhs", ("!tt.ptr<f32>",) * 4)
+    rhs0_module = _module("rhs0", ("!tt.ptr<f32>",) * 3)
+    rhs1_module = _module("rhs1", ("!tt.ptr<f32>",) * 3)
+    for module in (lhs_module, rhs0_module, rhs1_module):
+        module.operations = ()
+    lhs_launch = {
+        "programs": 1,
+        "runtime_arguments": [
+            {"value": bias},
+            {"value": x},
+            {"value": y},
+            {"value": lhs_out},
+        ],
+    }
+    rhs0_launch = {
+        "programs": 1,
+        "runtime_arguments": [{"value": x}, {"value": y}, {"value": tmp}],
+    }
+    rhs1_launch = {
+        "programs": 1,
+        "runtime_arguments": [
+            {"value": bias},
+            {"value": tmp},
+            {"value": rhs_out},
+        ],
+    }
+    lhs_store = StoreInfo(
+        0,
+        PointerInfo(3, lhs_out),
+        (PointerInfo(0, bias), PointerInfo(1, x), PointerInfo(2, y)),
+    )
+    rhs0_store = StoreInfo(
+        0,
+        PointerInfo(2, tmp),
+        (PointerInfo(0, x), PointerInfo(1, y)),
+    )
+    rhs1_store = StoreInfo(
+        0,
+        PointerInfo(2, rhs_out),
+        (PointerInfo(0, bias), PointerInfo(1, tmp)),
+    )
+    rhs_nodes = [
+        (0, rhs0_path, rhs0_module, rhs0_launch, rhs0_store),
+        (1, rhs1_path, rhs1_module, rhs1_launch, rhs1_store),
+    ]
+
+    spec, mapping = _multilaunch_pair_spec(
+        case_dir=case_dir,
+        lhs_path=lhs_path,
+        lhs_module=lhs_module,
+        lhs_launch=lhs_launch,
+        lhs_store=lhs_store,
+        rhs_nodes=rhs_nodes,
+        final_node=rhs_nodes[1],
+        leaf={"leaf_index": 0, "path": "output", "value": rhs_out},
+        nodeid="tests/test_op.py::test_op[x]",
+        pair_id="multi",
+    )
+
+    launches = spec["metadata"]["launches"]["rhs"]
+    assert [item["id"] for item in launches] == [
+        "launch000.store000",
+        "launch001.store000",
+    ]
+    assert "Internal0" in launches[0]["abi"]
+    assert "Internal0" in launches[1]["abi"]
+    assert spec["metadata"]["partition"]["enabled"] is True
+    assert spec["metadata"]["llm"]["enabled"] is True
+    assert mapping["mode"] == "prepartitioned_rhs_launch_sequence"

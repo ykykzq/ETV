@@ -27,7 +27,9 @@ roots belong to the same e-class.
 
 The current `ABSTRACT_FLOAT` mode uses exact mathematical values. It does not
 represent IEEE-754, tolerance-based, or GPU bitwise equivalence. The current MVP
-targets fixed-rank, single-kernel, single-store, acyclic pointwise programs.
+targets fixed-rank, acyclic pointwise programs. Fixed-specialization program
+pairs may declare an ordered multi-launch sequence on one side; the other side
+remains one kernel and is partitioned at corresponding semantic boundaries.
 
 Integer casts remain explicit IR operators carrying source and target types
 after TT IR lifting. The verifier has no default `cast(x) = x` rule. A cast
@@ -169,6 +171,16 @@ programs and propose corresponding boundaries. ETV itself checks root coverage,
 path uniqueness, left/right dependency topology, acyclicity, and types before
 verifying partitions in dependency order. The LLM never decides equivalence.
 
+For a multi-launch side, `metadata.launches.lhs` or `.rhs` declares the captured
+execution steps, launch-local ABI, bindings, and selected store. ETV treats those
+launches as fixed pre-partitioned subgraphs, reconstructs their intermediate
+memory edges by logical role and exact offset, and asks the LLM only for matching
+paths in the single-kernel side. Same-step stores are concurrent; only a later
+step observes them. Invalid matching proposals fall back to verification of the
+machine-composed whole expression. This path is currently finite-domain only,
+supports a launch sequence on exactly one side, and observes one selected store
+per sequence item.
+
 ## Repository Layout
 
 ```text
@@ -177,6 +189,7 @@ etv/casts.py                  Explicit cast metadata and finite-width integer se
 etv/ttir/libtriton.py         Pinned libtriton parsing, verification, and snapshots
 etv/ttir/lift.py              Semantic lifting from TT IR to ETV IR
 etv/schema.py                 TT IR PairSpec and internal test-fixture schemas
+etv/multilaunch.py            Ordered launch memory composition and fixed boundaries
 etv/parametric.py             Parameterized SMT obligations and predicate-derived rules
 etv/rules.py                  Built-in rule library and predicate requirements
 etv/egraph.py                 egglog encoding, saturation, and application logs

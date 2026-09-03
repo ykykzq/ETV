@@ -129,7 +129,7 @@ def _explain(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="etv",
-        description="Symbolic equivalence verification for pairs of raw TTIR programs",
+        description="Symbolic equivalence verification for two raw TTIR program sides",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -36,20 +36,22 @@ TorchInductor kernel 对任意 shape 通用，而是专门构造的符号 TT IR 
 
 在 macOS arm64、Python 3.12.13、源码构建的 libtriton 3.7.1 环境中，正式固定例和
 参数化例均返回 `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`，参数化报告包含 45 个 SMT
-检查。当前完整环境中的 100 个 ETV 测试全部通过；新增回归会把
+检查。当前完整环境中的 110 个 ETV 测试全部通过；回归覆盖
 `tt.clampf + math.exp + math.erf` 与 TorchInductor 风格的
-`cmpf + ori + select + extern_elementwise(__nv_erff)` 证明为等价。
+`cmpf + ori + select + extern_elementwise(__nv_erff)` 等价，以及多 launch 内存组合、
+固定边界匹配、错误 LLM 提案回退和同 step store 并发语义。
 
-内部 JSON 夹具覆盖正确、错误 stride、错误 mask、错误计算、FMA、规则策略、LLM 和
-子图划分。它们只测试证明核心，不属于生产前端。
+内部 JSON 夹具覆盖正确、错误 stride、错误 mask、错误计算、FMA、规则策略、LLM、
+表达式子图划分和 launch 预划分。它们只测试证明核心，不属于生产前端。
 
 ## 未实现或有限支持
 
 - 动态 rank；
 - `scf.for`、`tt.reduce` 等循环和归约语义；
-- 多 store 间的顺序 effect、原子操作、shared memory 和 barrier；单个 store/输出 leaf
-  可由 PairSpec 的 `store_index` 独立观察；
-- 多 kernel orchestration；
+- 单 kernel 内多 store 间的顺序 effect、原子操作、shared memory 和 barrier；同一
+  kernel 的多个被选 store 可作为相同 execution step 并发建模；
+- 参数化多 launch、双侧多 launch DAG 对齐，以及跨 stream/event 的 host 并发；固定
+  specialization 下单侧有序多 launch 已支持；
 - 多维 program grid 的完整语义；
 - buffer 分配大小与 GPU 内存安全；
 - IEEE-754、快速数学、容差和位级等价；
@@ -78,7 +80,7 @@ libtriton 能解析但提升器不支持的合法 TT IR 返回 `UNKNOWN`。这�
 1. 扩展 TT IR 提升语义到 view/layout、归约和结构化控制流；
 2. 将整数模型扩展为与 TT IR 溢出属性及 target `index` 位宽一致的位向量/混合整数证明；
 3. 为浮点定义域、IEEE-754 与快速数学建立可选语义；
-4. 将子图划分从纯表达式树扩展到 region 和显式内存 effect；
+4. 将 launch 子图扩展到双侧 DAG、参数化中间内存和显式 region effect；
 5. 导出 egglog explanation 或可独立重放的证明证书；
 6. 把当前 Torch 侧可提取性矩阵扩展为 ntops/Torch 双侧 TTIR、PairSpec 和端到端验证矩阵。
 
@@ -87,7 +89,7 @@ libtriton 能解析但提升器不支持的合法 TT IR 返回 `UNKNOWN`。这�
 在 macOS arm64、Python 3.12.13 的 libtriton 3.7.1 隔离环境中执行：
 
 ```text
-100 passed
+110 passed
 ```
 
 对仓库内 1230 个已生成 PairSpec 做只读重放后，通用 `TTIR_OP_UNSUPPORTED` 从历史报告

@@ -133,12 +133,13 @@ def _runtime_tensor_values(arguments: Any) -> list[dict[str, Any]]:
     return [
         item
         for item in _runtime_values(arguments)
-        if isinstance(item.get("value"), dict)
-        and item["value"].get("kind") == "tensor"
+        if isinstance(item.get("value"), dict) and item["value"].get("kind") == "tensor"
     ]
 
 
-def _pointer_runtime_map(module: Any, launch: dict[str, Any]) -> dict[int, dict[str, Any]]:
+def _pointer_runtime_map(
+    module: Any, launch: dict[str, Any]
+) -> dict[int, dict[str, Any]]:
     pointers = _pointer_arguments(module)
     runtime_tensors = _runtime_tensor_values(launch.get("runtime_arguments"))
     explicitly_mapped = {
@@ -162,7 +163,9 @@ def _pointer_runtime_map(module: Any, launch: dict[str, Any]) -> dict[int, dict[
 def _store_infos(module: Any, launch: dict[str, Any]) -> list[StoreInfo]:
     runtime = _pointer_runtime_map(module, launch)
     pointer_arguments = set(_pointer_arguments(module))
-    stores = [operation for operation in module.operations if operation.name == "tt.store"]
+    stores = [
+        operation for operation in module.operations if operation.name == "tt.store"
+    ]
     result: list[StoreInfo] = []
     for store_index, store in enumerate(stores):
         output_origins = _argument_origins(module, [store.operands[0].id])
@@ -176,8 +179,12 @@ def _store_infos(module: Any, launch: dict[str, Any]) -> list[StoreInfo]:
             module,
             [operand.id for operand in store.operands[1:]],
         )
-        dependency_arguments = sorted(dependency_origins.intersection(pointer_arguments))
-        if not dependency_arguments and any(operation.regions for operation in module.operations):
+        dependency_arguments = sorted(
+            dependency_origins.intersection(pointer_arguments)
+        )
+        if not dependency_arguments and any(
+            operation.regions for operation in module.operations
+        ):
             # libtriton snapshots expose region counts but not every nested SSA
             # edge. Preserve the captured input provenance for an auditable
             # PairSpec; lifting will still honestly report unsupported region
@@ -235,8 +242,7 @@ def _pointer_inventory(
         elif argument in store_dependencies:
             semantic_role = (
                 "scratch_or_intermediate_store_dependency"
-                if pointer.runtime_role
-                in {"scratch", "unclassified_output_or_scratch"}
+                if pointer.runtime_role in {"scratch", "unclassified_output_or_scratch"}
                 else (
                     "store_dependency"
                     if selected_store is None
@@ -287,7 +293,9 @@ def _description_signature(description: Any) -> tuple[Any, ...] | None:
     )
 
 
-def _flatten_tensor_descriptions(value: Any, path: str = "reference_output") -> list[dict[str, Any]]:
+def _flatten_tensor_descriptions(
+    value: Any, path: str = "reference_output"
+) -> list[dict[str, Any]]:
     if not isinstance(value, dict):
         return []
     if value.get("kind") == "tensor":
@@ -346,8 +354,7 @@ def _lhs_store_for_leaf(
     declared_matches = [
         store
         for store in lhs_stores
-        if leaf_index
-        in (store.output.provenance.get("output_leaf_indices") or [])
+        if leaf_index in (store.output.provenance.get("output_leaf_indices") or [])
     ]
     if len(declared_matches) == 1:
         return declared_matches[0]
@@ -372,8 +379,16 @@ def _pair_dependencies(
     lhs_store: StoreInfo,
     rhs_store: StoreInfo,
 ) -> list[tuple[PointerInfo, PointerInfo]]:
-    lhs_inputs = [item for item in lhs_store.dependencies if item.argument != lhs_store.output.argument]
-    rhs_inputs = [item for item in rhs_store.dependencies if item.argument != rhs_store.output.argument]
+    lhs_inputs = [
+        item
+        for item in lhs_store.dependencies
+        if item.argument != lhs_store.output.argument
+    ]
+    rhs_inputs = [
+        item
+        for item in rhs_store.dependencies
+        if item.argument != rhs_store.output.argument
+    ]
     has_provenance = any(
         item.storage_id is not None or item.tensor_id is not None
         for item in (*lhs_inputs, *rhs_inputs)
@@ -429,14 +444,12 @@ def _pair_dependencies(
     lhs_output_alias = {
         index
         for index, (lhs, _) in enumerate(pairs)
-        if lhs.storage_id is not None
-        and lhs.storage_id == lhs_store.output.storage_id
+        if lhs.storage_id is not None and lhs.storage_id == lhs_store.output.storage_id
     }
     rhs_output_alias = {
         index
         for index, (_, rhs) in enumerate(pairs)
-        if rhs.storage_id is not None
-        and rhs.storage_id == rhs_store.output.storage_id
+        if rhs.storage_id is not None and rhs.storage_id == rhs_store.output.storage_id
     }
     if lhs_output_alias != rhs_output_alias:
         raise ValueError(
@@ -493,7 +506,7 @@ def _endpoint(pointer: PointerInfo) -> dict[str, Any]:
 
 
 def _disjoint_groups(
-    roles: dict[str, tuple[PointerInfo, PointerInfo]]
+    roles: dict[str, tuple[PointerInfo, PointerInfo]],
 ) -> list[list[str]]:
     result: list[list[str]] = []
     for lhs_name, rhs_name in combinations(sorted(roles), 2):
@@ -527,7 +540,9 @@ def _pair_spec(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     output_numel = _tensor_numel(leaf.get("value"))
     if output_numel is None or output_numel <= 0:
-        raise ValueError(f"output leaf {leaf.get('leaf_index')} is empty or not a tensor")
+        raise ValueError(
+            f"output leaf {leaf.get('leaf_index')} is empty or not a tensor"
+        )
     lhs_programs = lhs_launch.get("programs")
     rhs_programs = rhs_launch.get("programs")
     if not isinstance(lhs_programs, int) or lhs_programs <= 0:
@@ -609,12 +624,8 @@ def _pair_spec(
         "lhs_store_index": lhs_store.index,
         "rhs_store_index": rhs_store.index,
         "pointer_inventory": {
-            "lhs": _pointer_inventory(
-                lhs_module, lhs_launch, [lhs_store], lhs_store
-            ),
-            "rhs": _pointer_inventory(
-                rhs_module, rhs_launch, [rhs_store], rhs_store
-            ),
+            "lhs": _pointer_inventory(lhs_module, lhs_launch, [lhs_store], lhs_store),
+            "rhs": _pointer_inventory(rhs_module, rhs_launch, [rhs_store], rhs_store),
         },
         "unmapped_selected_dependencies": {
             "lhs": sorted(
@@ -646,6 +657,293 @@ def _pair_spec(
     return spec, mapping
 
 
+def _runtime_ttir_launches(reference: dict[str, Any]) -> list[dict[str, Any]]:
+    runtime = reference.get("runtime_launches", [])
+    selected = reference.get("selected_ttir", [])
+    if not isinstance(runtime, list) or not all(
+        isinstance(item, dict) for item in runtime
+    ):
+        return []
+    result = []
+    for index, launch in enumerate(runtime):
+        path = launch.get("ttir")
+        if not isinstance(path, str) and len(selected) == len(runtime):
+            selected_item = selected[index]
+            path = (
+                selected_item.get("path") if isinstance(selected_item, dict) else None
+            )
+        if not isinstance(path, str):
+            raise ValueError(
+                f"cannot associate runtime launch {index} with one selected TTIR"
+            )
+        result.append({**launch, "_ttir_path": path})
+    return result
+
+
+def _storage_key(pointer: PointerInfo) -> str:
+    if pointer.storage_id is None:
+        raise ValueError(
+            "multi-launch slicing requires capture-v2 storage provenance for every "
+            f"selected pointer (arg{pointer.argument})"
+        )
+    return pointer.storage_id
+
+
+def _qualified_endpoint(pointer: PointerInfo, launch_id: str) -> dict[str, Any]:
+    result = _endpoint(pointer)
+    result["name"] = f"{launch_id}::{result['name']}"
+    return result
+
+
+def _multilaunch_pair_spec(
+    *,
+    case_dir: Path,
+    lhs_path: Path,
+    lhs_module: Any,
+    lhs_launch: dict[str, Any],
+    lhs_store: StoreInfo,
+    rhs_nodes: list[tuple[int, Path, Any, dict[str, Any], StoreInfo]],
+    final_node: tuple[int, Path, Any, dict[str, Any], StoreInfo],
+    leaf: dict[str, Any],
+    nodeid: str,
+    pair_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    output_numel = _tensor_numel(leaf.get("value"))
+    if output_numel is None or output_numel <= 0:
+        raise ValueError(
+            f"output leaf {leaf.get('leaf_index')} is empty or not a tensor"
+        )
+    lhs_programs = lhs_launch.get("programs")
+    if not isinstance(lhs_programs, int) or lhs_programs <= 0:
+        raise ValueError(f"invalid LHS program count: {lhs_programs!r}")
+
+    producer_by_storage: dict[
+        str, list[tuple[int, Path, Any, dict[str, Any], StoreInfo]]
+    ] = {}
+    for node in rhs_nodes:
+        producer_by_storage.setdefault(_storage_key(node[4].output), []).append(node)
+
+    relevant: dict[
+        tuple[int, int], tuple[int, Path, Any, dict[str, Any], StoreInfo]
+    ] = {}
+
+    def include(node: tuple[int, Path, Any, dict[str, Any], StoreInfo]) -> None:
+        key = (node[0], node[4].index)
+        if key in relevant:
+            return
+        relevant[key] = node
+        launch_index, _, _, _, store = node
+        for dependency in store.dependencies:
+            storage = _storage_key(dependency)
+            producers = [
+                candidate
+                for candidate in producer_by_storage.get(storage, [])
+                if candidate[0] < launch_index
+            ]
+            if producers:
+                latest_step = max(candidate[0] for candidate in producers)
+                for candidate in producers:
+                    if candidate[0] == latest_step:
+                        include(candidate)
+
+    include(final_node)
+    ordered = [relevant[key] for key in sorted(relevant)]
+    if len(ordered) < 2:
+        raise ValueError(
+            "multiple runtime launches were captured, but only one launch contributes "
+            "to this observed output leaf"
+        )
+
+    internal_storage = {
+        _storage_key(node[4].output) for node in ordered if node != final_node
+    }
+    final_storage = _storage_key(final_node[4].output)
+    external_occurrences: dict[
+        str, tuple[tuple[int, Path, Any, dict[str, Any], StoreInfo], PointerInfo]
+    ] = {}
+    for node in ordered:
+        for pointer in node[4].dependencies:
+            storage = _storage_key(pointer)
+            if storage not in internal_storage and storage != final_storage:
+                external_occurrences.setdefault(storage, (node, pointer))
+
+    synthetic_rhs = StoreInfo(
+        index=final_node[4].index,
+        output=final_node[4].output,
+        dependencies=tuple(pointer for _, pointer in external_occurrences.values()),
+    )
+    dependencies = _pair_dependencies(lhs_store, synthetic_rhs)
+    role_pointers: dict[str, tuple[PointerInfo, PointerInfo]] = {
+        f"Input{index}": pair for index, pair in enumerate(dependencies)
+    }
+    role_pointers["Output"] = (lhs_store.output, final_node[4].output)
+    rhs_role_by_storage = {
+        _storage_key(rhs): logical for logical, (_, rhs) in role_pointers.items()
+    }
+    internal_role_by_storage = {
+        storage: f"Internal{index}"
+        for index, storage in enumerate(sorted(internal_storage))
+    }
+
+    launches = []
+    launch_pointer_inventories = []
+    for launch_index, rhs_path, module, launch, store in ordered:
+        launch_id = f"launch{launch_index:03d}.store{store.index:03d}"
+        programs = launch.get("programs")
+        if not isinstance(programs, int) or programs <= 0:
+            raise ValueError(
+                f"invalid RHS program count for launch {launch_index}: {programs!r}"
+            )
+        output_storage = _storage_key(store.output)
+        output_role = (
+            "Output"
+            if (launch_index, store.index) == (final_node[0], final_node[4].index)
+            else internal_role_by_storage[output_storage]
+        )
+        abi: dict[str, dict[str, Any]] = {output_role: _endpoint(store.output)}
+        unmapped = []
+        for pointer in store.dependencies:
+            if pointer.argument == store.output.argument:
+                continue
+            storage = _storage_key(pointer)
+            logical = internal_role_by_storage.get(storage) or rhs_role_by_storage.get(
+                storage
+            )
+            if logical is None:
+                logical = f"Unmapped.{launch_id}.arg{pointer.argument}"
+                unmapped.append(pointer.argument)
+            existing = abi.get(logical)
+            endpoint = _endpoint(pointer)
+            if existing is not None and existing != endpoint:
+                raise ValueError(
+                    f"launch {launch_id} uses logical role {logical} through multiple pointers"
+                )
+            abi[logical] = endpoint
+        launches.append(
+            {
+                "id": launch_id,
+                "step": launch_index,
+                "file": str(Path("../..").joinpath(rhs_path.relative_to(case_dir))),
+                "frontend": {
+                    "kind": "ttir",
+                    "function": module.function,
+                    "programs": programs,
+                    "store_index": store.index,
+                },
+                "semantic": f"captured launch {launch_index}, store {store.index}",
+                "abi": abi,
+                "bindings": _side_bindings(module, launch.get("runtime_arguments")),
+            }
+        )
+        launch_pointer_inventories.append(
+            {
+                "launch_id": launch_id,
+                "pointers": _pointer_inventory(module, launch, [store], store),
+                "unmapped_selected_dependencies": sorted(unmapped),
+            }
+        )
+
+    first_rhs = ordered[0]
+    final_launch_id = f"launch{final_node[0]:03d}.store{final_node[4].index:03d}"
+    roles = {}
+    for logical, (lhs, rhs) in role_pointers.items():
+        rhs_occurrence = (
+            final_node
+            if logical == "Output"
+            else external_occurrences[_storage_key(rhs)][0]
+        )
+        rhs_launch_id = (
+            final_launch_id
+            if logical == "Output"
+            else f"launch{rhs_occurrence[0]:03d}.store{rhs_occurrence[4].index:03d}"
+        )
+        roles[logical] = {
+            "lhs": _endpoint(lhs),
+            "rhs": _qualified_endpoint(rhs, rhs_launch_id),
+        }
+    disjoint = _disjoint_groups(role_pointers)
+    spec = {
+        "format": "etv-pair-v2",
+        "metadata": {
+            "pair_id": pair_id,
+            "lhs": str(Path("../..").joinpath(lhs_path.relative_to(case_dir))),
+            "rhs": str(Path("../..").joinpath(first_rhs[1].relative_to(case_dir))),
+            "semantic_mode": "abstract_float",
+            "frontends": {
+                "lhs": {
+                    "kind": "ttir",
+                    "function": lhs_module.function,
+                    "programs": lhs_programs,
+                    "store_index": lhs_store.index,
+                },
+                "rhs": launches[0]["frontend"],
+            },
+            "limits": {
+                "max_iterations": 8,
+                "max_enodes": 20000,
+                "timeout_ms": 10000,
+            },
+            "llm": {"enabled": True, "generate_rules": False},
+            "partition": {
+                "enabled": True,
+                "min_partitions": 2,
+                "max_partitions": max(16, len(launches) * 4),
+            },
+            "launches": {"rhs": launches},
+        },
+        "assumptions": {
+            "for_llm": [
+                "The RHS launches were captured in execution order from one compiled reference call.",
+                "RHS launch boundaries are fixed; the LLM may only select corresponding LHS expression paths.",
+                "Intermediate storage edges come from capture-v2 storage provenance and exact element offsets.",
+                f"This PairSpec observes output leaf {leaf.get('path')!r} only.",
+            ]
+        },
+        "predicates": {
+            "abi": roles,
+            "bindings": {"X": output_numel},
+            "side_bindings": {
+                "lhs": _side_bindings(lhs_module, lhs_launch.get("runtime_arguments")),
+                "rhs": {},
+            },
+            "parameters": {},
+            "constraints": [],
+            "disjoint": disjoint,
+            "custom": [],
+        },
+        "observation": {
+            "output_role": "Output",
+            "output_numel": {"var": "X"},
+            "require_full_coverage": True,
+            "require_disjoint": [],
+        },
+        "rewrites": [],
+    }
+    mapping = {
+        "nodeid": nodeid,
+        "mode": "prepartitioned_rhs_launch_sequence",
+        "output_leaf": leaf,
+        "lhs_store_index": lhs_store.index,
+        "rhs_final_launch": final_node[0],
+        "rhs_final_store_index": final_node[4].index,
+        "ordered_components": [item["id"] for item in launches],
+        "launch_pointer_inventories": launch_pointer_inventories,
+        "roles": {
+            logical: {
+                "lhs_argument": lhs.argument,
+                "rhs_argument": rhs.argument,
+                "lhs_storage_id": lhs.storage_id,
+                "rhs_storage_id": rhs.storage_id,
+                "lhs_storage_offset": lhs.storage_offset,
+                "rhs_storage_offset": rhs.storage_offset,
+            }
+            for logical, (lhs, rhs) in role_pointers.items()
+        },
+        "disjoint": disjoint,
+    }
+    return spec, mapping
+
+
 def _reference_self_check(reference: dict[str, Any]) -> None:
     check = (reference.get("checks") or {}).get("compiled_vs_fx_eager")
     if not isinstance(check, dict):
@@ -656,6 +954,141 @@ def _reference_self_check(reference: dict[str, Any]) -> None:
         raise ValueError("RHS compiled-vs-FX self-check did not pass")
 
 
+def _attempt_multilaunch_reference(
+    *,
+    case_dir: Path,
+    manifest: dict[str, Any],
+    lhs_launch: dict[str, Any],
+    reference: dict[str, Any],
+    runtime_launches: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    lhs_path = Path(lhs_launch["ttir"]).resolve()
+    lhs_module = parse_ttir(lhs_path)
+    lhs_stores = _store_infos(lhs_module, lhs_launch)
+    rhs_nodes: list[tuple[int, Path, Any, dict[str, Any], StoreInfo]] = []
+    for launch_index, launch in enumerate(runtime_launches):
+        rhs_path = Path(launch["_ttir_path"]).resolve()
+        module = parse_ttir(rhs_path)
+        stores = _store_infos(module, launch)
+        if not stores:
+            raise ValueError(f"RHS runtime launch {launch_index} has no tt.store")
+        rhs_nodes.extend(
+            (launch_index, rhs_path, module, launch, store) for store in stores
+        )
+    leaves = _output_leaves(reference)
+    if not leaves:
+        raise ValueError("reference output has no tensor leaves")
+
+    reference_id = (
+        f"r{reference.get('site_index', 0):03d}-"
+        f"e{reference.get('execution', 0):03d}"
+    )
+    diagnostic_path = (
+        case_dir / "pairspec" / "pairs" / f"diagnostic-{reference_id}.json"
+    )
+    _write_json(
+        diagnostic_path,
+        {
+            "nodeid": manifest["nodeid"],
+            "mode": "prepartitioned_rhs_launch_sequence",
+            "reference_site": reference.get("site_index"),
+            "reference_execution": reference.get("execution"),
+            "lhs": {
+                "stores": _store_inventory(lhs_stores),
+                "pointers": _pointer_inventory(lhs_module, lhs_launch, lhs_stores),
+            },
+            "rhs_launches": [
+                {
+                    "launch_index": launch_index,
+                    "path": str(nodes[0][1]),
+                    "function": nodes[0][2].function,
+                    "stores": _store_inventory([item[4] for item in nodes]),
+                }
+                for launch_index in range(len(runtime_launches))
+                for nodes in [[item for item in rhs_nodes if item[0] == launch_index]]
+            ],
+            "output_leaves": leaves,
+        },
+    )
+
+    generated = []
+    for leaf in leaves:
+        leaf_index = leaf.get("leaf_index", 0)
+        leaf_storage = PointerInfo(-1, leaf.get("value")).storage_id
+        candidates = []
+        for node in rhs_nodes:
+            declared = node[4].output.provenance.get("output_leaf_indices") or []
+            if leaf_index in declared or (
+                leaf_storage is not None and node[4].output.storage_id == leaf_storage
+            ):
+                candidates.append(node)
+        if len(candidates) != 1:
+            raise ValueError(
+                f"cannot associate output leaf {leaf_index} with one final RHS launch store; "
+                f"found {len(candidates)}"
+            )
+        final_node = candidates[0]
+        all_rhs_stores = [item[4] for item in rhs_nodes]
+        lhs_store = _lhs_store_for_leaf(lhs_stores, final_node[4], leaf, all_rhs_stores)
+        pair_slug = f"{reference_id}-o{leaf_index:03d}"
+        pair_id = f"{manifest['nodeid']}::{pair_slug}"
+        spec, mapping = _multilaunch_pair_spec(
+            case_dir=case_dir,
+            lhs_path=lhs_path,
+            lhs_module=lhs_module,
+            lhs_launch=lhs_launch,
+            lhs_store=lhs_store,
+            rhs_nodes=rhs_nodes,
+            final_node=final_node,
+            leaf=leaf,
+            nodeid=manifest["nodeid"],
+            pair_id=pair_id,
+        )
+        spec_path = case_dir / "pairspec" / "pairs" / f"pair-{pair_slug}.json"
+        mapping_path = case_dir / "pairspec" / "pairs" / f"mapping-{pair_slug}.json"
+        _write_json(spec_path, spec)
+        _write_json(mapping_path, mapping)
+        generated.append(
+            {
+                "pair_id": pair_id,
+                "pairspec": str(spec_path),
+                "mapping": str(mapping_path),
+                "reference_site": reference.get("site_index"),
+                "reference_execution": reference.get("execution"),
+                "output_leaf_index": leaf_index,
+                "output_leaf_path": leaf.get("path"),
+                "lhs_pointer_count": len(_pointer_arguments(lhs_module)),
+                "rhs_pointer_count": sum(
+                    len(_pointer_arguments(nodes[0][2]))
+                    for launch_index in range(len(runtime_launches))
+                    for nodes in [
+                        [item for item in rhs_nodes if item[0] == launch_index]
+                    ]
+                ),
+                "lhs_store_count": len(lhs_stores),
+                "rhs_store_count": len(rhs_nodes),
+                "rhs_launch_count": len(runtime_launches),
+                "prepartitioned_side": "rhs",
+                "output_leaf_count": len(leaves),
+                "has_nonzero_endpoint_offset": any(
+                    role.get("lhs_storage_offset") or role.get("rhs_storage_offset")
+                    for role in mapping["roles"].values()
+                ),
+                "unmapped_selected_dependencies": {
+                    "lhs": [],
+                    "rhs": sorted(
+                        {
+                            argument
+                            for inventory in mapping["launch_pointer_inventories"]
+                            for argument in inventory["unmapped_selected_dependencies"]
+                        }
+                    ),
+                },
+            }
+        )
+    return generated
+
+
 def _attempt_reference(
     *,
     case_dir: Path,
@@ -664,15 +1097,19 @@ def _attempt_reference(
     reference: dict[str, Any],
 ) -> list[dict[str, Any]]:
     _reference_self_check(reference)
-    selected = reference.get("selected_ttir", [])
-    runtime_launches = reference.get("runtime_launches", [])
-    if len(selected) != 1 or len(runtime_launches) != 1:
-        raise ValueError(
-            "requires one selected RHS TTIR and one runtime launch per reference, found "
-            f"{len(selected)} and {len(runtime_launches)}"
+    runtime_launches = _runtime_ttir_launches(reference)
+    if not runtime_launches:
+        raise ValueError("requires at least one runtime launch with selected RHS TTIR")
+    if len(runtime_launches) > 1:
+        return _attempt_multilaunch_reference(
+            case_dir=case_dir,
+            manifest=manifest,
+            lhs_launch=lhs_launch,
+            reference=reference,
+            runtime_launches=runtime_launches,
         )
     lhs_path = Path(lhs_launch["ttir"]).resolve()
-    rhs_path = Path(selected[0]["path"]).resolve()
+    rhs_path = Path(runtime_launches[0]["_ttir_path"]).resolve()
     lhs_module = parse_ttir(lhs_path)
     rhs_module = parse_ttir(rhs_path)
     lhs_stores = _store_infos(lhs_module, lhs_launch)
@@ -692,8 +1129,12 @@ def _attempt_reference(
     if not leaves:
         raise ValueError("reference output has no tensor leaves")
 
-    reference_id = f"r{reference.get('site_index', 0):03d}-e{reference.get('execution', 0):03d}"
-    diagnostic_path = case_dir / "pairspec" / "pairs" / f"diagnostic-{reference_id}.json"
+    reference_id = (
+        f"r{reference.get('site_index', 0):03d}-e{reference.get('execution', 0):03d}"
+    )
+    diagnostic_path = (
+        case_dir / "pairspec" / "pairs" / f"diagnostic-{reference_id}.json"
+    )
     _write_json(
         diagnostic_path,
         {
@@ -790,7 +1231,9 @@ def _generate(case_dir: Path) -> dict[str, Any]:
         if item.get("status") == "captured" and item.get("ttir")
     ]
     if len(lhs_launches) != 1:
-        status["reason"] = f"requires one captured LHS launch, found {len(lhs_launches)}"
+        status["reason"] = (
+            f"requires one captured LHS launch, found {len(lhs_launches)}"
+        )
         _write_json(case_dir / "pairspec" / "status.json", status)
         return status
     references = [
@@ -838,25 +1281,23 @@ def _generate(case_dir: Path) -> dict[str, Any]:
         status["features"] = {
             "multiple_references": len(references) > 1,
             "multiple_references_fully_generated": len(references) > 1
-            and all(
-                item.get("status") == "generated" for item in status["attempts"]
-            ),
+            and all(item.get("status") == "generated" for item in status["attempts"]),
             "unequal_pointer_abi": any(
                 item.get("lhs_pointer_count") != item.get("rhs_pointer_count")
                 for item in status["pairspecs"]
             ),
             "multiple_stores": any(
-                item.get("lhs_store_count", 0) > 1
-                or item.get("rhs_store_count", 0) > 1
+                item.get("lhs_store_count", 0) > 1 or item.get("rhs_store_count", 0) > 1
                 for item in status["pairspecs"]
+            ),
+            "multiple_launches": any(
+                item.get("rhs_launch_count", 1) > 1 for item in status["pairspecs"]
             ),
             "tuple_output": any(
-                item.get("output_leaf_count", 0) > 1
-                for item in status["pairspecs"]
+                item.get("output_leaf_count", 0) > 1 for item in status["pairspecs"]
             ),
             "nonzero_endpoint_offset": any(
-                item.get("has_nonzero_endpoint_offset")
-                for item in status["pairspecs"]
+                item.get("has_nonzero_endpoint_offset") for item in status["pairspecs"]
             ),
             "incomplete_pointer_mapping": any(
                 item.get("unmapped_selected_dependencies", {}).get("lhs")

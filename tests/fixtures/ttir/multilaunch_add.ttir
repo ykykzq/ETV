@@ -1,0 +1,25 @@
+module {
+  tt.func public @multilaunch_add(%arg0: !tt.ptr<f32>, %arg1: !tt.ptr<f32>, %arg2: !tt.ptr<f32>, %arg3: i32) {
+    %c128 = arith.constant 128 : i32
+    %pid = tt.get_program_id x : i32
+    %base = arith.muli %pid, %c128 : i32
+    %range = tt.make_range {end = 128 : i32, start = 0 : i32} : tensor<128xi32>
+    %base_vector = tt.splat %base : i32 -> tensor<128xi32>
+    %index = arith.addi %base_vector, %range : tensor<128xi32>
+    %numel = tt.splat %arg3 : i32 -> tensor<128xi32>
+    %mask = arith.cmpi slt, %index, %numel : tensor<128xi32>
+    %zero = arith.constant 0.000000e+00 : f32
+    %zeros = tt.splat %zero : f32 -> tensor<128xf32>
+    %input_base = tt.splat %arg0 : !tt.ptr<f32> -> tensor<128x!tt.ptr<f32>>
+    %input_ptr = tt.addptr %input_base, %index : tensor<128x!tt.ptr<f32>>, tensor<128xi32>
+    %input = tt.load %input_ptr, %mask, %zeros : tensor<128x!tt.ptr<f32>>
+    %tmp_base = tt.splat %arg1 : !tt.ptr<f32> -> tensor<128x!tt.ptr<f32>>
+    %tmp_ptr = tt.addptr %tmp_base, %index : tensor<128x!tt.ptr<f32>>, tensor<128xi32>
+    %tmp = tt.load %tmp_ptr, %mask, %zeros : tensor<128x!tt.ptr<f32>>
+    %result = arith.addf %input, %tmp : tensor<128xf32>
+    %output_base = tt.splat %arg2 : !tt.ptr<f32> -> tensor<128x!tt.ptr<f32>>
+    %output_ptr = tt.addptr %output_base, %index : tensor<128x!tt.ptr<f32>>, tensor<128xi32>
+    tt.store %output_ptr, %result, %mask : tensor<128x!tt.ptr<f32>>
+    tt.return
+  }
+}

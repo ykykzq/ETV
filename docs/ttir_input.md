@@ -1,7 +1,8 @@
 # TT IR 与 PairSpec v2 输入格式
 
-ETV 的两个程序输入必须是 raw TT IR 文本，扩展名为 `.ttir` 或 `.mlir`。正式 PairSpec
-使用 `etv-pair-v2`，顶层由五个互不替代的部分组成：
+ETV 两侧的程序 artifact 必须是 raw TT IR 文本，扩展名为 `.ttir` 或 `.mlir`。通常
+每侧一个 artifact；固定规模模式允许其中一侧用多个 artifact 声明有序 launch 序列。
+正式 PairSpec 使用 `etv-pair-v2`，顶层由五个互不替代的部分组成：
 
 | 部分 | 作用 | 是否参与证明 |
 | --- | --- | --- |
@@ -83,6 +84,66 @@ ETV 的两个程序输入必须是 raw TT IR 文本，扩展名为 `.ttir` 或 `
 TT IR 不携带完整 host launch grid，所以 ETV 不允许省略 `programs`。`limits` 控制
 egglog 迭代、e-node 数和超时。`llm` 与 `partition` 只控制辅助流程；API 输出本身不构成
 证明。启用 `partition.enabled` 必须同时显式启用 `llm.enabled`。
+
+### 多 launch 预划分
+
+当一侧已经由多个 kernel/launch 构成时，在 `metadata.launches.lhs` 或 `.rhs` 中按执行
+顺序列出组件：
+
+```json
+"launches": {
+  "rhs": [
+    {
+      "id": "reduce.store0",
+      "step": 0,
+      "file": "rhs-reduce.ttir",
+      "frontend": {
+        "kind": "ttir", "function": "reduce", "programs": 32,
+        "store_index": 0
+      },
+      "semantic": "partial reduction",
+      "abi": {
+        "Input": {"kind": "block", "name": "arg0"},
+        "Internal0": {"kind": "block", "name": "arg1"}
+      },
+      "bindings": {"arg2": 4096}
+    },
+    {
+      "id": "final.store0",
+      "step": 1,
+      "file": "rhs-final.ttir",
+      "frontend": {
+        "kind": "ttir", "function": "final", "programs": 32,
+        "store_index": 0
+      },
+      "semantic": "final output",
+      "abi": {
+        "Internal0": {"kind": "block", "name": "arg0"},
+        "Output": {"kind": "block", "name": "arg1"}
+      }
+    }
+  ]
+}
+```
+
+`file/frontend/abi/bindings` 都是 launch 局部信息；局部 ABI 覆盖 pair-wide 物理参数名，
+逻辑角色仍跨 launch 保持一致。逻辑角色和精确元素 offset 相同的前序 store 与后序 load
+形成中间边。`step` 必须非递减，省略时使用列表序号；同 step 的项目表示同一 kernel 中
+被 `store_index` 分别选出的多个 store，它们读取同一旧内存并同时提交。更大 step 才能
+观察前一 step 的写入。
+
+pair-wide `predicates.abi` 仍只描述两侧外部输入与最终 Output 的对应。序列侧若同一
+`arg0` 出现在不同 kernel，应在 pair-wide endpoint 中使用 `launch-id::arg0` 之类的唯一
+限定名；真正求值使用各 launch 的局部 `abi`。`Internal*` 等仅存在于序列内部的角色无需
+写入 pair-wide ABI。
+
+验证器把序列边界视为固定预划分，只让 LLM 为另一侧返回对应表达式路径。ETV 随后检查
+所有固定 anchor 都被覆盖、另一侧路径唯一、父子依赖拓扑一致，并按依赖顺序逐个证明。
+LLM 失败或提案被拒绝时，验证器可对按顺序内存语义机器组合的整图回退验证。
+
+当前限制是：只有一侧可声明序列；只支持固定 binding，不支持参数化多 launch；每个
+序列项选择一个 store。未进入最终 Output 反向切片的 launch 会记为 unobserved，不构成
+对其其他副作用的证明。
 
 ## assumptions
 

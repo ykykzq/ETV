@@ -1,0 +1,73 @@
+{
+  "format": "etv-pair-v2",
+  "metadata": {
+    "pair_id": "prepartitioned_mul_add_vs_fused",
+    "rhs": "../programs/multilaunch_fused.json",
+    "semantic_mode": "abstract_float",
+    "frontends": {"rhs": {"kind": "semantic_json"}},
+    "llm": {"enabled": true, "generate_rules": false},
+    "partition": {"enabled": true, "min_partitions": 2, "max_partitions": 4},
+    "launches": {
+      "lhs": [
+        {
+          "id": "multiply",
+          "step": 0,
+          "file": "../programs/multilaunch_mul.json",
+          "frontend": {"kind": "semantic_json"},
+          "semantic": "elementwise multiply",
+          "abi": {
+            "InputX": {"kind": "block", "name": "x"},
+            "InputY": {"kind": "block", "name": "y"},
+            "Internal.Temp": {"kind": "block", "name": "tmp"}
+          }
+        },
+        {
+          "id": "add",
+          "step": 1,
+          "file": "../programs/multilaunch_add.json",
+          "frontend": {"kind": "semantic_json"},
+          "semantic": "elementwise add and final store",
+          "abi": {
+            "Bias": {"kind": "block", "name": "bias"},
+            "Internal.Temp": {"kind": "block", "name": "tmp"},
+            "Output": {"kind": "block", "name": "out"}
+          }
+        }
+      ]
+    }
+  },
+  "assumptions": {"for_llm": ["The two LHS launches are ordered on one stream."]},
+  "predicates": {
+    "abi": {
+      "Bias": {
+        "lhs": {"kind": "block", "name": "add::bias"},
+        "rhs": {"kind": "block", "name": "bias"}
+      },
+      "InputX": {
+        "lhs": {"kind": "block", "name": "multiply::x"},
+        "rhs": {"kind": "block", "name": "x"}
+      },
+      "InputY": {
+        "lhs": {"kind": "block", "name": "multiply::y"},
+        "rhs": {"kind": "block", "name": "y"}
+      },
+      "Output": {
+        "lhs": {"kind": "block", "name": "add::out"},
+        "rhs": {"kind": "block", "name": "out"}
+      }
+    },
+    "bindings": {"X": 4},
+    "side_bindings": {},
+    "parameters": {},
+    "constraints": [],
+    "disjoint": [],
+    "custom": []
+  },
+  "observation": {
+    "output_role": "Output",
+    "output_numel": {"var": "X"},
+    "require_full_coverage": true,
+    "require_disjoint": []
+  },
+  "rewrites": []
+}

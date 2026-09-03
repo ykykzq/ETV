@@ -219,7 +219,32 @@ cast operator 与类型 payload 是 egglog term 的组成部分。规则库默�
 饱和受 `max_iterations`、`max_enodes`、`timeout_ms` 限制。耗尽资源返回 `UNKNOWN`，
 不会以“没有找到证明”推断不等价。
 
-## 10. 子图划分
+## 10. 多 launch 预划分与顺序内存
+
+若 `metadata.launches` 在一侧声明至少两个组件，验证器不会先把这一侧当成一棵自由切分
+的表达式树，而是把声明的 kernel/store 边界视为已有子图。每个组件分别经过 libtriton
+和 TT IR 提升，并使用自己的局部 ABI、binding、program 数和 `store_index`。
+
+固定规模求值按 `step` 执行。一个 step 中的所有组件从相同旧内存读取，通过后一起提交；
+下一 step 才能观察这些写入。中间依赖必须同时满足：load 与旧 store 使用同一逻辑角色，
+且归一化元素 offset 完全相同。验证器不会因名称相似或 LLM 建议而连接内存边。从最终
+`observation.output_role` 反向得到的 launch DAG 决定需要证明的固定子图；未到达观察根的
+组件只记录为 unobserved。
+
+对于另一侧单 kernel，LLM 一次读取完整 counterpart 和固定 launch DAG，只返回每个固定
+anchor 的 counterpart 表达式路径。机器检查 anchor 完整覆盖、counterpart 路径唯一、
+root 对 root、sort 和父子拓扑。通过后仍由 egglog/Z3 按子到父证明每个 pair。已证明子图
+才会在父义务中替换为共同 typed boundary。因此 LLM 不能建立等价事实。
+
+若 API 失败、提案非法或某个子图未证明，ETV 可把前序 store value 仅在匹配角色/offset
+的 load 位置精确代入，回退到机器组合后的整图证明。回退成功仍证明固定 specialization
+的最终 Output，但不获得分解带来的复杂度收益。
+
+当前仅允许一侧为 launch 序列，且只支持固定 binding。每个序列项选择一个 store；同一
+kernel 的多个 store 必须使用相同 step，避免错误赋予 kernel 内顺序可见性。执行顺序、
+局部 ABI 和逻辑存储身份来自 PairSpec，是证明前提而非 ETV 自动证明的事实。
+
+## 11. 子图划分
 
 可选 LLM 划分发生在计算证明前。模型一次扫描左右完整 Program、形式谓词、自然语言
 assumptions 和所有根，返回成对
@@ -232,7 +257,7 @@ assumptions 和所有根，返回成对
 
 非法提议、API 失败或局部义务未证明都会回退整图验证。LLM 的语义标签不是证明。
 
-## 11. 最终状态
+## 12. 最终状态
 
 `PROVED` 要求：
 
@@ -246,7 +271,7 @@ and
 `DISPROVED` 要求具体反例，如输出地址、活动 mask 或抽象输入值使两侧结果不同。
 `UNKNOWN` 用于输入错误、语义未实现、事实不足、规则不足、定义域未证明或资源耗尽。
 
-## 12. 信任边界与保证
+## 13. 信任边界与保证
 
 `PROVED` 在声明的 PairSpec 谓词前提和 `ABSTRACT_FLOAT` 语义下建立可观察输出内存
 等价。报告中的 `soundness.level=formal_under_declared_predicates` 表示证明条件化于这些
@@ -259,6 +284,7 @@ and
 - PairSpec 角色、shape、launch、no-alias 事实真实；
 - 未验证可信规则正确；
 - IEEE-754/位级 GPU 等价；
-- allocation bounds、并发、shared memory 或多 kernel 行为。
+- allocation bounds、跨 stream 并发、shared memory，或 PairSpec 未声明的 host 行为；
+- 参数化多 launch、双侧多 launch DAG 对齐，或未进入 observation 反向切片的副作用。
 
 因此报告必须与输入哈希、事实、规则应用日志和信任警告一起解释，不能只读取顶层状态。

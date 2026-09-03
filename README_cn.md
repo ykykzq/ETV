@@ -22,7 +22,8 @@ store；它不是 e-graph。证明阶段才把 ETV IR 中的表达式编码进 e
 - `UNKNOWN`：输入超出语义子集，或事实、定义域、规则、资源不足。
 
 当前浮点模式 `ABSTRACT_FLOAT` 使用精确数学值，不代表 IEEE-754、容差或 GPU 位级
-等价。当前 MVP 面向固定 rank、单 kernel、单 store 的无环逐点程序。
+等价。当前 MVP 面向固定 rank 的无环逐点程序。固定 specialization 可以在一侧声明
+有序多 launch 序列，另一侧保持为单 kernel，并在对应语义边界上进行划分。
 
 整数 cast 在 TT IR 提升后仍是带源/目标类型的显式 IR operator。验证器没有默认的
 `cast(x)=x` 规则；两侧 cast 结构不一致时必须由已准入 rewrite 实际消解，否则结果为
@@ -144,6 +145,13 @@ LLM 新增的非代数规则可按当前策略作为可信规则准入，但若�
 可选子图划分让 LLM 扫描完整左右程序并提出对应子图边界。ETV 自己检查根覆盖、路径
 唯一性、左右依赖拓扑、无环性和类型，再按依赖顺序分别验证；LLM 不决定等价结论。
 
+多 launch 一侧通过 `metadata.launches.lhs` 或 `.rhs` 声明执行 step、每个 launch 的局部
+ABI、binding 和选定 store。ETV 把这些 launch 视为固定的预划分子图，根据逻辑存储角色
+与精确 offset 重建中间内存边；LLM 只能选择单 kernel 一侧的对应表达式路径。同一 step
+中的 store 并发提交，只有后续 step 可以读取。提案非法时，验证器回退到机器组合后的
+整图证明。该路径目前只支持固定规模、仅一侧为 launch 序列，且每个序列项观察一个
+store。
+
 ## 仓库结构
 
 ```text
@@ -152,6 +160,7 @@ etv/casts.py                  显式 cast 元数据与有限位宽整数语义
 etv/ttir/libtriton.py         固定版本 libtriton 解析、验证与快照
 etv/ttir/lift.py              TT IR 到 ETV IR 的语义提升
 etv/schema.py                 TT IR PairSpec 与内部测试夹具 schema
+etv/multilaunch.py            有序 launch 内存组合与固定子图边界
 etv/parametric.py             参数化 SMT 义务和谓词派生规则
 etv/rules.py                  内建规则库与 predicate requirement
 etv/egraph.py                 egglog 编码、饱和与应用日志

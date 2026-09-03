@@ -19,6 +19,8 @@ DeepSeek HTTPS API 发送候选表达式、自然语言上下文和可用 predic
 `partition.enabled` 后会发送一次左右完整 ETV IR Program、PairSpec 谓词、自然语言
 上下文和计算根
 摘要；API key 仍只从 `DEEPSEEK_API_KEY` 读取，报告只保存模型/usage 与请求响应哈希。
+多 launch 模式还会发送固定 launch 组件、机器恢复的依赖拓扑和 counterpart 表达式节点；
+模型只能返回 counterpart path，不能改变 launch 顺序或作为证明证据。
 
 egglog 13.2.0 要求 Python 3.11 以上，因此 ETV 不再支持原来的 Python 3.9 基础路径。其 wheel 同时包含 Rust egglog 绑定；上游包还声明了 `typing-extensions`、`black`、`graphviz`、`anywidget`、`cloudpickle>=3` 和 `opentelemetry-api` 等传递依赖。本工程不直接调用其中的 notebook/可视化功能，但保留上游完整依赖集合以避免维护非官方裁剪包。
 
@@ -133,7 +135,7 @@ googletest 下载，不关闭 libtriton Python 模块，也不影响本工程随
   前端、独立语义提升得到内部 IR，程序对经关系/代数重写得到
   `PROVED(OBSERVABLE_MEMORY_EQUIVALENT)`；
 - 包含 `scf.for`/`scf.yield` 的测试模块通过完整解析，并正确保持在语义提升边界之外。
-- ETV 完整环境测试为 `88 passed`；ntops 的 76 个算子模块、2102 个 CUDA 用例均完成
+- ETV 完整环境测试为 `110 passed`；ntops 的 76 个算子模块、2102 个 CUDA 用例均完成
   收集，但在本机因无 CUDA 全部跳过；Torch reference 离线矩阵中 67 个生成 TTIR、
   6 个走外部 kernel、3 个受 CPU-only PyTorch trace 限制。详见
   [uv 环境与全算子测试](operator_testing.md)。

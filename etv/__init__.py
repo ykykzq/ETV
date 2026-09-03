@@ -1,4 +1,4 @@
-"""ETV: symbolic equivalence verification for pairs of raw TTIR programs."""
+"""ETV: symbolic equivalence verification for two raw TTIR program sides."""
 
 import logging
 
@@ -9,4 +9,4 @@ from .model import ProofLevel, Status
 from .verify import verify_spec
 
 __all__ = ["ProofLevel", "Status", "verify_spec"]
-__version__ = "0.6.1"
+__version__ = "0.7.0"
