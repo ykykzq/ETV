@@ -1,0 +1,61 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.bincount
+  name: bincount
+  revision: 1
+  category: pooling_convolution_and_random
+requires:
+  observed_domain_zh: 1-D int32 input；case 为 `(size,weights,minlength)`：`(100,F,0)`、`(100,T,0)`、`(100,T,50)`、`(1000,F,2000)`、`(50,T,10)`、`(0,F,5)`。非空
+    input 值域 `[0,size)`；weights 若存在则为同长度 float32 `randn`。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: rank_equals
+        tensor: input
+        value: 1
+      - op: dtype_in
+        tensor: input
+        values:
+        - int32
+      - op: all_elements_nonnegative
+        tensor: input
+    weights:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: device_is
+        tensor: weights
+        value: cuda
+      - op: dtype_in
+        tensor: weights
+        values:
+        - float32
+    minlength:
+      kind: scalar_or_shape_parameter
+      default: 0
+      constraints:
+      - op: integer_greater_equal
+        value: minlength
+        lower: 0
+  relations:
+  - op: same_shape
+    values:
+    - input
+    - weights
+    when: weights is not null
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_bincount.py
+    name: test_bincount
+    line: 20
+  reviewed: true

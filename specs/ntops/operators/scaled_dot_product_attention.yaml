@@ -1,0 +1,229 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.scaled_dot_product_attention
+  name: scaled_dot_product_attention
+  revision: 1
+  category: linear_algebra_and_normalization
+requires:
+  observed_domain_zh: '`q:(B,Hq,L,D)`、`k/v:(B,Hkv,S,D)`；`B in [1,4]`，`Hq in {2,4,8,16,32}`，`Hkv` 是不大于
+    `Hq` 的 2 的幂，`L,S in [1,512]`，`D in {32,64}`，float16/32，`enable_gqa=True`。mask 为 None、`(L,S)` bool，或仅含
+    `0/-Inf` 的浮点；mask 与 `is_causal=True` 不同时出现。scale 为 None 或 `[0.05,0.5]`；causal variant 为 None/lower-right/upper-left，lower-right
+    要求 `L<=S`。KV-cache case 把 k/v 最后一个 slot 清零并另传原值与 slot view。'
+  arguments:
+    query:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: query
+        value: cuda
+      - op: rank_equals
+        tensor: query
+        value: 4
+      - op: dtype_in
+        tensor: query
+        values:
+        - float16
+        - float32
+    key:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: key
+        value: cuda
+      - op: rank_equals
+        tensor: key
+        value: 4
+      - op: dtype_in
+        tensor: key
+        values:
+        - float16
+        - float32
+    value:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: value
+        value: cuda
+      - op: rank_equals
+        tensor: value
+        value: 4
+      - op: dtype_in
+        tensor: value
+        values:
+        - float16
+        - float32
+    attn_mask:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: device_is
+        tensor: attn_mask
+        value: cuda
+      - op: dtype_in
+        tensor: attn_mask
+        values:
+        - bool
+        - float16
+        - float32
+    present_key:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: device_is
+        tensor: present_key
+        value: cuda
+      - op: dtype_in
+        tensor: present_key
+        values:
+        - float16
+        - float32
+    present_value:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: device_is
+        tensor: present_value
+        value: cuda
+      - op: dtype_in
+        tensor: present_value
+        values:
+        - float16
+        - float32
+    present_key_slot:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: device_is
+        tensor: present_key_slot
+        value: cuda
+      - op: dtype_in
+        tensor: present_key_slot
+        values:
+        - float16
+        - float32
+    present_value_slot:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: device_is
+        tensor: present_value_slot
+        value: cuda
+      - op: dtype_in
+        tensor: present_value_slot
+        values:
+        - float16
+        - float32
+    dropout_p:
+      kind: scalar_or_shape_parameter
+      default: 0
+      constraints:
+      - op: equals
+        left: dropout_p
+        right: 0
+    is_causal:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: is_causal
+        values:
+        - false
+        - true
+    scale:
+      kind: scalar_or_shape_parameter
+      default: null
+      constraints:
+      - op: generated_by
+        value: scale
+        generator: None or random.uniform(0.05, 0.5)
+    enable_gqa:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: equals
+        left: enable_gqa
+        right: true
+    causal_variant:
+      kind: scalar_or_shape_parameter
+      default: null
+      constraints:
+      - op: value_in
+        value: causal_variant
+        values:
+        - null
+        - CausalVariant.LOWER_RIGHT
+        - CausalVariant.UPPER_LEFT
+  relations:
+  - op: dim_equal
+    left:
+    - query
+    - 3
+    right:
+    - key
+    - 3
+  - op: dim_equal
+    left:
+    - query
+    - 3
+    right:
+    - value
+    - 3
+  - op: dim_equal
+    left:
+    - key
+    - 2
+    right:
+    - value
+    - 2
+  - op: dim_equal
+    left:
+    - query
+    - 0
+    right:
+    - key
+    - 0
+  - op: dim_equal
+    left:
+    - query
+    - 0
+    right:
+    - value
+    - 0
+  - op: dim_equal
+    left:
+    - key
+    - 1
+    right:
+    - value
+    - 1
+  - op: same_dtype
+    values:
+    - query
+    - key
+    - value
+  - op: head_count_divisible
+    query: query
+    key: key
+  - op: not_both
+    left:
+      op: is_not_null
+      value: attn_mask
+    right:
+      op: is_true
+      value: is_causal
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_scaled_dot_product_attention.py
+    name: test_scaled_dot_product_attention
+    line: 97
+  reviewed: true

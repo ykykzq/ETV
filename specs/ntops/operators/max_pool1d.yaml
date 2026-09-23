@@ -1,0 +1,86 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.max_pool1d
+  name: max_pool1d
+  revision: 1
+  category: pooling_convolution_and_random
+requires:
+  observed_domain_zh: float32 `input:(B,C,L)`，`B,C in [1,4]`、`L in [10,50]`；(kernel,stride) 为 `(2,2)/(3,2)/(3,1)`；padding
+    0/1/2；ceil_mode bool。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: rank_equals
+        tensor: input
+        value: 3
+    kernel_size:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: value_in
+        value: kernel_size
+        values:
+        - 2
+        - 3
+    stride:
+      kind: scalar_or_shape_parameter
+      default: null
+      constraints:
+      - op: value_in
+        value: stride
+        values:
+        - 1
+        - 2
+    padding:
+      kind: scalar_or_shape_parameter
+      default: 0
+      constraints:
+      - op: value_in
+        value: padding
+        values:
+        - 0
+        - 1
+        - 2
+    dilation:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: equals
+        left: dilation
+        right: 1
+    ceil_mode:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: ceil_mode
+        values:
+        - false
+        - true
+  relations:
+  - op: value_pair_in
+    values:
+    - kernel_size
+    - stride
+    pairs:
+    - - 2
+      - 2
+    - - 3
+      - 2
+    - - 3
+      - 1
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_max_pool1d.py
+    name: test_max_pool1d
+    line: 11
+  reviewed: true

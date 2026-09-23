@@ -1,0 +1,64 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.lp_pool1d
+  name: lp_pool1d
+  revision: 1
+  category: pooling_convolution_and_random
+requires:
+  observed_domain_zh: float32 `input:(B,C,L)`，`B,C in [1,4]`、`L in [4,32]`；norm 为 1/2/3；kernel `[1,min(5,L)]`；stride
+    为 None 或 `[1,kernel]`；ceil_mode bool。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: rank_equals
+        tensor: input
+        value: 3
+    norm_type:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: value_in
+        value: norm_type
+        values:
+        - 1.0
+        - 2.0
+        - 3.0
+    kernel_size:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: generated_by
+        value: kernel_size
+        generator: random.randint(1, min(5, input.shape[2]))
+    stride:
+      kind: scalar_or_shape_parameter
+      default: null
+      constraints:
+      - op: generated_by
+        value: stride
+        generator: None or random.randint(1, kernel_size)
+    ceil_mode:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: ceil_mode
+        values:
+        - false
+        - true
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_lp_pool1d.py
+    name: test_lp_pool1d
+    line: 14
+  reviewed: true

@@ -197,8 +197,13 @@ etv/partition.py              LLM paired-subgraph proposals and machine validati
 etv/observability.py          Structured runtime logging and run correlation
 etv/verify.py                 End-to-end proof orchestration
 tools/extract_add_pair.py     ntops/TorchInductor dual-TT-IR extraction
+tools/extract_ntops_test_specs.py  Auditable ntops test-spec evidence extraction
+tools/materialize_ntops_operator_specs.py  Structured YAML spec materialization
 tools/setup_uv_ttir.sh        Reproducible uv/source-build environment
 tools/test_ntops_torch_ttir.py  All-operator TorchInductor TTIR probe
+specs/ntops_test_evidence.json  Pinned test syntax and assertion evidence
+specs/ntops_LICENSE             License for redistributed ntops test excerpts
+specs/ntops/operators/          75 standalone requires-only operator YAML files
 examples/add/                 Program pair, PairSpec, sources, and provenance hashes
 ```
 
@@ -206,5 +211,7 @@ Further reading: [Architecture](docs/architecture.md),
 [Complete Verification Process](docs/verification_process.md),
 [Implementation Status](docs/implementation_status.md),
 [uv and Operator Testing](docs/operator_testing.md),
+[Operator Spec Format](docs/spec_format.md),
+[75 Test-Derived ntops Specs](docs/ntops_test_specs.md),
 [Runtime Logging](docs/logging.md), and
 [Real Add Verification](docs/add_validation.md).

@@ -1,0 +1,78 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.pow
+  name: pow
+  revision: 1
+  category: elementwise
+requires:
+  observed_domain_zh: 两个同 shape 的 由 `torch.randn` 生成的浮点 张量；只有 float32 实际执行，float16 直接返回。底数可为负且指数为任意采样浮点。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    exponent:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: exponent
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: exponent
+        values:
+        - float32
+      - op: device_is
+        tensor: exponent
+        value: cuda
+      - op: all_dims_between
+        tensor: exponent
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: exponent
+        generator: torch.randn
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: equals
+        left: out
+        right: null
+  relations:
+  - op: same_shape
+    values:
+    - input
+    - exponent
+  - op: same_dtype
+    values:
+    - input
+    - exponent
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_pow.py
+    name: test_pow
+    line: 11
+  reviewed: true

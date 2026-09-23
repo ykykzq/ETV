@@ -1,0 +1,66 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.threshold
+  name: threshold
+  revision: 1
+  category: elementwise
+requires:
+  observed_domain_zh: 一个由测试生成的浮点张量；`threshold` 均匀取 `[-1,1]`，替换值均匀取 `[0,1]`。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    threshold:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: value_between
+        value: threshold
+        lower: -1.0
+        upper: 1.0
+    value:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: value_between
+        value: value
+        lower: 0.0
+        upper: 1.0
+    inplace:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: equals
+        left: inplace
+        right: false
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_threshold.py
+    name: test_threshold
+    line: 14
+  reviewed: true

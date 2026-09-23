@@ -168,12 +168,18 @@ etv/partition.py              LLM 成对子图提议与机器检查
 etv/observability.py          结构化运行日志与 run 关联
 etv/verify.py                 端到端证明编排
 tools/extract_add_pair.py     ntops/TorchInductor 双 TT IR 提取
+tools/extract_ntops_test_specs.py  可审计的 ntops 测试 Spec 证据抽取
+tools/materialize_ntops_operator_specs.py  结构化 YAML Spec 物化
 tools/setup_uv_ttir.sh        可重复的 uv/源码构建环境
 tools/test_ntops_torch_ttir.py  全算子 TorchInductor TTIR 探针
+specs/ntops_test_evidence.json  固定版本测试语法与断言证据
+specs/ntops_LICENSE             再分发 ntops 测试片段的许可证
+specs/ntops/operators/          75 份独立的仅输入前提算子 YAML
 examples/add/                 程序对、PairSpec、源代码与来源哈希
 ```
 
 进一步阅读：[架构](docs/architecture.md)、[完整验证过程](docs/verification_process.md)、
 [实现状态](docs/implementation_status.md)、[uv 与全算子测试](docs/operator_testing.md)、
+[算子 Spec 格式](docs/spec_format.md)、[75 个测试派生 ntops Spec](docs/ntops_test_specs.md)、
 [运行日志](docs/logging.md)和
 [真实 Add 验证](docs/add_validation.md)。

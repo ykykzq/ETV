@@ -1,0 +1,97 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.addmm
+  name: addmm
+  revision: 1
+  category: linear_algebra_and_normalization
+requires:
+  observed_domain_zh: 测试生成的矩阵维度域：`input:(m,n)`、`x:(m,k)`、`y:(k,n)`；`alpha,beta` 为标准高斯标量。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: shape_equals
+        tensor: input
+        value:
+        - m
+        - n
+    mat1:
+      kind: tensor
+      constraints:
+      - op: dtype_in
+        tensor: mat1
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: mat1
+        value: cuda
+      - op: shape_equals
+        tensor: mat1
+        value:
+        - m
+        - k
+    mat2:
+      kind: tensor
+      constraints:
+      - op: dtype_in
+        tensor: mat2
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: mat2
+        value: cuda
+      - op: shape_equals
+        tensor: mat2
+        value:
+        - k
+        - n
+    beta:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: generated_by
+        value: beta
+        generator: random.gauss(0, 1)
+    alpha:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: generated_by
+        value: alpha
+        generator: random.gauss(0, 1)
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: equals
+        left: out
+        right: null
+  relations:
+  - op: integer_between
+    values:
+    - m
+    - n
+    - k
+    lower: 1
+    upper: 1024
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_addmm.py
+    name: test_addmm
+    line: 12
+  reviewed: true

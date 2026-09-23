@@ -1,0 +1,123 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.batch_norm
+  name: batch_norm
+  revision: 1
+  category: linear_algebra_and_normalization
+requires:
+  observed_domain_zh: 测试生成的浮点输入域 仅 rank 2--4；channel 为 `shape[1]`。`affine` 决定是否提供同 dtype 的 `(C,)` weight/bias；`eps`
+    为 `1e-5` 或 `1e-3`；`training=True`，running mean/var 均为 None。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+      - op: rank_between
+        tensor: input
+        lower: 2
+        upper: 4
+      - op: channel_axis
+        tensor: input
+        axis: 1
+    weight:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: rank_between
+        tensor: weight
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: weight
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: weight
+        value: cuda
+      - op: all_dims_between
+        tensor: weight
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: weight
+        generator: torch.randn
+      - op: optional_shape_equals
+        tensor: weight
+        shape:
+        - C
+    bias:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: rank_between
+        tensor: bias
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: bias
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: bias
+        value: cuda
+      - op: all_dims_between
+        tensor: bias
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: bias
+        generator: torch.randn
+      - op: optional_shape_equals
+        tensor: bias
+        shape:
+        - C
+    eps:
+      kind: scalar_or_shape_parameter
+      default: 1.0e-05
+      constraints:
+      - op: value_in
+        value: eps
+        values:
+        - 1.0e-05
+        - 0.001
+    training:
+      kind: scalar_or_shape_parameter
+      default: true
+      constraints:
+      - op: equals
+        left: training
+        right: true
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_batch_norm.py
+    name: test_batch_norm
+    line: 11
+  reviewed: true

@@ -1,0 +1,49 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.adaptive_avg_pool2d
+  name: adaptive_avg_pool2d
+  revision: 1
+  category: pooling_convolution_and_random
+requires:
+  observed_domain_zh: '`input:(B,C,H,W)`，float16/32；`B in [1,3]`、`C in [1,4]`；output size 为 `(1,1)/(2,2)/(4,4)`，且
+    `H=out_h*q_h`、`W=out_w*q_w`，`q_h,q_w in [2,6]`。'
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: rank_equals
+        tensor: input
+        value: 4
+    output_size:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: value_in
+        value: output_size
+        values:
+        - - 1
+          - 1
+        - - 2
+          - 2
+        - - 4
+          - 4
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_adaptive_avg_pool2d.py
+    name: test_adaptive_avg_pool2d
+    line: 10
+  reviewed: true

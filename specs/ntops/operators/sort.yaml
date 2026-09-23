@@ -1,0 +1,82 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.sort
+  name: sort
+  revision: 1
+  category: reduction_sort_and_shape
+requires:
+  observed_domain_zh: 基本域为 测试生成的浮点输入域，dim 取任一合法正/负轴，`descending`、`stable` 为 bool；重复值 case 为 `(16,33)`、整数
+    `[-4,5)` 转 float32、dim -1、stable=true；`out` case 为 float16 `(19,23)` 与 values/indices 缓冲。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    dim:
+      kind: scalar_or_shape_parameter
+      default: -1
+      constraints: []
+    descending:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: descending
+        values:
+        - false
+        - true
+    stable:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: stable
+        values:
+        - false
+        - true
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: generated_by
+        value: out
+        generator: None or a compatible output buffer constructed by the test
+  relations:
+  - op: valid_axis
+    tensor: input
+    axis: dim
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_sort.py
+    name: test_sort
+    line: 15
+  - path: tests/test_sort.py
+    name: test_sort_stable_with_duplicate_values
+    line: 32
+  - path: tests/test_sort.py
+    name: test_sort_with_out
+    line: 48
+  reviewed: true

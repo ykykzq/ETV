@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:etv:operator-requires:v1",
+  "title": "ETV standalone test-derived operator requirements",
+  "type": "object",
+  "required": [
+    "schema",
+    "operator",
+    "requires",
+    "evidence"
+  ],
+  "properties": {
+    "schema": {
+      "const": "operator-requires/v1"
+    },
+    "operator": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "revision",
+        "category"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "category": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "requires": {
+      "type": "object",
+      "required": [
+        "observed_domain_zh",
+        "arguments",
+        "relations"
+      ],
+      "properties": {
+        "observed_domain_zh": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "kind",
+              "constraints"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "default": {},
+              "constraints": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "op"
+                  ],
+                  "properties": {
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "all_dims_between",
+                        "all_elements_nonnegative",
+                        "all_same_dtype",
+                        "all_same_shape",
+                        "all_values_in_half_open_interval",
+                        "broadcastable",
+                        "channel_axis",
+                        "device_is",
+                        "dim_equal",
+                        "dim_even",
+                        "dtype_in",
+                        "equals",
+                        "generated_by",
+                        "head_count_divisible",
+                        "index_in_axis",
+                        "integer_between",
+                        "integer_greater_equal",
+                        "is_not_null",
+                        "is_true",
+                        "nonempty_shape_suffix",
+                        "nonnegative_valid_axis",
+                        "not_both",
+                        "optional_nonnegative_valid_axis",
+                        "optional_shape_equals",
+                        "optional_valid_axis",
+                        "rank_between",
+                        "rank_equals",
+                        "rank_in",
+                        "same_dtype",
+                        "same_shape",
+                        "sequence_length_between",
+                        "shape_equals",
+                        "two_distinct_valid_axes",
+                        "valid_axis",
+                        "value_between",
+                        "value_in",
+                        "value_pair_in"
+                      ]
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "op"
+            ],
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "all_dims_between",
+                  "all_elements_nonnegative",
+                  "all_same_dtype",
+                  "all_same_shape",
+                  "all_values_in_half_open_interval",
+                  "broadcastable",
+                  "channel_axis",
+                  "device_is",
+                  "dim_equal",
+                  "dim_even",
+                  "dtype_in",
+                  "equals",
+                  "generated_by",
+                  "head_count_divisible",
+                  "index_in_axis",
+                  "integer_between",
+                  "integer_greater_equal",
+                  "is_not_null",
+                  "is_true",
+                  "nonempty_shape_suffix",
+                  "nonnegative_valid_axis",
+                  "not_both",
+                  "optional_nonnegative_valid_axis",
+                  "optional_shape_equals",
+                  "optional_valid_axis",
+                  "rank_between",
+                  "rank_equals",
+                  "rank_in",
+                  "same_dtype",
+                  "same_shape",
+                  "sequence_length_between",
+                  "shape_equals",
+                  "two_distinct_valid_axes",
+                  "valid_axis",
+                  "value_between",
+                  "value_in",
+                  "value_pair_in"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "status",
+        "source",
+        "tests",
+        "reviewed"
+      ],
+      "properties": {
+        "status": {
+          "const": "inferred_from_tests"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "repository",
+            "commit",
+            "license"
+          ],
+          "properties": {
+            "repository": {
+              "type": "string"
+            },
+            "commit": {
+              "type": "string"
+            },
+            "license": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "tests": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "name",
+              "line"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "reviewed": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

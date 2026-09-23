@@ -1,0 +1,50 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.rsqrt
+  name: rsqrt
+  revision: 1
+  category: elementwise
+requires:
+  observed_domain_zh: 一个由测试生成的浮点张量，允许采样到负值。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: equals
+        left: out
+        right: null
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_rsqrt.py
+    name: test_rsqrt
+    line: 11
+  reviewed: true

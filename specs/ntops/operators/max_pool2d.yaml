@@ -1,0 +1,99 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.max_pool2d
+  name: max_pool2d
+  revision: 1
+  category: pooling_convolution_and_random
+requires:
+  observed_domain_zh: '`input:(2,3,112,112)`，float16/32；kernel `(1,1)/(3,3)`；stride None、1、`(2,3)`；padding
+    0、1、`(2,3)`，过大 padding 组合跳过；dilation 1、2、`(2,3)`；`ceil_mode=False`。'
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: dtype_in
+        tensor: input
+        values:
+        - float32
+        - float16
+      - op: shape_equals
+        tensor: input
+        value:
+        - 2
+        - 3
+        - 112
+        - 112
+    kernel_size:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: value_in
+        value: kernel_size
+        values:
+        - - 1
+          - 1
+        - - 3
+          - 3
+    stride:
+      kind: scalar_or_shape_parameter
+      default: null
+      constraints:
+      - op: value_in
+        value: stride
+        values:
+        - null
+        - 1
+        - - 2
+          - 3
+    padding:
+      kind: scalar_or_shape_parameter
+      default: 0
+      constraints:
+      - op: value_in
+        value: padding
+        values:
+        - 0
+        - 1
+        - - 2
+          - 3
+    dilation:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: value_in
+        value: dilation
+        values:
+        - 1
+        - 2
+        - - 2
+          - 3
+    ceil_mode:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: ceil_mode
+        values:
+        - false
+    return_indices:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: equals
+        left: return_indices
+        right: false
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_max_pool2d.py
+    name: test_max_pool2d
+    line: 18
+  reviewed: true

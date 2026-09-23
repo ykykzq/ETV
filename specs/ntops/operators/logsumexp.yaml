@@ -1,0 +1,100 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.logsumexp
+  name: logsumexp
+  revision: 1
+  category: reduction_sort_and_shape
+requires:
+  observed_domain_zh: 基本输入为 测试生成的浮点输入域，dim 随机取任一正轴或对应负轴，`keepdim` 为 bool。另用固定 3-D/4-D shape 覆盖 dim 0/1/2、连续
+    `out`、切片、转置、permute 和多轴步进 `out`。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    dim:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: value_in
+        value: dim
+        values:
+        - 0
+        - 1
+        - 2
+    keepdim:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: keepdim
+        values:
+        - false
+        - true
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: generated_by
+        value: out
+        generator: None or a compatible output buffer constructed by the test
+  relations:
+  - op: valid_axis
+    tensor: input
+    axis: dim
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp
+    line: 14
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_strided_output
+    line: 30
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_transposed_output
+    line: 63
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_strided_slice_output
+    line: 91
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_contiguous_out
+    line: 125
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_out_different_strides_dim0
+    line: 152
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_out_different_strides_dim1
+    line: 184
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_out_permuted
+    line: 215
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_with_out_multiple_strides
+    line: 246
+  - path: tests/test_logsumexp.py
+    name: test_logsumexp_out_vs_no_out
+    line: 277
+  reviewed: true

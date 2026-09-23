@@ -1,0 +1,88 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.rotary_position_embedding
+  name: rotary_position_embedding
+  revision: 1
+  category: linear_algebra_and_normalization
+requires:
+  observed_domain_zh: '`input:(B,L,H,D)`，`B in {1,4}`、`L in {1,128}`、`H in {1,8}`、`D in {32,64}`，float16/32；`D`
+    为偶数。sin/cos table 均为 `(L,D/2)`，按 `base=10000` 生成；`interleaved`、`inplace` 各为 bool。'
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: dtype_in
+        tensor: input
+        values:
+        - float32
+        - float16
+      - op: rank_equals
+        tensor: input
+        value: 4
+      - op: dim_even
+        tensor: input
+        axis: 3
+    sin_table:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: sin_table
+        value: cuda
+      - op: dtype_in
+        tensor: sin_table
+        values:
+        - float32
+        - float16
+      - op: shape_equals
+        tensor: sin_table
+        value:
+        - L
+        - D/2
+    cos_table:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: cos_table
+        value: cuda
+      - op: dtype_in
+        tensor: cos_table
+        values:
+        - float32
+        - float16
+    interleaved:
+      kind: scalar_or_shape_parameter
+      default: true
+      constraints:
+      - op: value_in
+        value: interleaved
+        values:
+        - false
+        - true
+    inplace:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: inplace
+        values:
+        - false
+        - true
+  relations:
+  - op: same_shape
+    values:
+    - sin_table
+    - cos_table
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_rotary_position_embedding.py
+    name: test_rotary_position_embedding
+    line: 59
+  reviewed: true

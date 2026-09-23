@@ -1,0 +1,53 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.atan
+  name: atan
+  revision: 1
+  category: elementwise
+requires:
+  observed_domain_zh: 测试生成的浮点 shape 上取均匀 `[-10,10)`；另测 float16/32/64 的 `[0,1,-1,+Inf,-Inf]`、float16/32
+    的 `[NaN,1]`、`(4,5,6)` 非连续 `out`，以及经原地仿射变换的 `(10,10)`。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+        - float64
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: generated_by
+        value: out
+        generator: None or a compatible output buffer constructed by the test
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_atan.py
+    name: test_atan_basic
+    line: 12
+  - path: tests/test_atan.py
+    name: test_atan_boundary_values
+    line: 30
+  - path: tests/test_atan.py
+    name: test_atan_strided_output
+    line: 63
+  - path: tests/test_atan.py
+    name: test_atan_inplace_compatibility
+    line: 87
+  - path: tests/test_atan.py
+    name: test_atan_nan_handling
+    line: 110
+  reviewed: true

@@ -1,0 +1,59 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.stack
+  name: stack
+  revision: 1
+  category: reduction_sort_and_shape
+requires:
+  observed_domain_zh: 2--5 个同 shape float32 张量；每个输入固定 rank 3，各维独立取 `[16,64]`；dim 仅为 0、1、2。
+  arguments:
+    tensors:
+      kind: tensor_sequence
+      constraints:
+      - op: device_is
+        tensor: tensors
+        value: cuda
+      - op: sequence_length_between
+        value: tensors
+        lower: 2
+        upper: 5
+      - op: rank_equals
+        tensor: tensors[*]
+        value: 3
+      - op: dtype_in
+        tensor: tensors[*]
+        values:
+        - float32
+      - op: all_dims_between
+        tensor: tensors[*]
+        lower: 16
+        upper: 64
+      - op: generated_by
+        tensor: tensors[*]
+        generator: torch.randn
+    dim:
+      kind: scalar_or_shape_parameter
+      default: 0
+      constraints:
+      - op: value_in
+        value: dim
+        values:
+        - 0
+        - 1
+        - 2
+  relations:
+  - op: all_same_shape
+    values: tensors
+  - op: all_same_dtype
+    values: tensors
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_stack.py
+    name: test_stack
+    line: 9
+  reviewed: true

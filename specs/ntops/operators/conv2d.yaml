@@ -1,0 +1,115 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.conv2d
+  name: conv2d
+  revision: 1
+  category: pooling_convolution_and_random
+requires:
+  observed_domain_zh: '`input:(2,3,112,112)`、weight `(4,3,r,s)`、bias `(4,)`，float16/32；`(r,s)` 为 `(1,1)`
+    或 `(3,3)`；stride 为 1、2、`(2,3)`；padding 为 0、1、`(2,3)`；dilation 为 1、2、`(2,3)`；默认 groups=1。'
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: dtype_in
+        tensor: input
+        values:
+        - float32
+        - float16
+      - op: shape_equals
+        tensor: input
+        value:
+        - 2
+        - 3
+        - 112
+        - 112
+    weight:
+      kind: tensor
+      constraints:
+      - op: device_is
+        tensor: weight
+        value: cuda
+      - op: dtype_in
+        tensor: weight
+        values:
+        - float32
+        - float16
+      - op: shape_equals
+        tensor: weight
+        value:
+        - 4
+        - 3
+        - r
+        - s
+    bias:
+      kind: tensor
+      optional: true
+      default: null
+      constraints:
+      - op: device_is
+        tensor: bias
+        value: cuda
+      - op: dtype_in
+        tensor: bias
+        values:
+        - float32
+        - float16
+      - op: shape_equals
+        tensor: bias
+        value:
+        - 4
+    stride:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: value_in
+        value: stride
+        values:
+        - 1
+        - 2
+        - - 2
+          - 3
+    padding:
+      kind: scalar_or_shape_parameter
+      default: 0
+      constraints:
+      - op: value_in
+        value: padding
+        values:
+        - 0
+        - 1
+        - - 2
+          - 3
+    dilation:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: value_in
+        value: dilation
+        values:
+        - 1
+        - 2
+        - - 2
+          - 3
+    groups:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: equals
+        left: groups
+        right: 1
+  relations: []
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_conv2d.py
+    name: test_conv2d
+    line: 19
+  reviewed: true

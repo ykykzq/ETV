@@ -1,0 +1,86 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.quantile
+  name: quantile
+  revision: 1
+  category: reduction_sort_and_shape
+requires:
+  observed_domain_zh: 测试生成的浮点输入中只有 float32 实际执行；q 为 `[0,1)` 的 Python scalar，或长度 `[1,5]`、逐元素 `[0,1)` 的
+    1-D tensor；dim 为 None 或合法非负轴；`keepdim` 为 bool；interpolation 遍历 linear/lower/higher/nearest/midpoint。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    q:
+      kind: scalar_or_shape_parameter
+      required: true
+      constraints:
+      - op: all_values_in_half_open_interval
+        value: q
+        lower: 0
+        upper: 1
+    dim:
+      kind: scalar_or_shape_parameter
+      default: null
+      constraints: []
+    keepdim:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: keepdim
+        values:
+        - false
+        - true
+    interpolation:
+      kind: scalar_or_shape_parameter
+      default: linear
+      constraints:
+      - op: value_in
+        value: interpolation
+        values:
+        - linear
+        - lower
+        - higher
+        - nearest
+        - midpoint
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: equals
+        left: out
+        right: null
+  relations:
+  - op: optional_nonnegative_valid_axis
+    tensor: input
+    axis: dim
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_quantile.py
+    name: test_quantile
+    line: 18
+  reviewed: true

@@ -1,0 +1,69 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.max
+  name: max
+  revision: 1
+  category: reduction_sort_and_shape
+requires:
+  observed_domain_zh: 一个由测试生成的浮点张量。覆盖全局归约，以及任一正轴或对应负轴的归约；轴归约的 `keepdim` 为 bool。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    dim:
+      kind: scalar_or_shape_parameter
+      default: null
+      constraints: []
+    keepdim:
+      kind: scalar_or_shape_parameter
+      default: false
+      constraints:
+      - op: value_in
+        value: keepdim
+        values:
+        - false
+        - true
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: equals
+        left: out
+        right: null
+  relations:
+  - op: optional_valid_axis
+    tensor: input
+    axis: dim
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_max.py
+    name: test_max_dim
+    line: 14
+  - path: tests/test_max.py
+    name: test_max_global
+    line: 30
+  reviewed: true

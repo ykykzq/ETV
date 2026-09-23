@@ -1,0 +1,87 @@
+schema: operator-requires/v1
+operator:
+  id: ntops.torch.add
+  name: add
+  revision: 1
+  category: binary_and_comparison
+requires:
+  observed_domain_zh: 两个同 shape 的浮点张量；`alpha` 来自标准高斯标量。
+  arguments:
+    input:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: input
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: input
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: input
+        value: cuda
+      - op: all_dims_between
+        tensor: input
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: input
+        generator: torch.randn
+    other:
+      kind: tensor
+      constraints:
+      - op: rank_between
+        tensor: other
+        lower: 1
+        upper: 4
+      - op: dtype_in
+        tensor: other
+        values:
+        - float16
+        - float32
+      - op: device_is
+        tensor: other
+        value: cuda
+      - op: all_dims_between
+        tensor: other
+        lower: 1
+        upper: 1024
+      - op: generated_by
+        tensor: other
+        generator: torch.randn
+    alpha:
+      kind: scalar_or_shape_parameter
+      default: 1
+      constraints:
+      - op: generated_by
+        value: alpha
+        generator: random.gauss(0, 1)
+    out:
+      kind: optional_output_buffer
+      default: null
+      constraints:
+      - op: equals
+        left: out
+        right: null
+  relations:
+  - op: same_shape
+    values:
+    - input
+    - other
+  - op: same_dtype
+    values:
+    - input
+    - other
+evidence:
+  status: inferred_from_tests
+  source:
+    repository: https://github.com/InfiniTensor/ntops.git
+    commit: 9ae4166ad342e4745f0eed13a5a20d069e994fc0
+    license: Apache-2.0
+  tests:
+  - path: tests/test_add.py
+    name: test_add
+    line: 11
+  reviewed: true

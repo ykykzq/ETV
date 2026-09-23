@@ -35,3 +35,9 @@ python -m etv check examples/add/pair_parametric.json --out build/add_parametric
 两个正式示例的左右程序都由 TT IR 前端读取。Semantic JSON 仅存在于
 `tests/fixtures/semantic`，不属于示例或用户输入格式；其他小型 TT IR 集成夹具位于
 `tests/fixtures/ttir`。
+
+## 单 LHS kernel / 多 RHS kernel
+
+`single_lhs_multi_rhs/` 从 benchmark 中抽取了 `argsort`、`rms_norm`、`batch_norm` 和
+`quantile` 四个真实程序对，用于检查预划分多 launch 输入、顺序内存组合和中间 storage
+依赖。详见 `single_lhs_multi_rhs/README.md`。
