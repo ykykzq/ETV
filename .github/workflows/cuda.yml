@@ -1,0 +1,24 @@
+name: Optional CUDA Capture
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: [self-hosted, linux, x64, cuda]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.22"
+      - run: uv sync --locked --extra benchmark
+        env:
+          UV_PROJECT_ENVIRONMENT: .venv-benchmark
+      - run: .venv-benchmark/bin/etv-bench collect examples.generators.add:collect --out build/captured_add --repository https://github.com/ykykzq/ETV --commit "$GITHUB_SHA" --test-id generated_add
+      - run: uv sync --locked --extra dev --extra ttir
+        env:
+          UV_PROJECT_ENVIRONMENT: .venv-verifier
+      - run: .venv-verifier/bin/python tools/fetch_llvm_headers.py
+      - run: .venv-verifier/bin/python tools/build_adapter.py --llvm-include build/llvm/llvm-1f126a6d-ubuntu-x64-1/include
+      - run: .venv-benchmark/bin/etv-bench pair build/captured_add/capture.json --verifier .venv-verifier/bin/etv
+      - run: .venv-benchmark/bin/etv-bench run build/captured_add/manifest.json --verifier .venv-verifier/bin/etv --out build/captured_add/result

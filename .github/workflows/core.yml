@@ -1,0 +1,40 @@
+name: Core
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.22"
+          enable-cache: true
+      - run: uv sync --locked --extra dev
+      - run: uv run --no-sync pytest tests/unit
+      - run: uv run --no-sync ruff check src tests tools examples/generators
+      - run: uv run --no-sync ruff format --check src tests tools examples/generators
+      - run: uv run --no-sync mypy
+      - run: uv run --no-sync python -m build
+  ttir:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.22"
+          enable-cache: true
+      - run: uv sync --locked --extra dev --extra ttir
+      - uses: actions/cache@v4
+        with:
+          path: build/llvm
+          key: llvm-1f126a6d-ubuntu-x64-1
+      - run: uv run --no-sync python tools/fetch_llvm_headers.py
+      - run: uv run --no-sync python tools/build_adapter.py --llvm-include build/llvm/llvm-1f126a6d-ubuntu-x64-1/include
+      - run: uv run --no-sync pytest
+      - run: uv run --no-sync python tools/smoke.py
