@@ -51,6 +51,8 @@ class RuleFact:
     matches: int = 0
     used: bool = False
     detail: str = ""
+    lhs: Expr | None = None
+    rhs: Expr | None = None
 
 
 @dataclass(frozen=True)

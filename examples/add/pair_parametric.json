@@ -1,0 +1,215 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "The lhs is the ntops Add kernel and the rhs is the TorchInductor kernel extracted from the same Add workload."
+    ]
+  },
+  "format": "etv-pair-v3",
+  "metadata": {
+    "limits": {
+      "egraph_timeout_ms": 10000,
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "smt_timeout_ms": 10000
+    },
+    "llm": {
+      "enabled": false
+    },
+    "pair_id": "parametric_2d_1d_add",
+    "partition": {
+      "enabled": false,
+      "max_parts": 16,
+      "provider": "none"
+    },
+    "semantic_mode": "abstract_float",
+    "target": {
+      "index_bits": 64
+    }
+  },
+  "observation": {
+    "numel": {
+      "var": "c"
+    },
+    "require_disjoint": [
+      "Input",
+      "Other",
+      "Output"
+    ],
+    "require_full_coverage": true,
+    "role": "Output"
+  },
+  "predicates": {
+    "bindings": {},
+    "constraints": [
+      {
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "var": "a"
+                },
+                {
+                  "var": "b"
+                }
+              ],
+              "op": "mul"
+            },
+            {
+              "var": "c"
+            }
+          ],
+          "op": "eq"
+        },
+        "id": "shape.product"
+      }
+    ],
+    "custom": [],
+    "disjoint": [
+      [
+        "Alpha",
+        "Input",
+        "Other",
+        "Output"
+      ]
+    ],
+    "parameters": {
+      "a": {
+        "max": 16,
+        "min": 1,
+        "type": "i32"
+      },
+      "b": {
+        "max": 16,
+        "min": 1,
+        "type": "i32"
+      },
+      "c": {
+        "max": 256,
+        "min": 1,
+        "type": "i32"
+      }
+    },
+    "roles": {
+      "Alpha": {
+        "element": "abstract_float",
+        "kind": "scalar"
+      },
+      "Input": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      },
+      "Other": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      },
+      "Output": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      }
+    }
+  },
+  "programs": {
+    "lhs": [
+      {
+        "abi": {
+          "Alpha": {
+            "kind": "scalar",
+            "name": "arg2"
+          },
+          "Input": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Other": {
+            "kind": "block",
+            "name": "arg1"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg3"
+          }
+        },
+        "bindings": {
+          "arg4": {
+            "var": "a"
+          },
+          "arg5": {
+            "var": "b"
+          }
+        },
+        "file": "ttir/parametric_2d_add.ttir",
+        "function": "parametric_2d_add",
+        "grid": {
+          "programs": {
+            "args": [
+              {
+                "var": "c"
+              },
+              256
+            ],
+            "op": "ceildiv"
+          }
+        },
+        "id": "lhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ],
+    "rhs": [
+      {
+        "abi": {
+          "Alpha": {
+            "index": 0,
+            "kind": "scalar_block",
+            "name": "arg1"
+          },
+          "Input": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Other": {
+            "kind": "block",
+            "name": "arg2"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg3"
+          }
+        },
+        "bindings": {
+          "arg4": {
+            "var": "c"
+          }
+        },
+        "file": "ttir/parametric_1d_add.ttir",
+        "function": "parametric_1d_add",
+        "grid": {
+          "programs": {
+            "args": [
+              {
+                "var": "c"
+              },
+              128
+            ],
+            "op": "ceildiv"
+          }
+        },
+        "id": "rhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ]
+  },
+  "rewrites": []
+}

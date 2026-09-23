@@ -1,0 +1,147 @@
+{
+  "artifacts": [
+    {
+      "after_sha256": "44190e7a1b363bacdd9cbf8eb0179b24436edc3715238cd912971d5be49fdcd1",
+      "before_sha256": "44190e7a1b363bacdd9cbf8eb0179b24436edc3715238cd912971d5be49fdcd1",
+      "original": "ttir/ntops_add.ttir",
+      "path": "lhs-0.ttir"
+    },
+    {
+      "after_sha256": "598d56f8b1c03d61125f7f5ddbb78ecb9055298908d43faf59004f42f4f444e6",
+      "before_sha256": "598d56f8b1c03d61125f7f5ddbb78ecb9055298908d43faf59004f42f4f444e6",
+      "original": "ttir/torch_inductor_add.ttir",
+      "path": "rhs-0.ttir"
+    }
+  ],
+  "facts": "ABI and bindings are trusted input premises; migration is not a proof.",
+  "format": "etv-v2-migration-v1",
+  "migrated_pair_sha256": "db8b4ebc0327fda788baaba90bd4e13ef7d502fcde69d9f613095262cc0376a9",
+  "original_pair": {
+    "assumptions": {
+      "for_llm": [
+        "The lhs is the ntops Add kernel and the rhs is the TorchInductor kernel extracted from the same Add workload."
+      ]
+    },
+    "format": "etv-pair-v2",
+    "metadata": {
+      "frontends": {
+        "lhs": {
+          "function": "ntops_add_kernel",
+          "kind": "ttir",
+          "programs": 1
+        },
+        "rhs": {
+          "function": "triton_poi_fused_0",
+          "kind": "ttir",
+          "programs": 1
+        }
+      },
+      "lhs": "ttir/ntops_add.ttir",
+      "limits": {
+        "max_enodes": 20000,
+        "max_iterations": 8,
+        "timeout_ms": 10000
+      },
+      "pair_id": "ntops_add_vs_torch_inductor_add",
+      "rhs": "ttir/torch_inductor_add.ttir",
+      "semantic_mode": "abstract_float"
+    },
+    "observation": {
+      "output_numel": {
+        "var": "X"
+      },
+      "output_role": "Output",
+      "require_disjoint": [
+        "Input",
+        "Other",
+        "Output"
+      ],
+      "require_full_coverage": true
+    },
+    "predicates": {
+      "abi": {
+        "Alpha": {
+          "lhs": {
+            "kind": "scalar",
+            "name": "arg2"
+          },
+          "rhs": {
+            "index": 0,
+            "kind": "scalar_block",
+            "name": "arg1"
+          }
+        },
+        "Input": {
+          "lhs": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "rhs": {
+            "kind": "block",
+            "name": "arg0"
+          }
+        },
+        "Other": {
+          "lhs": {
+            "kind": "block",
+            "name": "arg1"
+          },
+          "rhs": {
+            "kind": "block",
+            "name": "arg2"
+          }
+        },
+        "Output": {
+          "lhs": {
+            "kind": "block",
+            "name": "arg3"
+          },
+          "rhs": {
+            "kind": "block",
+            "name": "arg3"
+          }
+        }
+      },
+      "bindings": {
+        "X": 128
+      },
+      "custom": [],
+      "disjoint": [
+        [
+          "Input",
+          "Other",
+          "Output"
+        ]
+      ],
+      "side_bindings": {
+        "lhs": {
+          "arg10": 16,
+          "arg11": 1,
+          "arg12": 8,
+          "arg13": 16,
+          "arg14": 16,
+          "arg15": 1,
+          "arg4": 8,
+          "arg5": 16,
+          "arg6": 16,
+          "arg7": 1,
+          "arg8": 8,
+          "arg9": 16
+        },
+        "rhs": {
+          "arg4": 128
+        }
+      }
+    },
+    "rewrites": []
+  },
+  "original_pair_sha256": "8805501f4498f8ea5410ae186ef2fa032879014bad42f9368bede8f951cb9930",
+  "review": [
+    {
+      "change": "Declare Alpha separated from buffer roles: RHS scalar_block is memory, LHS scalar is passed by value.",
+      "pair_sha256": "dc9bb7ffa007222b89d037ab76859a2954273c551c69fb4c7e05e29c320c9dfe",
+      "status": "reviewed"
+    }
+  ],
+  "store_roles": {}
+}

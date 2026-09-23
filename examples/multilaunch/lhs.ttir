@@ -1,0 +1,23 @@
+module {
+  tt.func public @lhs(%arg0: !tt.ptr<f32>, %arg1: !tt.ptr<f32>) {
+    %range = tt.make_range {start = 0 : i32, end = 4 : i32} : tensor<4xi32>
+    %four = arith.constant dense<4> : tensor<4xi32>
+    %mask = arith.cmpi slt, %range, %four : tensor<4xi32>
+    %three = arith.constant dense<3> : tensor<4xi32>
+    %badmask = arith.cmpi slt, %range, %three : tensor<4xi32>
+    %shift = arith.constant dense<0> : tensor<4xi32>
+    %offset = arith.addi %range, %shift : tensor<4xi32>
+    %base = tt.splat %arg0 : !tt.ptr<f32> -> tensor<4x!tt.ptr<f32>>
+    %pointer = tt.addptr %base, %range : tensor<4x!tt.ptr<f32>>, tensor<4xi32>
+    %x = tt.load %pointer, %mask : tensor<4x!tt.ptr<f32>>
+    %two = arith.constant dense<2.0> : tensor<4xf32>
+    %one = arith.constant dense<1.0> : tensor<4xf32>
+    %double = arith.mulf %x, %two : tensor<4xf32>
+    %increment = arith.addf %x, %one : tensor<4xf32>
+    %fused = arith.addf %double, %one : tensor<4xf32>
+    %out = tt.splat %arg1 : !tt.ptr<f32> -> tensor<4x!tt.ptr<f32>>
+    %outptr = tt.addptr %out, %offset : tensor<4x!tt.ptr<f32>>, tensor<4xi32>
+    tt.store %outptr, %fused, %mask : tensor<4x!tt.ptr<f32>>
+    tt.return
+  }
+}

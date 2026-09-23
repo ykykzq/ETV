@@ -1,0 +1,168 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "The RHS launches were captured in execution order from one compiled reference call.",
+      "RHS launch boundaries are fixed; the LLM may only select corresponding LHS expression paths.",
+      "Intermediate storage edges come from capture-v2 storage provenance and exact element offsets.",
+      "This PairSpec observes output leaf 'compiled_output' only."
+    ]
+  },
+  "format": "etv-pair-v3",
+  "metadata": {
+    "limits": {
+      "egraph_timeout_ms": 10000,
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "smt_timeout_ms": 2000
+    },
+    "llm": {
+      "enabled": false
+    },
+    "pair_id": "build/upstream/ntops/tests/test_argsort.py::test_argsort[True-shape8-0-dtype8-cuda-0.001-0.001]::r000-e000-o000",
+    "partition": {
+      "enabled": false,
+      "max_parts": 16,
+      "provider": "none"
+    },
+    "semantic_mode": "abstract_float",
+    "target": {
+      "index_bits": 64
+    }
+  },
+  "observation": {
+    "numel": {
+      "var": "X"
+    },
+    "require_disjoint": [],
+    "require_full_coverage": true,
+    "role": "Output"
+  },
+  "predicates": {
+    "bindings": {
+      "X": 258
+    },
+    "constraints": [],
+    "custom": [],
+    "disjoint": [
+      [
+        "Input0",
+        "Output"
+      ]
+    ],
+    "parameters": {},
+    "roles": {
+      "Input0": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      },
+      "Internal0": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      },
+      "Output": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      }
+    }
+  },
+  "programs": {
+    "lhs": [
+      {
+        "abi": {
+          "Input0": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg4"
+          }
+        },
+        "bindings": {
+          "arg1": 6,
+          "arg10": 43,
+          "arg11": 43,
+          "arg2": 43,
+          "arg3": 43,
+          "arg5": 6,
+          "arg6": 43,
+          "arg7": 43,
+          "arg9": 6
+        },
+        "file": "lhs-0.ttir",
+        "function": "application",
+        "grid": {
+          "programs": 43
+        },
+        "id": "lhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ],
+    "rhs": [
+      {
+        "abi": {
+          "Input0": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Internal0": {
+            "kind": "block",
+            "name": "arg1"
+          }
+        },
+        "bindings": {
+          "arg2": 43,
+          "arg3": 6
+        },
+        "file": "rhs-0.ttir",
+        "function": "triton_per_fused_sort_0",
+        "grid": {
+          "programs": 43
+        },
+        "id": "rhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Internal0"
+          }
+        ]
+      },
+      {
+        "abi": {
+          "Internal0": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg1"
+          }
+        },
+        "bindings": {
+          "arg2": 258
+        },
+        "file": "rhs-1.ttir",
+        "function": "triton_poi_fused_sort_1",
+        "grid": {
+          "programs": 3
+        },
+        "id": "rhs.1",
+        "step": 1,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ]
+  },
+  "rewrites": []
+}

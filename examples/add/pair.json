@@ -1,0 +1,166 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "The lhs is the ntops Add kernel and the rhs is the TorchInductor kernel extracted from the same Add workload."
+    ]
+  },
+  "format": "etv-pair-v3",
+  "metadata": {
+    "limits": {
+      "egraph_timeout_ms": 10000,
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "smt_timeout_ms": 2000
+    },
+    "llm": {
+      "enabled": false
+    },
+    "pair_id": "ntops_add_vs_torch_inductor_add",
+    "partition": {
+      "enabled": false,
+      "max_parts": 16,
+      "provider": "none"
+    },
+    "semantic_mode": "abstract_float",
+    "target": {
+      "index_bits": 64
+    }
+  },
+  "observation": {
+    "numel": {
+      "var": "X"
+    },
+    "require_disjoint": [
+      "Input",
+      "Other",
+      "Output"
+    ],
+    "require_full_coverage": true,
+    "role": "Output"
+  },
+  "predicates": {
+    "bindings": {
+      "X": 128
+    },
+    "constraints": [],
+    "custom": [],
+    "disjoint": [
+      [
+        "Alpha",
+        "Input",
+        "Other",
+        "Output"
+      ]
+    ],
+    "parameters": {},
+    "roles": {
+      "Alpha": {
+        "element": "abstract_float",
+        "kind": "scalar"
+      },
+      "Input": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      },
+      "Other": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      },
+      "Output": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      }
+    }
+  },
+  "programs": {
+    "lhs": [
+      {
+        "abi": {
+          "Alpha": {
+            "kind": "scalar",
+            "name": "arg2"
+          },
+          "Input": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Other": {
+            "kind": "block",
+            "name": "arg1"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg3"
+          }
+        },
+        "bindings": {
+          "arg10": 16,
+          "arg11": 1,
+          "arg12": 8,
+          "arg13": 16,
+          "arg14": 16,
+          "arg15": 1,
+          "arg4": 8,
+          "arg5": 16,
+          "arg6": 16,
+          "arg7": 1,
+          "arg8": 8,
+          "arg9": 16
+        },
+        "file": "lhs-0.ttir",
+        "function": "ntops_add_kernel",
+        "grid": {
+          "programs": 1
+        },
+        "id": "lhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ],
+    "rhs": [
+      {
+        "abi": {
+          "Alpha": {
+            "index": 0,
+            "kind": "scalar_block",
+            "name": "arg1"
+          },
+          "Input": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Other": {
+            "kind": "block",
+            "name": "arg2"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg3"
+          }
+        },
+        "bindings": {
+          "arg4": 128
+        },
+        "file": "rhs-0.ttir",
+        "function": "triton_poi_fused_0",
+        "grid": {
+          "programs": 1
+        },
+        "id": "rhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ]
+  },
+  "rewrites": []
+}

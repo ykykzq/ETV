@@ -1,0 +1,119 @@
+{
+  "assumptions": {
+    "for_llm": [
+      "The lhs is the ntops Add kernel and the rhs is the TorchInductor kernel extracted from the same Add workload."
+    ]
+  },
+  "format": "etv-pair-v3",
+  "metadata": {
+    "limits": {
+      "egraph_timeout_ms": 10000,
+      "max_enodes": 20000,
+      "max_iterations": 8,
+      "smt_timeout_ms": 2000
+    },
+    "llm": {
+      "enabled": false
+    },
+    "pair_id": "unsupported_loop",
+    "partition": {
+      "enabled": false,
+      "max_parts": 16,
+      "provider": "none"
+    },
+    "semantic_mode": "abstract_float",
+    "target": {
+      "index_bits": 64
+    }
+  },
+  "observation": {
+    "numel": 4,
+    "require_disjoint": [
+      "Input",
+      "Output"
+    ],
+    "require_full_coverage": true,
+    "role": "Output"
+  },
+  "predicates": {
+    "bindings": {},
+    "constraints": [],
+    "custom": [],
+    "disjoint": [
+      [
+        "Input",
+        "Output"
+      ]
+    ],
+    "parameters": {},
+    "roles": {
+      "Input": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      },
+      "Output": {
+        "element": "abstract_float",
+        "kind": "buffer"
+      }
+    }
+  },
+  "programs": {
+    "lhs": [
+      {
+        "abi": {
+          "Input": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg1"
+          }
+        },
+        "bindings": {},
+        "file": "lhs.ttir",
+        "function": "lhs",
+        "grid": {
+          "programs": 1
+        },
+        "id": "lhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ],
+    "rhs": [
+      {
+        "abi": {
+          "Input": {
+            "kind": "block",
+            "name": "arg0"
+          },
+          "Output": {
+            "kind": "block",
+            "name": "arg1"
+          }
+        },
+        "bindings": {},
+        "file": "rhs.ttir",
+        "function": "rhs",
+        "grid": {
+          "programs": 1
+        },
+        "id": "rhs.0",
+        "step": 0,
+        "stores": [
+          {
+            "index": 0,
+            "role": "Output"
+          }
+        ]
+      }
+    ]
+  },
+  "rewrites": []
+}
