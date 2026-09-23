@@ -249,3 +249,16 @@ def test_ternary_and_negation(tmp_path, operation, semantic):
         tmp_path, text, (Endpoint("Input", "scalar", "arg0"), Endpoint("Output", "block", "arg1"))
     )
     assert kernel.stores[0].value.op == semantic
+
+
+def test_signed_i1_comparison(tmp_path):
+    text = """module { tt.func @kernel(%arg0: !tt.ptr<f32>) {
+      %a = arith.constant true
+      %b = arith.constant false
+      %lt = arith.cmpi slt, %a, %b : i1
+      %value = arith.uitofp %lt : i1 to f32
+      tt.store %arg0, %value : !tt.ptr<f32>
+      tt.return
+    } }"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    assert evaluate(kernel.stores[0].value) == 1

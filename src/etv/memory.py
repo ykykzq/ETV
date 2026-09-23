@@ -1,11 +1,11 @@
 """Step composition and observable writer obligations."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import prod
 
 import z3
 
-from .errors import ResourceLimit, UnsupportedSemantics
+from .errors import ETVError, ResourceLimit, UnsupportedSemantics
 from .ir import (
     BOOL,
     INDEX,
@@ -472,6 +472,92 @@ def build_obligations(pair: ProgramPair, spec: PairSpec) -> ObligationSet:
         roots = builder.symbolic() if spec.parameters else builder.fixed()
         return ObligationSet(roots, tuple(builder.obligations))
     except _Stop as stop:
+        if spec.parameters and stop.reason in {
+            "COVERAGE_NOT_PROVED",
+            "ADDRESS_NOT_PROVED",
+            "UNIQUE_WRITER_NOT_PROVED",
+        }:
+            witness = _replay_memory_model(pair, spec, builder.obligations[-1])
+            if witness is not None:
+                replay_fact = Obligation(
+                    "memory.counterexample_replay",
+                    "enumeration",
+                    "closed",
+                    (builder.obligations[-1].id,),
+                    "exact specialized replay",
+                )
+                return replace(witness, obligations=tuple(builder.obligations) + (replay_fact,))
         return ObligationSet(
             (), tuple(builder.obligations), stop.status, stop.reason, stop.counterexample
         )
+
+
+def _replay_memory_model(
+    pair: ProgramPair, spec: PairSpec, obligation: Obligation
+) -> ObligationSet | None:
+    if obligation.status != "sat":
+        return None
+    try:
+        model = dict(obligation.model)
+        values = {p.name: int(model.get(p.name, str(p.minimum))) for p in spec.parameters}
+        replacements = tuple((name, const(value)) for name, value in sorted(values.items()))
+        for predicate in spec.predicates:
+            if predicate.expr is not None and predicate.kind in (
+                "parameter",
+                "constraints",
+                "custom",
+            ):
+                if not evaluate(predicate.expr, values, spec.index_bits):
+                    return None
+
+        def concrete(expr: Expr) -> Expr:
+            return substitute(expr, replacements)
+
+        def sequence(program: ProgramSequence) -> ProgramSequence:
+            return ProgramSequence(
+                tuple(
+                    tuple(
+                        replace(
+                            kernel,
+                            programs=concrete(kernel.programs),
+                            parameters=tuple(concrete(p) for p in kernel.parameters),
+                            effects=tuple(concrete(e) for e in kernel.effects),
+                            stores=tuple(
+                                replace(
+                                    store,
+                                    logical_index=concrete(store.logical_index),
+                                    offset=concrete(store.offset),
+                                    mask=concrete(store.mask),
+                                    value=concrete(store.value),
+                                )
+                                for store in kernel.stores
+                            ),
+                        )
+                        for kernel in step
+                    )
+                    for step in program.steps
+                )
+            )
+
+        specialized = replace(
+            spec,
+            parameters=(),
+            observation=replace(spec.observation, numel=concrete(spec.observation.numel)),
+            predicates=tuple(
+                replace(p, expr=concrete(p.expr) if p.expr is not None else None)
+                for p in spec.predicates
+            ),
+        )
+        replay = build_obligations(ProgramPair(sequence(pair.lhs), sequence(pair.rhs)), specialized)
+        if replay.status != "DISPROVED" or replay.counterexample is None:
+            return None
+        counterexample = replace(
+            replay.counterexample,
+            parameters=tuple((name, str(value)) for name, value in sorted(values.items()))
+            + replay.counterexample.parameters,
+            replay="Specialize the declared parameters to this model, then exhaustively enumerate all program/lane instances. "
+            + replay.counterexample.replay,
+        )
+        return replace(replay, counterexample=counterexample)
+    except (ETVError, ValueError, KeyError, ZeroDivisionError):
+        return None

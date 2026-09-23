@@ -139,3 +139,15 @@ def test_predicate_dag_reaches_manifest(tmp_path):
         assert set(fact["dependencies"]) <= ids
     assert report["soundness"]["level"] == "formal_under_declared_predicates"
     assert not report["proof"]["egraph"]["independent_certificate"]
+
+
+def test_parameterized_memory_counterexample_replays(tmp_path):
+    path, _ = case_copy(tmp_path, "add")
+    path = path.with_name("pair_parametric.json")
+    data = json.loads(path.read_text())
+    data["programs"]["rhs"][0]["abi"]["Output"]["offset"] = 1
+    path.write_text(json.dumps(data))
+    result = verify(path)
+    assert (result.status, result.reason) == ("DISPROVED", "ADDRESS_MISMATCH")
+    assert result.counterexample is not None
+    assert {"a", "b", "c"} <= dict(result.counterexample.parameters).keys()
