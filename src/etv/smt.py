@@ -69,8 +69,19 @@ class Encoder:
         if op == "load":
             raise UnsupportedSemantics("MEMORY_NOT_COMPOSED")
         if op == "read":
-            memory = z3.Array("memory." + str(expr.attr("role")), z3.IntSort(), z3.RealSort())
-            return z3.Select(memory, self.encode(expr.args[0]))
+            sort = (
+                z3.BoolSort()
+                if expr.type == BOOL
+                else z3.RealSort()
+                if expr.type.kind == "abstract_float"
+                else z3.IntSort()
+            )
+            memory = z3.Array("memory." + str(expr.attr("role")), z3.IntSort(), sort)
+            value = z3.Select(memory, self.encode(expr.args[0]))
+            if expr.type.kind == "int":
+                assert expr.type.bits is not None
+                return _wrap(value, expr.type.bits)
+            return value
         args = [self.encode(a) for a in expr.args]
         a = args[0]
         b = args[1] if len(args) > 1 else None
@@ -79,6 +90,9 @@ class Encoder:
         if op in CASTS:
             if op in ("extf", "truncf"):
                 return a
+            if op in ("fptosi", "fptoui"):
+                value = z3.If(a >= 0, z3.ToInt(a), -z3.ToInt(-a))
+                return _wrap(value, width(expr.type, self.index_bits))
             if expr.args[0].type == BOOL:
                 a = z3.If(a, 1, 0)
             source = width(expr.args[0].type, self.index_bits)
@@ -99,6 +113,12 @@ class Encoder:
             result = q if op == "div" else a - q * b
         elif op == "ceildiv":
             result = -((-a) / b)
+        elif op in ("shrui", "mulhiui"):
+            assert b is not None
+            bits = width(expr.type, self.index_bits)
+            if op == "shrui":
+                return z3.BV2Int(z3.LShR(z3.Int2BV(a, bits), z3.Int2BV(b, bits)), is_signed=True)
+            result = ((a % (1 << bits)) * (b % (1 << bits))) / (1 << bits)
         elif op == "fdiv":
             result = a / b
         elif op in ("eq", "ne", "lt", "le", "gt", "ge"):
@@ -110,6 +130,11 @@ class Encoder:
                 "gt": lambda: a > b,
                 "ge": lambda: a >= b,
             }[op]()
+        elif op in ("and", "or", "xor") and expr.type.kind == "int":
+            assert expr.type.bits is not None
+            left, right = z3.Int2BV(a, expr.type.bits), z3.Int2BV(b, expr.type.bits)
+            value = left & right if op == "and" else left | right if op == "or" else left ^ right
+            return z3.BV2Int(value, is_signed=True)
         elif op == "and":
             return z3.And(a, b)
         elif op == "or":
@@ -169,6 +194,15 @@ class Encoder:
                 conditions.append(z3.Not(z3.And(a == -(1 << (expr.type.bits - 1)), b == -1)))
         elif op == "ceildiv":
             conditions.append(self.encode(expr.args[1]) > 0)
+        elif op == "shrui":
+            bits = width(expr.type, self.index_bits)
+            conditions.append(self.encode(expr.args[1]) % (1 << bits) < bits)
+        elif op in ("fptosi", "fptoui"):
+            bits = width(expr.type, self.index_bits)
+            a = self.encode(expr.args[0])
+            value = z3.If(a >= 0, z3.ToInt(a), -z3.ToInt(-a))
+            low, high = (-(1 << (bits - 1)), 1 << (bits - 1)) if op == "fptosi" else (0, 1 << bits)
+            conditions.extend((value >= low, value < high))
         elif op in ("sqrt", "rsqrt", "log", "acosh", "pow"):
             a = self.encode(expr.args[0])
             conditions.append(a >= 0 if op == "sqrt" else a >= 1 if op == "acosh" else a > 0)

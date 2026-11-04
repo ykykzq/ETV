@@ -14,9 +14,15 @@ duplicate rule IDs are errors. Registries never leak between runs.
 Z3 algebraic admission refutes equality and matching definedness for all pattern
 inputs. Only `unsat` under an exact encoder is `formal`. Incorrect, unsupported
 or unresolved algebraic rules are rejected. Gated layout/relation rules may be
-`admitted_unverified`; generated rules are explicitly unverified too. A match
+`admitted_unverified`; generated layout/relation rules are explicitly unverified too. A match
 makes the soundness level conditional and lists the rule as a trusted axiom.
 Reports retain expressions, source, hash, validator, admission and match counts.
+
+The built-in proposer also abstracts observation leaves into independent typed
+pattern variables and proposes up to 16 distinct equalities. These algebraic
+candidates must pass universal Z3 equality and equal-definedness checks before
+entering egglog. A candidate alone never establishes equivalence or becomes a
+trusted axiom when its proof fails.
 
 ## Optional LLM
 

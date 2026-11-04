@@ -16,6 +16,7 @@ class Pointer:
     storage: StorageRef
     offset: Expr
     element: Type
+    boolean_byte: bool = False
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ ARITH = {
     "andi": "and",
     "ori": "or",
     "xori": "xor",
+    "shrui": "shrui",
     "addf": "fadd",
     "subf": "fsub",
     "mulf": "fmul",
@@ -97,7 +99,10 @@ def reindex(tensor: Tensor, index: Expr, new_shape: tuple[int, ...]) -> Tensor:
     replacements = (("__lane", index),)
     if isinstance(tensor.term, Pointer):
         term: Expr | Pointer = Pointer(
-            tensor.term.storage, substitute(tensor.term.offset, replacements), tensor.term.element
+            tensor.term.storage,
+            substitute(tensor.term.offset, replacements),
+            tensor.term.element,
+            tensor.term.boolean_byte,
         )
     else:
         term = substitute(tensor.term, replacements)
@@ -148,9 +153,15 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
     if name == "arith.cmpi":
         predicate = op.integer("predicate")
         names = {0: "eq", 1: "ne", 2: "lt", 3: "le", 4: "gt", 5: "ge"}
-        if predicate not in names:
-            raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "unsigned cmpi")
-        operator = names[predicate]
+        if predicate in (6, 7, 8, 9):
+            # Zero extend to an extra sign bit, then use signed comparison.
+            bits = 1 if args[0].type == BOOL else args[0].type.bits
+            if bits is None:
+                raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "unsigned index comparison")
+            args = tuple(Expr("extui", Type("int", bits + 1), (arg,)) for arg in args)
+            operator = {6: "lt", 7: "le", 8: "gt", 9: "ge"}[predicate]
+        else:
+            operator = names[predicate]
         if predicate >= 2 and args[0].type == BOOL:
             args = tuple(
                 Expr("extsi", Type("int", 2), (arg,), (("source_bits", 1), ("target_bits", 2)))
@@ -158,7 +169,7 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
             )
     elif name == "arith.cmpf":
         predicate = op.integer("predicate")
-        if predicate in (0, 8, 7, 15):
+        if predicate in (0, 14, 7, 15):
             return const(predicate in (7, 15), BOOL)
         names = {
             1: "eq",
@@ -167,14 +178,24 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
             4: "lt",
             5: "le",
             6: "ne",
-            9: "eq",
-            10: "gt",
-            11: "ge",
-            12: "lt",
-            13: "le",
-            14: "ne",
+            8: "eq",
+            9: "gt",
+            10: "ge",
+            11: "lt",
+            12: "le",
+            13: "ne",
         }
         operator = names[predicate]
+    elif name in ("arith.minsi", "arith.maxsi"):
+        # A signless i1 is interpreted as -1/0 by signed min/max.
+        compared = (
+            tuple(Expr("extsi", Type("int", 2), (arg,)) for arg in args) if typ == BOOL else args
+        )
+        return Expr(
+            "select", typ, (Expr("lt" if name == "arith.minsi" else "gt", BOOL, compared), *args)
+        )
+    elif name == "tt.mulhiui":
+        operator = "mulhiui"
     elif name == "tt.clampf":
         if op.integer("propagateNan") != 0:
             raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "clampf propagateNan")
@@ -182,6 +203,16 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
     elif name == "tt.extern_elementwise":
         symbol = op.string("symbol")
         symbol = symbol.removeprefix("__nv_")
+        # The declared abstract_float domain contains finite mathematical reals.
+        # CUDA's isnan returns an integer, not an IEEE floating-point value.
+        if (
+            symbol in ("isnan", "isnanf")
+            and op.integer("pure") != 0
+            and len(args) == 1
+            and args[0].type == FLOAT
+            and typ.kind == "int"
+        ):
+            return const(0, typ)
         if op.integer("pure") == 0 or symbol not in EXTERN:
             raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", name + ":" + symbol)
         operator = EXTERN[symbol]
@@ -196,6 +227,8 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
         for attr in op.attributes:
             if attr.name == "overflowFlags" and op.integer(attr.name) != 0:
                 raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "integer overflow flags")
+            if attr.name == "isExact":
+                raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "exact shift flag")
     elif name.startswith("math.") and name[5:] in FLOAT_UNARY | {"fma"}:
         operator = name[5:]
     else:
@@ -208,13 +241,69 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
     return result
 
 
+def _reduce(op: Operation, source: Tensor) -> Tensor:
+    """Expand an associative, single-result static reduction as a balanced tree."""
+    if len(op.regions) != 1 or len(op.regions[0]) != 1 or len(op.results) != 1:
+        raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", "multi-result reduction")
+    block = op.regions[0][0]
+    if len(block.arguments) != 2 or len(block.operations) != 2:
+        raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", "complex reduction combiner")
+    combine, terminator = block.operations
+    allowed = {
+        "arith.addf",
+        "arith.mulf",
+        "arith.maxnumf",
+        "arith.minnumf",
+        "arith.addi",
+        "arith.muli",
+        "arith.andi",
+        "arith.ori",
+        "arith.xori",
+    }
+    if (
+        combine.name not in allowed
+        or combine.regions
+        or len(combine.results) != 1
+        or tuple(v.id for v in combine.operands) != tuple(v.id for v in block.arguments)
+        or terminator.name != "tt.reduce.return"
+        or tuple(v.id for v in terminator.operands) != (combine.results[0].id,)
+    ):
+        raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", "non-associative reduction combiner")
+    axis = op.integer("axis")
+    if not 0 <= axis < len(source.shape):
+        raise UnsupportedSemantics("TTIR_SHAPE_UNSUPPORTED", "reduction axis")
+    extent = source.shape[axis]
+    if extent > 4096:
+        raise ResourceLimit("static reduction extent")
+    result_shape = source.shape[:axis] + source.shape[axis + 1 :]
+    if shape(op.results[0].type) != result_shape:
+        raise UnsupportedSemantics("TTIR_SHAPE_UNSUPPORTED", "reduction result")
+    tail = prod(source.shape[axis + 1 :])
+    base = index_expr(
+        "add",
+        index_expr("mul", index_expr("div", var("__lane"), const(tail)), const(extent * tail)),
+        index_expr("rem", var("__lane"), const(tail)),
+    )
+    terms = [
+        scalar(reindex(source, index_expr("add", base, const(i * tail)), result_shape))
+        for i in range(extent)
+    ]
+    typ = scalar_type(op.results[0].type)
+    while len(terms) > 1:
+        terms = [
+            _pointwise(combine, (terms[i], terms[i + 1]), typ) if i + 1 < len(terms) else terms[i]
+            for i in range(0, len(terms), 2)
+        ]
+    return Tensor(result_shape, terms[0])
+
+
 def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
     function = module.function
     if len(function.regions) != 1 or len(function.regions[0]) != 1:
         raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", function.name)
     block = function.regions[0][0]
     for operation in block.operations:
-        if operation.regions:
+        if operation.regions and operation.name != "tt.reduce":
             raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", operation.name)
     values: dict[str, Tensor] = {}
     endpoints = {ep.name: ep for ep in launch.abi}
@@ -238,8 +327,6 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             ):
                 raise InputError("ABI_ROLE_MISSING", f"{launch.id}:{name}")
             element = scalar_type(value.type.element)
-            if element != FLOAT:
-                raise UnsupportedSemantics("TTIR_TYPE_UNSUPPORTED", "nonfloat memory")
             storage = StorageRef(launch.side, launch.id, name, ep.role, ep.offset, ep.index)
             values[value.id] = Tensor((), Pointer(storage, const(ep.offset), element))
         else:
@@ -263,6 +350,11 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
     store_count = 0
     selected = {s.index: s.role for s in launch.stores}
     for op in block.operations:
+        if op.name == "tt.reduce":
+            if len(op.operands) != 1:
+                raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", "multi-operand reduction")
+            values[op.results[0].id] = _reduce(op, values[op.operands[0].id])
+            continue
         if op.regions:
             raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", op.name)
         if op.name == "tt.return":
@@ -275,7 +367,7 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             raise ResourceLimit("static tensor shape")
         if op.name == "tt.store":
             pointer = args[0].term
-            if not isinstance(pointer, Pointer) or pointer.element != FLOAT:
+            if not isinstance(pointer, Pointer):
                 raise UnsupportedSemantics("TTIR_TYPE_UNSUPPORTED", "store pointer")
             if store_count not in selected:
                 raise UnsupportedSemantics("UNSELECTED_STORE", "all effects must be declared")
@@ -286,8 +378,17 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
                 raise InputError("ABI_ROLE_MISSING", "store role disagrees with pointer")
             mask = scalar(args[2]) if len(args) == 3 else const(True, BOOL)
             value_expr = scalar(args[1])
-            if value_expr.type != FLOAT:
-                raise UnsupportedSemantics("TTIR_TYPE_UNSUPPORTED", "nonfloat store")
+            if pointer.boolean_byte:
+                if value_expr.op == "extui" and value_expr.args[0].type == BOOL:
+                    value_expr = value_expr.args[0]
+                elif value_expr.op == "const" and value_expr.attr("value") in (0, 1):
+                    value_expr = const(bool(value_expr.attr("value")), BOOL)
+                else:
+                    raise UnsupportedSemantics(
+                        "TTIR_OP_UNSUPPORTED", "noncanonical boolean byte store"
+                    )
+            if value_expr.type != pointer.element:
+                raise UnsupportedSemantics("TTIR_TYPE_UNSUPPORTED", "store element type mismatch")
             stores.append(
                 Store(
                     store_count,
@@ -306,7 +407,14 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
         typ = (
             scalar_type(op.results[0].type)
             if op.name
-            not in ("tt.addptr", "tt.splat", "tt.broadcast", "tt.expand_dims", "tt.reshape")
+            not in (
+                "tt.addptr",
+                "tt.splat",
+                "tt.broadcast",
+                "tt.expand_dims",
+                "tt.reshape",
+                "tt.bitcast",
+            )
             else None
         )
         if op.name == "arith.constant":
@@ -339,6 +447,69 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             if prod(args[0].shape) != prod(out_shape):
                 raise UnsupportedSemantics("TTIR_SHAPE_UNSUPPORTED", "reshape size")
             result = Tensor(out_shape, args[0].term)
+        elif op.name == "tt.gather":
+            source, indices = args
+            axis = op.integer("axis")
+            if (
+                not 0 <= axis < len(source.shape)
+                or len(source.shape) != len(out_shape)
+                or out_shape != indices.shape
+                or isinstance(source.term, Pointer)
+            ):
+                raise UnsupportedSemantics(
+                    "TTIR_SHAPE_UNSUPPORTED", "gather shape or pointer source"
+                )
+            offset = const(0)
+            index = Expr("to_index", INDEX, (scalar(indices),))
+            for dim, extent in enumerate(out_shape):
+                coordinate = (
+                    index
+                    if dim == axis
+                    else index_expr(
+                        "rem",
+                        index_expr("div", var("__lane"), const(prod(out_shape[dim + 1 :]))),
+                        const(extent),
+                    )
+                )
+                offset = index_expr(
+                    "add",
+                    offset,
+                    index_expr("mul", coordinate, const(prod(source.shape[dim + 1 :]))),
+                )
+            selected_value = scalar(reindex(source, offset, out_shape))
+            valid = Expr(
+                "and",
+                BOOL,
+                (
+                    Expr("ge", BOOL, (index, const(0))),
+                    Expr("lt", BOOL, (index, const(source.shape[axis]))),
+                ),
+            )
+            result = Tensor(
+                out_shape,
+                Expr(
+                    "select",
+                    selected_value.type,
+                    (valid, selected_value, Expr("undefined", selected_value.type)),
+                ),
+            )
+        elif op.name == "tt.bitcast":
+            pointer = args[0].term
+            target_type = op.results[0].type
+            target = target_type.element if target_type.kind == "tensor" else target_type
+            if (
+                not isinstance(pointer, Pointer)
+                or pointer.element != BOOL
+                or target is None
+                or target.kind != "pointer"
+                or target.address_space != 1
+                or target.element is None
+                or scalar_type(target.element) != Type("int", 8)
+            ):
+                raise UnsupportedSemantics(
+                    "TTIR_OP_UNSUPPORTED", "unsupported pointer/bit reinterpretation"
+                )
+            result = Tensor(out_shape, Pointer(pointer.storage, pointer.offset, BOOL, True))
         elif op.name == "tt.addptr":
             pointer = args[0].term
             if not isinstance(pointer, Pointer):
@@ -346,19 +517,43 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             delta = Expr("to_index", INDEX, (scalar(args[1]),))
             result = Tensor(
                 out_shape,
-                Pointer(pointer.storage, index_expr("add", pointer.offset, delta), pointer.element),
+                Pointer(
+                    pointer.storage,
+                    index_expr("add", pointer.offset, delta),
+                    pointer.element,
+                    pointer.boolean_byte,
+                ),
             )
         elif op.name == "tt.load":
             pointer = args[0].term
-            if not isinstance(pointer, Pointer) or pointer.element != FLOAT:
+            if not isinstance(pointer, Pointer):
                 raise UnsupportedSemantics("TTIR_TYPE_UNSUPPORTED", "load pointer")
+            if pointer.boolean_byte and not launch.canonical_boolean_storage:
+                raise UnsupportedSemantics(
+                    "TTIR_OP_UNSUPPORTED", "boolean byte load requires canonical storage contract"
+                )
             mask = scalar(args[1]) if len(args) > 1 else const(True, BOOL)
-            default = scalar(args[2]) if len(args) > 2 else Expr("undefined", FLOAT)
+            default = scalar(args[2]) if len(args) > 2 else Expr("undefined", pointer.element)
+            if pointer.boolean_byte:
+                # The explicit representation predicate permits only 0/1 bytes.
+                if default.op == "undefined":
+                    default = Expr("undefined", BOOL)
+                elif default.op == "const" and default.attr("value") in (0, 1):
+                    default = const(bool(default.attr("value")), BOOL)
+                else:
+                    raise UnsupportedSemantics(
+                        "TTIR_OP_UNSUPPORTED", "noncanonical boolean byte load default"
+                    )
             term = Expr(
-                "load", FLOAT, (pointer.offset, mask, default), (("storage", pointer.storage),)
+                "load",
+                pointer.element,
+                (pointer.offset, mask, default),
+                (("storage", pointer.storage),),
             )
             effects.append(term)
-            result = Tensor(out_shape, term)
+            result = Tensor(
+                out_shape, Expr("extui", Type("int", 8), (term,)) if pointer.boolean_byte else term
+            )
         else:
             assert typ is not None
             result = Tensor(out_shape, _pointwise(op, tuple(scalar(a) for a in args), typ))

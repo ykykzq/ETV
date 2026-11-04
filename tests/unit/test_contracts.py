@@ -111,3 +111,14 @@ def test_typed_launch_constant_is_exact_and_not_a_grid_expression(tmp_path):
     data["programs"]["lhs"][0]["grid"]["programs"] = {"var": "arg1"}
     with pytest.raises(InputError):
         parse_pair_spec(write(tmp_path, data))
+
+
+def test_boolean_representation_is_an_explicit_predicate(tmp_path):
+    data = minimal(tmp_path)
+    data["metadata"]["target"] = {"boolean_storage": "canonical_i8"}
+    spec = parse_pair_spec(write(tmp_path, data))
+    assert all(x.canonical_boolean_storage for x in spec.lhs + spec.rhs)
+    assert "target.boolean_storage" in {p.id for p in spec.predicates}
+    data["metadata"]["target"]["boolean_storage"] = "arbitrary_bytes"
+    with pytest.raises(InputError):
+        parse_pair_spec(write(tmp_path, data))

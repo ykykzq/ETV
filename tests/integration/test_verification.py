@@ -82,3 +82,35 @@ def test_stdout_json_and_exit_code(tmp_path):
         for e in events
     )
     assert json.loads((tmp_path / "report.json").read_text())["reason"] == "COMPUTE_MISMATCH"
+
+
+@pytest.mark.parametrize("bad_mask", [False, True])
+def test_fixed_large_grid_symbolic_proof_and_replay_fallback(tmp_path, bad_mask):
+    shutil.copytree(ROOT / "examples/compute_mismatch", tmp_path / "case")
+    path = tmp_path / "case/pair.json"
+    data = json.loads(path.read_text())
+    data["observation"]["numel"] = 512
+    text = (path.parent / "lhs.ttir").read_text()
+    text = (
+        text.replace("end = 4", "end = 512")
+        .replace("tensor<4x", "tensor<512x")
+        .replace("dense<4>", "dense<512>")
+    )
+    (path.parent / "lhs.ttir").write_text(text)
+    right = text.replace("@lhs", "@rhs")
+    if bad_mask:
+        right = right.replace("tt.store %outptr, %x, %mask", "tt.store %outptr, %x, %badmask")
+    (path.parent / "rhs.ttir").write_text(right)
+    path.write_text(json.dumps(data))
+    report = verify(path)
+    assert report.status == ("DISPROVED" if bad_mask else "PROVED"), (
+        report.reason,
+        report.diagnostic,
+    )
+    if bad_mask:
+        assert report.reason == "MASK_MISMATCH" and report.counterexample.index == "3"
+    else:
+        assert len(report.equalities) == 1
+        assert any(
+            o.id == "memory.lhs.uniqueness" and o.status == "unsat" for o in report.obligations
+        )

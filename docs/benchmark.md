@@ -79,3 +79,59 @@ before/after evidence. Multi-launch conversion requires explicit store-role evid
 `tools/import_real_cases.py` converts the four retained real fixtures using their
 captured pointer inventories. Fixed upstream sources are in
 `tools/upstream_revisions.json`; large corpora are not required by the core.
+
+## Frozen representative experiments
+
+`etv_bench.pytest_capture` freezes the full collection with `--etv-freeze` and
+selects one representative per test function. `tools/run_representatives.py`
+checks the upstream commit and test-source hashes, collects the entire test tree
+in each isolated process, compares selected parameters to the lock, then executes
+only that representative. Full collection order matters because upstream modules
+can import and consume each other's random parametrization generators.
+
+`tools/freeze_representatives.py` copies the TTIR, runtime mappings, original test
+outcomes, process failures and logs into a new versioned directory. It refuses to
+overwrite an existing version and records SHA-256 for every frozen file.
+`tools/analyze_representatives.py` verifies the hashes both before and after the
+batch, invokes the public pairing/verification CLI, and retains all failed cases
+in the summary denominator. `tools/report_representatives.py` renders the complete
+case matrix, output dtype differences and explicitly separate synthetic controls.
+Reports and raw experiment corpora are generated locally and are excluded from
+the code-only experiment branch.
+
+## Complete-capture formal suite
+
+`tools/filter_captures.py` requires a frozen inventory with every test selected
+and attempted. It retains complete two-sided runtime captures and excludes failed
+or incomplete capture records. It checks identities, source revisions, selected
+launches, file containment and TTIR hashes. Numerical-test outcomes, output dtype
+differences, PairSpec validity and formal verdicts do not filter the retained set.
+Both retained and excluded identities are recorded; the source captures remain
+unchanged. The destination must be fresh.
+
+Run these commands from the repository root, using the verifier environment from
+[installation](installation.md). The paths below refer to locally captured data;
+the repository does not include the full experiment corpus.
+
+```bash
+.venv-verifier/bin/python tools/filter_captures.py build/full-suite.lock.json \
+  --captures build/full-capture --out build/filtered-v1
+.venv-verifier/bin/python tools/run_formal_suite.py \
+  --frozen build/filtered-v1 --out build/formal-v1 \
+  --python .venv-verifier/bin/python --workers 16
+```
+
+The runner copies the frozen corpus into a fresh derived workspace and writes
+`run.json`, `progress.json`, `completed.json`, per-case reports and the complete
+`analysis/summary.json`. It checks implementation hashes and the complete selected
+identity set; the analyzer checks frozen artifact hashes before and after the run.
+`NOT_VERIFIED` denotes pipeline/contract failures without a formal verdict and
+must remain separate from verifier `UNKNOWN` in the detailed counts.
+
+The 2026-11-04 run retained 1,365 of 2,102 cases (3,350 TTIR files): 223 `PROVED`,
+462 `UNKNOWN`, 664 `NOT_VERIFIED` and 16 `DISPROVED`. All 223 proofs were formal
+under declared predicates, with no unverified trusted axioms. Branches and loops
+remain unsupported. The 16 replayed mismatches concern output-write masks in
+captured `diag_1d` fragments: host-side zero initialization is outside those TTIR
+fragments. They do not establish 16 incorrect full operators. Conclusions use
+the finite-real abstraction, not IEEE floating-point numerical equivalence.

@@ -469,7 +469,25 @@ def build_obligations(pair: ProgramPair, spec: PairSpec) -> ObligationSet:
             raise _Stop("UNKNOWN", "BOTH_SIDES_MULTI_LAUNCH_UNSUPPORTED")
         builder.premises_valid()
         builder.no_alias()
-        roots = builder.symbolic() if spec.parameters else builder.fixed()
+        if spec.parameters:
+            roots = builder.symbolic()
+        else:
+            # A fixed grid can also have a symbolic all-elements proof. Try it
+            # for large single-launch programs; every coverage/address/range
+            # obligation is still discharged. Unsupported layouts fall back to
+            # complete enumeration, including concrete counterexample replay.
+            numel = int(evaluate(spec.observation.numel, index_bits=spec.index_bits))
+            symbolic = numel > 256 and len(spec.lhs) == len(spec.rhs) == 1
+            if symbolic:
+                trial = _Builder(pair, spec)
+                trial.obligations = list(builder.obligations)
+                try:
+                    roots = trial.symbolic()
+                    builder = trial
+                except (_Stop, UnsupportedSemantics, ResourceLimit):
+                    roots = builder.fixed()
+            else:
+                roots = builder.fixed()
         return ObligationSet(roots, tuple(builder.obligations))
     except _Stop as stop:
         if spec.parameters and stop.reason in {

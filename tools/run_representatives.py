@@ -36,7 +36,7 @@ def main():
             raise ValueError("upstream source differs: " + file)
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    python = str(args.python.resolve())
+    python = str(args.python.absolute())
     gpus = args.gpus.split(",")
     selected = lock["selected"]
     started = time.time()
@@ -50,11 +50,21 @@ def main():
             result_path = directory / "process.json"
             if result_path.exists():
                 continue
+            selection = directory / "selection.json"
+            selection.write_text(
+                json.dumps(
+                    {
+                        "selected": [nodeid],
+                        "all_cases": [r for r in lock["all_cases"] if r["nodeid"] == nodeid],
+                    }
+                )
+            )
             env = dict(
                 os.environ,
                 CUDA_VISIBLE_DEVICES=gpus[worker_id],
                 OMP_NUM_THREADS="1",
                 TORCHINDUCTOR_COMPILE_THREADS="1",
+                TORCHINDUCTOR_CACHE_DIR=str(out / "inductor_cache"),
                 PYTHONPATH=os.pathsep.join(
                     [
                         str(Path(__file__).resolve().parents[1] / "src"),
@@ -67,10 +77,17 @@ def main():
                 python,
                 "-m",
                 "pytest",
-                nodeid,
+                "-c",
+                "pyproject.toml",
+                "--rootdir=.",
+                # Preserve upstream collection/import order: several modules
+                # import parametrization generators from another test module.
+                "tests",
                 "-q",
                 "-p",
                 "etv_bench.pytest_capture",
+                "--etv-selection",
+                str(selection),
                 "--etv-capture-root",
                 str(out),
                 "--junitxml",

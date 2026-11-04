@@ -79,7 +79,10 @@ def test_llm_failure_falls_back_to_whole_goal(tmp_path, monkeypatch):
 )
 def test_real_multilaunch_regions_and_counts(case, components):
     report = verify(ROOT / "examples/real" / case / "pair.json")
-    assert (report.status, report.reason) == ("UNKNOWN", "TTIR_REGION_UNSUPPORTED")
+    # Quantile's static single-input reduction is now supported; its next
+    # unsupported feature is the non-finite padding constant.
+    reason = "TTIR_CONSTANT_UNSUPPORTED" if case == "quantile" else "TTIR_REGION_UNSUPPORTED"
+    assert (report.status, report.reason) == ("UNKNOWN", reason)
     assert len(report.launches) == 3
     assert sum(launch.stores for launch in report.launches) == components
     first, second = report.launches[1:]

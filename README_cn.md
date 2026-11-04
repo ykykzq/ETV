@@ -101,16 +101,17 @@ CUDA 生成使用独立的 PyTorch 2.8.0 benchmark 环境；其 Triton 依赖不
 
 ## 语义与信任
 
-无环子集包含静态 tensor 索引映射、带 mask 的浮点 load/store、整数地址/cast、实数运算、
+无环子集包含静态 tensor 索引映射、带 mask 的浮点/布尔/整数 load/store、整数地址/cast、实数运算、
 比较、select、min/max/clamp、纯 math 操作和白名单 extern。整数保留位宽并使用模运算；
 有符号除法向零截断。必须证明除零和有符号除法溢出不可达。index cast 需要
 `target.index_bits`。cast 保留为带类型节点，部分实函数需要定义域证明。超越函数可以通过
 结构相等/同余证明等价；近似求值不能生成反例。
 
 同 step 的 launch 读取旧状态并同时提交；后续 step 可见之前的写入。固定路径在资源限制内
-穷举全部 program/lane/store。参数化路径目前支持每侧一个 launch、一个 store，且需要证明
-规范线性 writer。固定规模支持单侧多 launch。双侧多 launch、参数化 launch DAG、循环/
-reduction、原子操作、shared memory、barrier、多维 grid、动态 rank 和整数内存显式返回
+穷举全部 program/lane/store；大规模单 launch 用例先尝试覆盖全部元素的符号证明，无法完成时
+回退到完整穷举。参数化路径目前支持每侧一个 launch、一个 store，且需要证明
+规范线性 writer。固定规模支持单侧多 launch，以及静态单输入结合律归约。双侧多 launch、
+参数化 launch DAG、循环、其他归约、原子操作、shared memory、barrier、多维 grid 和动态 rank 显式返回
 `UNKNOWN`。
 
 结论依赖声明的 ABI、host 顺序、storage 分离和自定义前提，不证明 IEEE 舍入、NaN/Inf/

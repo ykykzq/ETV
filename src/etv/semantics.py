@@ -8,12 +8,14 @@ from .errors import UnsupportedSemantics
 from .ir import BOOL, INDEX, Expr, Type, const, signed, trunc_div
 
 Value = int | bool | Fraction
-CASTS = frozenset("extsi extui trunci index_cast index_castui sitofp uitofp extf truncf".split())
+CASTS = frozenset(
+    "extsi extui trunci index_cast index_castui sitofp uitofp extf truncf fptosi fptoui".split()
+)
 FLOAT_UNARY = frozenset(
     "absf ceil cos erf exp exp2 floor log rsqrt sin sqrt acosh atan cosh expm1 nearbyint tanh".split()
 )
 FLOAT_BINARY = frozenset("fadd fsub fmul fdiv fmin fmax pow".split())
-INTEGER_BINARY = frozenset("add sub mul div rem ceildiv".split())
+INTEGER_BINARY = frozenset("add sub mul div rem ceildiv shrui mulhiui".split())
 COMPARISONS = frozenset("eq ne lt le gt ge".split())
 
 
@@ -41,7 +43,9 @@ def validate_expr(expr: Expr) -> None:
         valid = expr.type.kind in ("int", "index") and all(t == expr.type for t in types)
     elif expr.op in COMPARISONS:
         valid = expr.type == BOOL and types[0] == types[1]
-    elif expr.op in {"and", "or", "xor", "not"}:
+    elif expr.op in {"and", "or", "xor"}:
+        valid = expr.type.kind in ("bool", "int") and all(t == expr.type for t in types)
+    elif expr.op == "not":
         valid = expr.type == BOOL and all(t == BOOL for t in types)
     elif expr.op == "select":
         valid = types[0] == BOOL and types[1] == types[2] == expr.type
@@ -49,6 +53,8 @@ def validate_expr(expr: Expr) -> None:
         valid = expr.type.kind == types[0].kind == "abstract_float"
     elif expr.op in {"sitofp", "uitofp"}:
         valid = expr.type.kind == "abstract_float" and types[0].kind in ("int", "bool")
+    elif expr.op in {"fptosi", "fptoui"}:
+        valid = expr.type.kind == "int" and types[0].kind == "abstract_float"
     elif expr.op in CASTS:
         valid = expr.type.kind in ("int", "bool", "index") and types[0].kind in (
             "int",
@@ -100,6 +106,13 @@ def evaluate(
     if op in CASTS:
         if op in ("extf", "truncf"):
             return Fraction(a)
+        if op in ("fptosi", "fptoui"):
+            bits = width(expr.type, index_bits)
+            value = int(Fraction(a))  # truncation toward zero, with poison out of range
+            low, high = (-(1 << (bits - 1)), 1 << (bits - 1)) if op == "fptosi" else (0, 1 << bits)
+            if not low <= value < high:
+                raise UnsupportedSemantics("INTEGER_DEFINEDNESS_NOT_PROVED")
+            return signed(value, bits)
         source_width = width(expr.args[0].type, index_bits)
         value = (
             int(a) % (1 << source_width)
@@ -126,12 +139,25 @@ def evaluate(
         if b <= 0:
             raise UnsupportedSemantics("INTEGER_DEFINEDNESS_NOT_PROVED")
         result = -(-int(a) // int(b))
+    elif op in ("shrui", "mulhiui"):
+        bits = width(expr.type, index_bits)
+        left, right = int(a) % (1 << bits), int(b) % (1 << bits)
+        if op == "shrui":
+            if right >= bits:
+                raise UnsupportedSemantics("INTEGER_DEFINEDNESS_NOT_PROVED")
+            result = left >> right
+        else:
+            result = (left * right) >> bits
     elif op == "fdiv":
         result = Fraction(a) / Fraction(b)
     elif op in ("eq", "ne", "lt", "le", "gt", "ge"):
         return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[
             op
         ]
+    elif op in ("and", "or", "xor") and expr.type.kind == "int":
+        result = (
+            int(a) & int(b) if op == "and" else int(a) | int(b) if op == "or" else int(a) ^ int(b)
+        )
     elif op == "and":
         return bool(a) and bool(b)
     elif op == "or":

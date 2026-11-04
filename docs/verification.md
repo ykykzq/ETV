@@ -7,7 +7,11 @@ before rule admission and equality saturation.
 
 ## Memory and Computation
 
-Fixed verification enumerates all declared program/lane/store instances. Same-step
+Fixed verification enumerates all declared program/lane/store instances. For
+single-launch cases with more than 256 output elements, it first attempts the
+same all-elements symbolic obligations used by the parameterized path below.
+If that attempt cannot discharge every obligation, it falls back to complete
+enumeration, including concrete counterexample replay. No lanes are sampled. Same-step
 launches read the prior state and commit together. Duplicate active writes produce
 `WRITE_RACE`. Intermediate loads require prior writes at the same storage/offset.
 Missing masked-load defaults remain explicit undefined branches. Final visible

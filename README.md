@@ -110,7 +110,7 @@ GPU capture is a separate optional job. See [generation and review](docs/benchma
 
 ## Semantics and Trust
 
-The acyclic subset includes static tensor index maps, masked float loads/stores,
+The acyclic subset includes static tensor index maps, masked float/bool/integer loads/stores,
 integer addresses/casts, real arithmetic, comparisons, select, min/max/clamp, pure
 math operations and whitelisted externs. Integers retain widths and modular
 arithmetic; signed division truncates toward zero. Division by zero and signed
@@ -120,11 +120,14 @@ Transcendentals may prove equal by structure/congruence; approximate evaluation
 cannot produce a counterexample.
 
 Launches at one step read the old state and commit together; later steps see their
-writes. Fixed cases enumerate every program/lane/store within the resource bound.
+writes. Fixed cases enumerate every program/lane/store within the resource bound;
+large single-launch cases first attempt an all-elements symbolic proof, with
+complete enumeration as fallback.
 Parameterized verification currently supports one launch and one store per side
-with a provable canonical linear writer. Fixed single-side multi-launch is supported.
-Both-side multi-launch, parameterized launch DAGs, loops/reductions, atomics, shared
-memory, barriers, multidimensional grids, dynamic rank and integer memory are
+with a provable canonical linear writer. Fixed single-side multi-launch and static
+single-input associative reductions are supported.
+Both-side multi-launch, parameterized launch DAGs, loops, other reductions, atomics, shared
+memory, barriers, multidimensional grids and dynamic rank are
 explicit `UNKNOWN` cases.
 
 Conclusions assume the declared ABI, host schedule, storage separation and custom

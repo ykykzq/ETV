@@ -82,6 +82,7 @@ class LaunchSpec:
     bindings: tuple[tuple[str, Expr], ...]
     index_bits: int | None
     max_instances: int
+    canonical_boolean_storage: bool = False
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,7 @@ def _launches(
     bits: int | None,
     limits: Limits,
     external: bool,
+    canonical_boolean_storage: bool = False,
 ) -> tuple[LaunchSpec, ...]:
     result: list[LaunchSpec] = []
     for raw in array(value):
@@ -287,6 +289,7 @@ def _launches(
                 bindings,
                 bits,
                 limits.max_instances,
+                canonical_boolean_storage,
             )
         )
     if not result or [x.step for x in result] != sorted(x.step for x in result):
@@ -304,7 +307,10 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
     meta = obj(top["metadata"], "pair_id semantic_mode limits", "target partition llm")
     if meta["semantic_mode"] != "abstract_float":
         raise InputError("INVALID_PAIRSPEC", "only abstract_float is defined")
-    target = obj(meta.get("target", {}), "", "index_bits")
+    target = obj(meta.get("target", {}), "", "index_bits boolean_storage")
+    boolean_storage = target.get("boolean_storage")
+    if boolean_storage not in (None, "canonical_i8"):
+        raise InputError("INVALID_PAIRSPEC", "boolean_storage must be canonical_i8")
     bits = integer(target["index_bits"]) if "index_bits" in target else None
     if bits is not None and bits not in (32, 64):
         raise InputError("INVALID_PAIRSPEC", "index_bits must be 32 or 64")
@@ -371,6 +377,14 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
     bindings = _bindings(pred["bindings"], symbols)
     symbols.update(bindings)
     predicates: list[Predicate] = []
+    if boolean_storage == "canonical_i8":
+        predicates.append(
+            Predicate(
+                "target.boolean_storage",
+                "representation",
+                "Boolean storage bytes are exactly 0 or 1; byte reinterpretation preserves this encoding.",
+            )
+        )
     for parameter in params:
         expr = Expr(
             "and",
@@ -412,10 +426,26 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
         predicates.append(Predicate("disjoint." + ".".join(group), "disjoint", ",".join(group)))
     programs = obj(top["programs"], "lhs rhs")
     lhs = _launches(
-        programs["lhs"], "lhs", path.parent, roles, symbols, bits, limits, allow_external
+        programs["lhs"],
+        "lhs",
+        path.parent,
+        roles,
+        symbols,
+        bits,
+        limits,
+        allow_external,
+        boolean_storage == "canonical_i8",
     )
     rhs = _launches(
-        programs["rhs"], "rhs", path.parent, roles, symbols, bits, limits, allow_external
+        programs["rhs"],
+        "rhs",
+        path.parent,
+        roles,
+        symbols,
+        bits,
+        limits,
+        allow_external,
+        boolean_storage == "canonical_i8",
     )
     if len({x.id for x in lhs + rhs}) != len(lhs + rhs):
         raise InputError("INVALID_PAIRSPEC", "launch ids must be globally unique")

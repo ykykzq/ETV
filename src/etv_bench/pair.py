@@ -72,6 +72,7 @@ def _memory_slots(function: dict[str, Any]) -> tuple[list[int], list[int], int]:
             "tt.broadcast",
             "tt.expand_dims",
             "tt.reshape",
+            "tt.bitcast",
         ):
             raise ValueError("pointer provenance is not a unique argument")
         return slot(operation["operands"][0]["id"])
@@ -138,13 +139,20 @@ def pair_capture(capture_path: Path, command: list[str]) -> Path:
             elif runtime["kind"] == "float":
                 bindings[name] = {"constant": runtime["value"], "type": "abstract_float"}
             elif runtime["kind"] == "buffer":
-                if runtime.get("dtype") not in (
-                    "torch.float16",
-                    "torch.bfloat16",
-                    "torch.float32",
-                    "torch.float64",
-                ):
-                    diagnostics.append("nonfloat memory requires review")
+                element = {
+                    "torch.float16": "abstract_float",
+                    "torch.bfloat16": "abstract_float",
+                    "torch.float32": "abstract_float",
+                    "torch.float64": "abstract_float",
+                    "torch.bool": "bool",
+                    "torch.int8": "i8",
+                    "torch.int16": "i16",
+                    "torch.int32": "i32",
+                    "torch.int64": "i64",
+                }.get(runtime.get("dtype"))
+                if element is None:
+                    diagnostics.append("unsupported memory element type")
+                    continue
                 role = storage_roles.get((side, runtime["storage_id"]))
                 if role is None:
                     diagnostics.append("external input lacks a unique declared storage role")
@@ -154,7 +162,10 @@ def pair_capture(capture_path: Path, command: list[str]) -> Path:
                     continue
                 abi[role] = {"kind": "block", "name": name, "offset": runtime["offset"]}
                 slot_roles[slot["slot"]] = role
-                roles[role] = {"kind": "buffer", "element": "abstract_float"}
+                role_type = {"kind": "buffer", "element": element}
+                if role in roles and roles[role] != role_type:
+                    diagnostics.append("storage role has inconsistent element types")
+                roles[role] = role_type
             else:
                 diagnostics.append("noninteger scalar requires explicit reviewed ABI")
             audit.append(
@@ -218,6 +229,10 @@ def pair_capture(capture_path: Path, command: list[str]) -> Path:
         },
         "rewrites": [],
     }
+    if any(role["element"] == "bool" for role in roles.values()):
+        # Representation premise, not a fact established by launch capture.
+        # It is surfaced in the verifier report alongside the ABI premises.
+        pair["metadata"]["target"]["boolean_storage"] = "canonical_i8"
     # Captured allocation identities establish separation premises, not proved facts.
     identities_by_role: dict[str, set[str]] = {}
     for (_, identity), role in storage_roles.items():

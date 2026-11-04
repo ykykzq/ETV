@@ -127,6 +127,8 @@ def builtin_rules(roots: tuple[RootPair, ...]) -> tuple[Rule, ...]:
     candidates = [
         ("fadd_commute", term("fadd", x, y), term("fadd", y, x)),
         ("fmul_commute", term("fmul", x, y), term("fmul", y, x)),
+        ("fmax_commute", term("fmax", x, y), term("fmax", y, x)),
+        ("fmin_commute", term("fmin", x, y), term("fmin", y, x)),
         (
             "fadd_associate",
             term("fadd", term("fadd", x, y), z),
@@ -141,7 +143,32 @@ def builtin_rules(roots: tuple[RootPair, ...]) -> tuple[Rule, ...]:
         ("fmul_one", term("fmul", x, const(1, FLOAT)), x),
         ("fsub_zero", term("fsub", x, const(0, FLOAT)), x),
         ("fma_expand", term("fma", x, y, z), term("fadd", term("fmul", x, y), z)),
+        ("fmax_select", term("fmax", x, y), term("select", Expr("gt", BOOL, (x, y)), x, y)),
+        ("fmin_select", term("fmin", x, y), term("select", Expr("lt", BOOL, (x, y)), x, y)),
     ]
+    p = Expr("pvar", BOOL, attrs=(("name", "p"),))
+    candidates.extend(
+        [
+            ("bool_or_false", Expr("or", BOOL, (p, const(False, BOOL))), p),
+            ("bool_false_or", Expr("or", BOOL, (const(False, BOOL), p)), p),
+            ("bool_and_true", Expr("and", BOOL, (p, const(True, BOOL))), p),
+            ("bool_true_and", Expr("and", BOOL, (const(True, BOOL), p)), p),
+            ("float_eq_reflexive", Expr("eq", BOOL, (x, x)), const(True, BOOL)),
+            ("float_ne_reflexive", Expr("ne", BOOL, (x, x)), const(False, BOOL)),
+            ("select_true", term("select", const(True, BOOL), x, y), x),
+            ("select_false", term("select", const(False, BOOL), x, y), y),
+            (
+                "select_gt_reverse",
+                term("select", Expr("gt", BOOL, (x, y)), x, y),
+                term("select", Expr("lt", BOOL, (y, x)), x, y),
+            ),
+            (
+                "select_le_complement",
+                term("select", Expr("le", BOOL, (x, y)), z, x),
+                term("select", Expr("gt", BOOL, (x, y)), x, z),
+            ),
+        ]
+    )
     casts = sorted(
         {
             (e.op, e.attrs)
@@ -154,6 +181,29 @@ def builtin_rules(roots: tuple[RootPair, ...]) -> tuple[Rule, ...]:
     )
     for index, (op, attrs) in enumerate(casts):
         candidates.append((f"{op}.{index}", Expr(op, FLOAT, (x,), attrs), x))
+    # Abstract memory leaves into independent typed variables. These are only
+    # candidates: admit_candidates must prove universal equality AND equal
+    # definedness in Z3 before any instance enters egglog.
+    seen: set[tuple[Expr, Expr]] = set()
+    for root in roots:
+        leaves: dict[Expr, Expr] = {}
+
+        def abstract(expr: Expr) -> Expr:
+            if expr.op in ("var", "read", "input"):
+                if expr not in leaves:
+                    leaves[expr] = Expr("pvar", expr.type, attrs=(("name", f"v{len(leaves)}"),))
+                return leaves[expr]
+            return Expr(expr.op, expr.type, tuple(abstract(a) for a in expr.args), expr.attrs)
+
+        if root.lhs == root.rhs:
+            continue
+        left, right = abstract(root.lhs), abstract(root.rhs)
+        if left.op == "pvar" or (left, right) in seen:
+            continue
+        seen.add((left, right))
+        candidates.append((f"observation_candidate.{len(seen)}", left, right))
+        if len(seen) >= 16:
+            break
     return tuple(
         Rule("builtin." + name, "algebraic", lhs, rhs, (), "builtin", "")
         for name, lhs, rhs in candidates

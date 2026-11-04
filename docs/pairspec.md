@@ -24,7 +24,7 @@ writes, must be declared.
 ABI maps logical roles to physical arguments `arg0`, `arg1`, etc. A physical
 argument cannot have multiple endpoints or also have a binding. Roles declare
 `kind: buffer|scalar` and `element: abstract_float|bool|iN|index`; modeled memory
-is floating point only. Endpoint examples:
+supports floating point, boolean and finite integer elements. Endpoint examples:
 
 ```json
 {
@@ -41,6 +41,11 @@ blocks that could alias writes. Store roles must match their pointer storage.
 Bindings are integer expressions keyed by logical names or physical argument names.
 Cycles and shadowing are rejected. Bind runtime integers explicitly to establish
 their fixed or bounded symbolic domains.
+
+Physical launch bindings also accept exact finite real constants, for example
+`"arg3": {"constant": "13421773/134217728", "type": "abstract_float"}`.
+Runtime Python floats are first rounded to the recorded fp32/fp64 scalar ABI.
+Shape/configuration expressions and global bindings remain integer/boolean expressions.
 
 ## Expressions and Premises
 
@@ -87,6 +92,12 @@ Required positive limits are `smt_timeout_ms`, `egraph_timeout_ms`, `max_iterati
 `max_enodes`. Optional `max_instances` defaults to 100000 and bounds static shapes
 and complete enumeration. Exhaustion is `UNKNOWN(RESOURCE_LIMIT)`, never sampling.
 `target.index_bits` is 32 or 64, required for actual index casts.
+
+Optional `target.boolean_storage: "canonical_i8"` declares that boolean storage
+bytes are exactly 0 or 1. This enables loads through a bool-to-byte pointer cast
+and is recorded as the supplied premise `target.boolean_storage`; it is not a
+fact established about host memory. Other values are rejected. Benchmark pairing
+adds this premise when a capture contains boolean memory roles.
 
 Partition options are `enabled`, `provider` (`none`, `deterministic`, `llm`) and
 `max_parts`. LLM defaults to disabled; enabling requires `provider: openai_compatible`,

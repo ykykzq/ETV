@@ -45,3 +45,23 @@ def test_registry_is_local_to_run(tmp_path):
     rules = admit_rules(spec, RootPair(lhs, x, const(0)))
     assert saturate(lhs, x, rules, Limits()).merged == (True,)
     assert saturate(lhs, x, RuleRegistry((), ()), Limits()).merged == (False,)
+
+
+def test_observation_candidates_are_proved_not_trusted(tmp_path):
+    from etv.ir import BOOL, Type
+
+    spec = parse_pair_spec(write(tmp_path, minimal(tmp_path)))
+    p = var("p", BOOL)
+    lhs = Expr("sitofp", FLOAT, (Expr("extui", Type("int", 8), (p,)),))
+    rhs = Expr("select", FLOAT, (p, const(1, FLOAT), const(0, FLOAT)))
+    rules = admit_rules(spec, RootPair(lhs, rhs, const(0)))
+    candidates = [f for f in rules.facts if "observation_candidate" in f.id]
+    assert candidates and all(f.admission == "formal" for f in candidates)
+    assert saturate(lhs, rhs, rules, Limits()).merged == (True,)
+    wrong = Expr("select", FLOAT, (p, const(2, FLOAT), const(0, FLOAT)))
+    bad = admit_rules(spec, RootPair(lhs, wrong, const(0)))
+    assert all(f.admission == "rejected" for f in bad.facts if "observation_candidate" in f.id)
+    assert saturate(lhs, wrong, bad, Limits()).merged == (False,)
+    x = var("x", FLOAT)
+    partial = admit_rules(spec, RootPair(Expr("fdiv", FLOAT, (x, x)), const(1, FLOAT), const(0)))
+    assert all(f.admission == "rejected" for f in partial.facts if "observation_candidate" in f.id)

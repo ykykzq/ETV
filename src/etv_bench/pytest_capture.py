@@ -93,10 +93,17 @@ def pytest_collection_modifyitems(config, items):
         )
     selection = config.getoption("--etv-selection")
     if selection:
-        requested = set(json.loads(selection.read_text())["selected"])
+        frozen = json.loads(selection.read_text())
+        requested = set(frozen["selected"])
         found = {item.nodeid for item in items} & requested
         if found != requested:
             raise pytest.UsageError("frozen node IDs missing: " + repr(sorted(requested - found)))
+        expected = {r["nodeid"]: r["parameters"] for r in frozen.get("all_cases", [])}
+        for record in records:
+            if record["nodeid"] in requested and record["parameters"] != expected.get(
+                record["nodeid"]
+            ):
+                raise pytest.UsageError("frozen parameters differ: " + record["nodeid"])
         deselected = [item for item in items if item.nodeid not in requested]
         items[:] = [item for item in items if item.nodeid in requested]
         config.hook.pytest_deselected(items=deselected)
@@ -109,9 +116,12 @@ def clone_arguments(arguments):
 
     def clone(value):
         if isinstance(value, torch.Tensor):
-            if id(value) not in memo:
-                memo[id(value)] = value.detach().clone(memory_format=torch.preserve_format)
-            return memo[id(value)]
+            storage = value.untyped_storage()
+            key = (str(value.device), storage.data_ptr(), value.dtype, storage.nbytes())
+            if key not in memo:
+                size = storage.nbytes() // value.element_size()
+                memo[key] = value.detach().as_strided((size,), (1,), 0).clone()
+            return memo[key].as_strided(value.shape, value.stride(), value.storage_offset())
         if isinstance(value, tuple):
             return tuple(clone(v) for v in value)
         if isinstance(value, list):
@@ -144,9 +154,11 @@ def tensor_inputs(arguments):
     return result
 
 
-def reference(name):
+def reference(name, arguments):
     import torch
 
+    if arguments.get("out") is None and hasattr(torch.nn.functional, name):
+        return getattr(torch.nn.functional, name)
     if hasattr(torch, name):
         return getattr(torch, name)
     if hasattr(torch.nn.functional, name):
@@ -162,13 +174,24 @@ def capture_call(directory, nodeid, function, arguments):
     try:
         if arguments.get("inplace", False):
             raise ValueError("in-place calls require an explicit alias contract")
-        expected = reference(function.__name__)
+        expected = reference(function.__name__, arguments)
+        # Static CUDA launchers discard the CompiledKernel/TTIR handle. Keep the
+        # ordinary Triton launcher for observable capture of the same compiled IR.
+        import torch._inductor.config
+
+        torch._inductor.config.use_static_cuda_launcher = False
+        status["capture_configuration"] = {"use_static_cuda_launcher": False}
         # A copied argument set preserves input values from before the upstream call.
         inputs = clone_arguments(arguments)
         capture = Capture(directory)
         capture.inputs(tensor_inputs(inputs))
-        compiled = torch.compile(expected, fullgraph=True)
-        compiled(**clone_arguments(inputs))
+        reference_inputs = {k: v for k, v in inputs.items() if k != "out" or v is not None}
+
+        def invoke_reference(**kwargs):
+            return expected(**kwargs)
+
+        compiled = torch.compile(invoke_reference, fullgraph=True)
+        compiled(**clone_arguments(reference_inputs))
         torch.cuda.synchronize()
         with capture.side("lhs"):
             lhs = function(**inputs)
@@ -176,7 +199,7 @@ def capture_call(directory, nodeid, function, arguments):
             raise ValueError("multiple/non-tensor outputs require separate observations")
         capture.outputs("lhs", {"Output": lhs})
         with capture.side("rhs"):
-            rhs = compiled(**inputs)
+            rhs = compiled(**reference_inputs)
         if not isinstance(rhs, torch.Tensor):
             raise ValueError("multiple/non-tensor reference outputs")
         capture.outputs("rhs", {"Output": rhs})
