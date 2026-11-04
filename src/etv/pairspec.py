@@ -1,11 +1,12 @@
 """Strict v3 contracts. Natural-language assumptions never enter the proof."""
 
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Literal, cast
 
 from .errors import InputError
-from .ir import BOOL, INDEX, Expr, Type, const, parse_type, var
+from .ir import BOOL, FLOAT, INDEX, Expr, Type, const, parse_type, var
 from .jsonio import (
     JSON,
     array,
@@ -177,7 +178,9 @@ def config_expr(value: JSON, symbols: dict[str, Expr]) -> Expr:
     return Expr(op, typ, args)
 
 
-def _bindings(value: JSON, symbols: dict[str, Expr]) -> tuple[tuple[str, Expr], ...]:
+def _bindings(
+    value: JSON, symbols: dict[str, Expr], *, scalar_constants: bool = False
+) -> tuple[tuple[str, Expr], ...]:
     pending = dict(mapping(value))
     result: dict[str, Expr] = {}
     if pending.keys() & symbols.keys():
@@ -185,6 +188,19 @@ def _bindings(value: JSON, symbols: dict[str, Expr]) -> tuple[tuple[str, Expr], 
     while pending:
         progressed = False
         for name, raw in tuple(sorted(pending.items())):
+            if scalar_constants and isinstance(raw, dict) and "constant" in raw:
+                node = obj(raw, "constant type")
+                if node["type"] != "abstract_float":
+                    raise InputError(
+                        "INVALID_PAIRSPEC", "scalar constant type must be abstract_float"
+                    )
+                try:
+                    result[name] = const(Fraction(string(node["constant"])), FLOAT)
+                except (ValueError, ZeroDivisionError) as exc:
+                    raise InputError("INVALID_PAIRSPEC", "invalid finite scalar constant") from exc
+                del pending[name]
+                progressed = True
+                continue
             try:
                 expr = config_expr(raw, {**symbols, **result})
             except InputError as exc:
@@ -216,7 +232,7 @@ def _launches(
     result: list[LaunchSpec] = []
     for raw in array(value):
         item = obj(raw, "id file function step grid stores abi bindings")
-        bindings = _bindings(item["bindings"], symbols)
+        bindings = _bindings(item["bindings"], symbols, scalar_constants=True)
         local = {**symbols, **dict(bindings)}
         programs = config_expr(obj(item["grid"], "programs")["programs"], local)
         if programs.type != INDEX:

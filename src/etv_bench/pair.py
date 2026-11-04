@@ -135,6 +135,8 @@ def pair_capture(capture_path: Path, command: list[str]) -> Path:
             runtime = slot["runtime"]
             if runtime["kind"] == "integer":
                 bindings[name] = runtime["value"]
+            elif runtime["kind"] == "float":
+                bindings[name] = {"constant": runtime["value"], "type": "abstract_float"}
             elif runtime["kind"] == "buffer":
                 if runtime.get("dtype") not in (
                     "torch.float16",

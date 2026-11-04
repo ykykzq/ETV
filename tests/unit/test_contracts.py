@@ -94,3 +94,20 @@ def test_duplicate_json_key(tmp_path):
     path.write_text('{"format": "a", "format": "b"}')
     with pytest.raises(InputError, match="duplicate"):
         parse_pair_spec(path)
+
+
+def test_typed_launch_constant_is_exact_and_not_a_grid_expression(tmp_path):
+    from fractions import Fraction
+    from etv.ir import FLOAT
+
+    data = minimal(tmp_path)
+    data["programs"]["lhs"][0]["bindings"]["arg1"] = {
+        "constant": "13421773/134217728",
+        "type": "abstract_float",
+    }
+    spec = parse_pair_spec(write(tmp_path, data))
+    bound = dict(spec.lhs[0].bindings)["arg1"]
+    assert bound.type == FLOAT and bound.attr("value") == Fraction(13421773, 134217728)
+    data["programs"]["lhs"][0]["grid"]["programs"] = {"var": "arg1"}
+    with pytest.raises(InputError):
+        parse_pair_spec(write(tmp_path, data))

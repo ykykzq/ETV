@@ -41,6 +41,18 @@ def test_runtime_one_is_not_a_constexpr(tmp_path):
     assert capture.launches[0]["sha256"]
 
 
+def test_runtime_float_is_rounded_to_physical_abi(tmp_path):
+    from fractions import Fraction
+    import struct
+
+    capture = Capture(tmp_path)
+    value = 0.1
+    rounded = struct.unpack("f", struct.pack("f", value))[0]
+    assert capture.argument(value, "fp32")["value"] == str(Fraction(rounded))
+    assert capture.argument(value, "fp64")["value"] == str(Fraction(value))
+    assert capture.argument(float("inf"), "fp32")["kind"] == "unsupported"
+
+
 def test_autotuning_candidates_are_excluded(tmp_path):
     capture = Capture(tmp_path)
     capture.current_side = "lhs"

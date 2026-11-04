@@ -5,9 +5,12 @@ import importlib
 import importlib.metadata
 import json
 import hashlib
+from fractions import Fraction
+import math
 from pathlib import Path
 import platform
 import sys
+import struct
 from types import FrameType
 from typing import Any, Iterator
 
@@ -25,7 +28,7 @@ class Capture:
         self.output_sizes: dict[str, int] = {}
         self.storage_refs: list[Any] = []
 
-    def argument(self, value: Any) -> dict[str, Any]:
+    def argument(self, value: Any, compiler_type: str | None = None) -> dict[str, Any]:
         if hasattr(value, "untyped_storage"):
             storage = value.untyped_storage()
             self.storage_refs.append(storage)
@@ -44,6 +47,18 @@ class Capture:
             }
         if type(value) is int:
             return {"kind": "integer", "value": value}
+        if type(value) is float and compiler_type in ("fp32", "fp64"):
+            # The launcher converts Python floats to the physical scalar ABI.
+            rounded = (
+                struct.unpack("f", struct.pack("f", value))[0] if compiler_type == "fp32" else value
+            )
+            if math.isfinite(rounded):
+                return {
+                    "kind": "float",
+                    "value": str(Fraction(rounded)),
+                    "compiler_type": compiler_type,
+                    "python_value": value,
+                }
         return {"kind": "unsupported", "python_type": type(value).__name__}
 
     def inputs(self, values: dict[str, Any]) -> None:
@@ -112,7 +127,7 @@ class Capture:
                         "slot": len(slots),
                         "source_name": source_name,
                         "compiler_type": compiler_type,
-                        "runtime": self.argument(bound[source_name]),
+                        "runtime": self.argument(bound[source_name], compiler_type),
                     }
                 )
             ordinal = sum(launch["side"] == self.current_side for launch in self.launches)

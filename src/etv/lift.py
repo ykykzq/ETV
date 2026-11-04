@@ -245,7 +245,13 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
         else:
             argument_type = scalar_type(value.type)
             if name in bindings:
-                term = Expr("coordinate", argument_type, (bindings[name],))
+                bound = bindings[name]
+                if bound.type == FLOAT and argument_type == FLOAT:
+                    term = bound
+                elif bound.type == INDEX and argument_type.kind in ("int", "index"):
+                    term = Expr("coordinate", argument_type, (bound,))
+                else:
+                    raise InputError("INVALID_PAIRSPEC", f"binding type disagrees with {name}")
             elif ep is not None and ep.kind == "scalar":
                 term = var("scalar." + ep.role, argument_type)
             else:
