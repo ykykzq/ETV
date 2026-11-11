@@ -429,7 +429,7 @@ def test_isnan_is_false_in_finite_real_semantics(tmp_path, symbol):
     kernel = lift_text(
         tmp_path, text, (Endpoint("Input", "scalar", "arg0"), Endpoint("Output", "block", "arg1"))
     )
-    assert evaluate(kernel.stores[0].value) == 0
+    assert evaluate(kernel.stores[0].value, {"scalar.Input": Fraction(2)}) == 0
 
 
 def test_boolean_byte_read_requires_explicit_representation(tmp_path):
@@ -460,3 +460,209 @@ def test_signed_boolean_minmax(tmp_path, operation, expected):
     }} }}"""
     kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
     assert evaluate(kernel.stores[0].value) is expected
+
+
+@pytest.mark.parametrize(
+    "typ,positive,negative",
+    [
+        ("f16", "0x7C00", "0xFC00"),
+        ("bf16", "0x7F80", "0xFF80"),
+        ("f32", "0x7F800000", "0xFF800000"),
+        ("f64", "0x7FF0000000000000", "0xFFF0000000000000"),
+    ],
+)
+@pytest.mark.parametrize("negative_sign", [False, True])
+@pytest.mark.parametrize("dense", [False, True])
+def test_official_apfloat_infinity_scalar_and_dense(
+    tmp_path, typ, positive, negative, negative_sign, dense
+):
+    literal = negative if negative_sign else positive
+    literal_type = f"tensor<4x{typ}>" if dense else typ
+    literal_value = f"dense<{literal}>" if dense else literal
+    pointer_code = (
+        f"%p = tt.splat %out : !tt.ptr<{typ}> -> tensor<4x!tt.ptr<{typ}>>" if dense else ""
+    )
+    pointer = "%p" if dense else "%out"
+    pointer_type = f"tensor<4x!tt.ptr<{typ}>>" if dense else f"!tt.ptr<{typ}>"
+    text = f"""module {{ tt.func @kernel(%out: !tt.ptr<{typ}>) {{
+      %v = arith.constant {literal_value} : {literal_type}
+      {pointer_code}
+      tt.store {pointer}, %v : {pointer_type}
+      tt.return
+    }} }}"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    assert evaluate(kernel.stores[0].value) == ("-inf" if negative_sign else "+inf")
+
+
+def test_official_dense_mixed_infinities_keep_lane_order(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<f32>) {
+      %v = arith.constant dense<[0.0, 0x7F800000, 0xFF800000, 2.0]> : tensor<4xf32>
+      %p = tt.splat %out : !tt.ptr<f32> -> tensor<4x!tt.ptr<f32>>
+      tt.store %p, %v : tensor<4x!tt.ptr<f32>>
+      tt.return
+    } }"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    assert [evaluate(kernel.stores[0].value, {"__lane": i}) for i in range(4)] == [
+        0,
+        "+inf",
+        "-inf",
+        2,
+    ]
+
+
+def test_official_nan_has_explicit_unsupported_reason(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<f32>) {
+      %v = arith.constant 0x7FC00000 : f32
+      tt.store %out, %v : !tt.ptr<f32>
+      tt.return
+    } }"""
+    with pytest.raises(ETVError) as error:
+        lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    assert error.value.reason == "TTIR_NAN_CONSTANT_UNSUPPORTED"
+
+
+@pytest.mark.parametrize("predicate", ["ord", "uno", "false", "true"])
+def test_float_constant_predicates_keep_undefined_operands(tmp_path, predicate):
+    text = f"""module {{ tt.func @kernel(%out: !tt.ptr<i1>) {{
+      %inf = arith.constant 0x7F800000 : f32
+      %invalid = arith.subf %inf, %inf : f32
+      %v = arith.cmpf {predicate}, %invalid, %inf : f32
+      tt.store %out, %v : !tt.ptr<i1>
+      tt.return
+    }} }}"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    with pytest.raises(ETVError):
+        evaluate(kernel.stores[0].value)
+
+
+def test_isnan_keeps_undefined_operand(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<i32>) {
+      %inf = arith.constant 0x7F800000 : f32
+      %invalid = arith.subf %inf, %inf : f32
+      %v = "tt.extern_elementwise"(%invalid) <{libname = "", libpath = "", symbol = "__nv_isnanf", pure = true}> : (f32) -> i32
+      tt.store %out, %v : !tt.ptr<i32>
+      tt.return
+    } }"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    with pytest.raises(ETVError):
+        evaluate(kernel.stores[0].value)
+
+
+@pytest.mark.parametrize(
+    "symbol,typ,positive,negative",
+    [
+        ("isinff", "f32", "0x7F800000", "0xFF800000"),
+        ("isinfd", "f64", "0x7FF0000000000000", "0xFFF0000000000000"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["positive", "negative", "finite"])
+@pytest.mark.parametrize("predicate", ["eq", "ne"])
+def test_libdevice_isinf_zero_test_is_exact(
+    tmp_path, symbol, typ, positive, negative, kind, predicate
+):
+    literal = positive if kind == "positive" else negative if kind == "negative" else "3.0"
+    text = f"""module {{ tt.func @kernel(%out: !tt.ptr<i1>) {{
+      %x = arith.constant {literal} : {typ}
+      %raw = "tt.extern_elementwise"(%x) <{{libname = "", libpath = "", symbol = "__nv_{symbol}", pure = true}}> : ({typ}) -> i32
+      %zero = arith.constant 0 : i32
+      %v = arith.cmpi {predicate}, %raw, %zero : i32
+      tt.store %out, %v : !tt.ptr<i1>
+      tt.return
+    }} }}"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    expected = kind != "finite"
+    assert evaluate(kernel.stores[0].value) is (expected if predicate == "ne" else not expected)
+
+
+@pytest.mark.parametrize("extra", ["raw_store", "arithmetic", "ordered_compare", "compare_one"])
+def test_libdevice_isinf_raw_nonzero_is_not_assumed_one(tmp_path, extra):
+    extra_use = {
+        "raw_store": "tt.store %rawout, %raw : !tt.ptr<i32>",
+        "arithmetic": "%unused = arith.addi %raw, %zero : i32",
+        "ordered_compare": "%unused = arith.cmpi sgt, %raw, %zero : i32",
+        "compare_one": "%one = arith.constant 1 : i32\n %unused = arith.cmpi eq, %raw, %one : i32",
+    }[extra]
+    text = f"""module {{ tt.func @kernel(%out: !tt.ptr<i1>, %rawout: !tt.ptr<i32>) {{
+      %x = arith.constant 0x7F800000 : f32
+      %raw = "tt.extern_elementwise"(%x) <{{libname = "", libpath = "", symbol = "__nv_isinff", pure = true}}> : (f32) -> i32
+      %zero = arith.constant 0 : i32
+      %v = arith.cmpi ne, %raw, %zero : i32
+      {extra_use}
+      tt.store %out, %v : !tt.ptr<i1>
+      tt.return
+    }} }}"""
+    with pytest.raises(ETVError, match="exclusively zero/nonzero uses"):
+        lift_text(
+            tmp_path, text, (Endpoint("Output", "block", "arg0"), Endpoint("Raw", "block", "arg1"))
+        )
+
+
+def test_libdevice_isinf_zero_test_keeps_invalid_argument(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<i1>) {
+      %inf = arith.constant 0x7F800000 : f32
+      %x = arith.subf %inf, %inf : f32
+      %raw = "tt.extern_elementwise"(%x) <{libname = "", libpath = "", symbol = "__nv_isinff", pure = true}> : (f32) -> i32
+      %zero = arith.constant 0 : i32
+      %v = arith.cmpi ne, %raw, %zero : i32
+      tt.store %out, %v : !tt.ptr<i1>
+      tt.return
+    } }"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    with pytest.raises(ETVError):
+        evaluate(kernel.stores[0].value)
+
+
+def test_scalar_reduction_splat_is_invariant_across_destination_lanes(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<f32>) {
+      %v = arith.constant dense<[1.0, 7.0, 3.0, 4.0]> : tensor<4xf32>
+      %pid = tt.get_program_id x : i32
+      %pidf = arith.sitofp %pid : i32 to f32
+      %pids = tt.splat %pidf : f32 -> tensor<4xf32>
+      %input = arith.addf %v, %pids : tensor<4xf32>
+      %maximum = "tt.reduce"(%input) <{axis = 0 : i32}> ({
+      ^bb0(%a: f32, %b: f32):
+        %m = arith.maxnumf %a, %b : f32
+        tt.reduce.return %m : f32
+      }) : (tensor<4xf32>) -> f32
+      %s = tt.splat %maximum : f32 -> tensor<4xf32>
+      %p = tt.splat %out : !tt.ptr<f32> -> tensor<4x!tt.ptr<f32>>
+      tt.store %p, %s : tensor<4x!tt.ptr<f32>>
+      tt.return
+    } }"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    for pid in (0, 1):
+        assert [
+            evaluate(kernel.stores[0].value, {"__lane": i, "__pid": pid}) for i in range(4)
+        ] == [7 + pid] * 4
+    second = text.replace(
+        "%p = tt.splat %out",
+        """%sum = "tt.reduce"(%s) <{axis = 0 : i32}> ({
+        ^bb0(%a: f32, %b: f32):
+          %r = arith.addf %a, %b : f32
+          tt.reduce.return %r : f32
+        }) : (tensor<4xf32>) -> f32
+        %s2 = tt.splat %sum : f32 -> tensor<4xf32>
+        %p = tt.splat %out""",
+    ).replace("tt.store %p, %s :", "tt.store %p, %s2 :")
+    repeated = lift_text(tmp_path, second, (Endpoint("Output", "block", "arg0"),))
+    for pid in (0, 1):
+        assert [
+            evaluate(repeated.stores[0].value, {"__lane": i, "__pid": pid}) for i in range(4)
+        ] == [4 * (7 + pid)] * 4
+
+
+@pytest.mark.parametrize("flags", ["none", "ninf", "fast"])
+def test_nonzero_fastmath_is_not_ignored_with_infinity_model(tmp_path, flags):
+    text = f"""module {{ tt.func @kernel(%arg0: f32, %arg1: !tt.ptr<f32>) {{
+      %value = arith.addf %arg0, %arg0 fastmath<{flags}> : f32
+      tt.store %arg1, %value : !tt.ptr<f32>
+      tt.return
+    }} }}"""
+    abi = (Endpoint("Input", "scalar", "arg0"), Endpoint("Output", "block", "arg1"))
+    if flags == "none":
+        assert lift_text(tmp_path, text, abi).stores[0].value.op == "fadd"
+    else:
+        with pytest.raises(ETVError) as error:
+            lift_text(tmp_path, text, abi)
+        assert error.value.reason == "TTIR_OP_UNSUPPORTED"
+        assert error.value.detail == "nonzero fastmath flags"

@@ -113,20 +113,30 @@ def _value(raw: dict[str, Any]) -> Value:
     return Value(raw["id"], _type(raw["type"]))
 
 
+def _float_value(raw: Any) -> Fraction | str | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        # Tagged by the native adapter using APFloat classification, not by
+        # matching an assembly spelling. NaN is retained for an explicit error.
+        special = raw.get("special")
+        if special in ("+inf", "-inf", "nan") and len(raw) == 1:
+            return str(special)
+        raise UnsupportedSemantics("TTIR_CONSTANT_UNSUPPORTED", "invalid APFloat tag")
+    return Fraction(raw)
+
+
 def _attribute(name: str, raw: dict[str, Any]) -> Attribute:
     kind = raw["kind"]
     values: tuple[int | str | Fraction | None, ...] = ()
     if kind == "integer":
         values = (int(raw["value"]),)
     elif kind == "float":
-        values = (Fraction(raw["value"]) if raw["value"] is not None else None,)
+        values = (_float_value(raw["value"]),)
     elif kind == "string":
         values = (raw["value"],)
     elif kind == "dense":
-        values = tuple(
-            int(v) if isinstance(v, str) else Fraction(v) if v is not None else None
-            for v in raw["value"]
-        )
+        values = tuple(int(v) if isinstance(v, str) else _float_value(v) for v in raw["value"])
     children = (
         tuple(_attribute(str(i), v) for i, v in enumerate(raw["value"]))
         if kind == "array"

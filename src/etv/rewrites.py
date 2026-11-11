@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import lru_cache
 from pathlib import Path
 
 import z3
@@ -112,6 +113,7 @@ def parse_rule_data(
     return tuple(result)
 
 
+@lru_cache(maxsize=100000)
 def _variables(expr: Expr) -> Expr:
     if expr.op == "pvar":
         return var("rule." + str(expr.attr("name")), expr.type)
@@ -185,15 +187,71 @@ def builtin_rules(roots: tuple[RootPair, ...]) -> tuple[Rule, ...]:
     # candidates: admit_candidates must prove universal equality AND equal
     # definedness in Z3 before any instance enters egglog.
     seen: set[tuple[Expr, Expr]] = set()
+    ground_seen: set[tuple[Expr, Expr]] = set()
+    memory_seen: set[tuple[Expr, Expr]] = set()
     for root in roots:
+        # A ground rule retains each exact read/variable term. It cannot match
+        # an arbitrary floating subtree, so finite external-input semantics may
+        # be used without extending a finite-only theorem to +/-infinity.
+        if (
+            root.lhs != root.rhs
+            and (root.lhs, root.rhs) not in ground_seen
+            and len(ground_seen) < 16
+        ):
+            ground_seen.add((root.lhs, root.rhs))
+            candidates.append((f"observation_ground.{len(ground_seen)}", root.lhs, root.rhs))
+        # Keep the read constructor and logical storage role in this template.
+        # Only its address is generalized: unlike a floating pvar, a read is a
+        # finite external input under the declared model. Z3 must establish the
+        # candidate for every address before the e-graph may apply it to any
+        # lane. This avoids one concrete rule per output without introducing a
+        # finite-only theorem that could match an arbitrary infinite subtree.
+        addresses: dict[Expr, Expr] = {}
+        memory_cache: dict[Expr, Expr] = {}
+        reserved_names = {
+            str(e.attr("key" if e.op == "input" else "name"))
+            for expression in (root.lhs, root.rhs)
+            for e in walk(expression)
+            if e.op in ("var", "input")
+        }
+
+        def memory_template(expr: Expr) -> Expr:
+            if expr in memory_cache:
+                return memory_cache[expr]
+            if expr.op == "read":
+                address = expr.args[0]
+                if address not in addresses:
+                    name = f"address{len(addresses)}"
+                    while "rule." + name in reserved_names:
+                        name += "_"
+                    addresses[address] = Expr("pvar", address.type, attrs=(("name", name),))
+                result = Expr("read", expr.type, (addresses[address],), expr.attrs)
+            else:
+                result = Expr(
+                    expr.op, expr.type, tuple(memory_template(a) for a in expr.args), expr.attrs
+                )
+            memory_cache[expr] = result
+            return result
+
+        if root.lhs != root.rhs and len(memory_seen) < 16:
+            left, right = memory_template(root.lhs), memory_template(root.rhs)
+            if addresses and (left, right) not in memory_seen:
+                memory_seen.add((left, right))
+                candidates.append((f"observation_memory.{len(memory_seen)}", left, right))
         leaves: dict[Expr, Expr] = {}
+        abstract_cache: dict[Expr, Expr] = {}
 
         def abstract(expr: Expr) -> Expr:
+            if expr in abstract_cache:
+                return abstract_cache[expr]
             if expr.op in ("var", "read", "input"):
                 if expr not in leaves:
                     leaves[expr] = Expr("pvar", expr.type, attrs=(("name", f"v{len(leaves)}"),))
-                return leaves[expr]
-            return Expr(expr.op, expr.type, tuple(abstract(a) for a in expr.args), expr.attrs)
+                result = leaves[expr]
+            else:
+                result = Expr(expr.op, expr.type, tuple(abstract(a) for a in expr.args), expr.attrs)
+            abstract_cache[expr] = result
+            return result
 
         if root.lhs == root.rhs:
             continue
@@ -225,7 +283,10 @@ def admit_candidates(candidates: tuple[Rule, ...], spec: PairSpec) -> RuleRegist
         if rule.generated or (rule.kind in ("relation", "layout") and rule.requires):
             status, validator = "admitted_unverified", "trusted"
         elif rule.kind == "algebraic":
-            encoder = Encoder(spec.index_bits)
+            has_patterns = any(
+                e.op == "pvar" for expression in (rule.lhs, rule.rhs) for e in walk(expression)
+            )
+            encoder = Encoder(spec.index_bits, extended_float_variables=has_patterns)
             lhs, rhs = _variables(rule.lhs), _variables(rule.rhs)
             try:
                 left, right = encoder.encode(lhs), encoder.encode(rhs)

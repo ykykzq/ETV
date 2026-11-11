@@ -4,10 +4,21 @@
 premises and `abstract_float` semantics. It does not establish arbitrary host or
 bit-level GPU behavior.
 
-Floats denote mathematical reals. Constants are exact rationals from official IR
-attributes. Real comparisons/min/max exclude NaN, infinity and signed-zero
-distinctions. Float conversions keep source/target metadata and are eliminated
-only by admitted rules for this abstraction. There is no rounding/tolerance model.
+Floating intermediates denote extended mathematical reals: finite reals, positive
+infinity and negative infinity are distinct tagged values. Finite constants remain
+exact rationals from official IR attributes; infinity is never replaced by a large
+finite sentinel. External floating inputs remain finite mathematical reals, which
+is explicitly reported as a model premise. This extension does not establish
+correctness for arbitrary NaN/infinity input buffers.
+
+Comparisons, min/max, selection and supported arithmetic preserve infinity tags.
+NaN is not a value in this model: reachable operations such as infinity minus the
+same infinity or zero times infinity must fail the definedness obligation. Rules
+that can match floating intermediates are checked over the extended domain; a rule
+proved only for finite real variables cannot silently be applied to infinity.
+Float conversions keep source/target metadata. Rounding, signed-zero distinctions,
+overflow from finite IEEE inputs, NaN payloads and numerical tolerance are outside
+the abstraction. See `infinity-model.md` for the implemented operation boundaries.
 
 Signless `iN` uses a signed finite-width interpretation; add/sub/mul wrap modulo
 width. Signed division/remainder truncate toward zero and exclude zero divisors
@@ -25,7 +36,12 @@ External buffers are total maps over nonnegative offsets. Allocation sizes/devic
 pointer validity are host premises, not inferred bounds. Internal/output storage
 starts uninitialized and becomes defined through prior steps. Explicit separation
 is required between distinct roles interacting with writers. In-place aliasing is
-outside this subset.
+outside this subset. A role both loaded and stored in one execution step returns
+`UNKNOWN(INPLACE_MEMORY_DEPENDENCY_UNPROVED)`, including previously initialized
+internal storage and dependencies between same-step launches. Snapshot reads are
+not evidence that overlapping accesses are safe across programs or lanes. This
+conservative check may reject independent address regions until their access
+independence or ordering is proved; read-only aliases remain supported.
 
 ## Evidence Levels
 

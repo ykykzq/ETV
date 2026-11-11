@@ -46,14 +46,15 @@ def test_parameterized_add():
     assert any(p.id == "shape.product" for p in report.predicates)
 
 
-def test_same_step_reads_old_state(tmp_path):
+def test_same_step_producer_consumer_needs_explicit_ordering(tmp_path):
     shutil.copytree(ROOT / "examples/multilaunch", tmp_path / "case")
     path = tmp_path / "case/pair.json"
     spec = json.loads(path.read_text())
     spec["programs"]["rhs"][1]["step"] = 0
     path.write_text(json.dumps(spec))
     report = verify(path)
-    assert (report.status, report.reason) == ("UNKNOWN", "UNDEFINED_LOAD_REACHABLE")
+    # Sharing a step does not establish launch ordering or cross-program safety.
+    assert (report.status, report.reason) == ("UNKNOWN", "INPLACE_MEMORY_DEPENDENCY_UNPROVED")
 
 
 def test_stdout_json_and_exit_code(tmp_path):

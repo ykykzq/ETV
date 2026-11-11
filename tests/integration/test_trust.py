@@ -79,10 +79,12 @@ def test_llm_failure_falls_back_to_whole_goal(tmp_path, monkeypatch):
 )
 def test_real_multilaunch_regions_and_counts(case, components):
     report = verify(ROOT / "examples/real" / case / "pair.json")
-    # Quantile's static single-input reduction is now supported; its next
-    # unsupported feature is the non-finite padding constant.
-    reason = "TTIR_CONSTANT_UNSUPPORTED" if case == "quantile" else "TTIR_REGION_UNSUPPORTED"
+    # Quantile's reduction and infinity padding now lift; the subsequent
+    # pointer/bit reinterpretation still lies outside this abstraction.
+    reason = "TTIR_OP_UNSUPPORTED" if case == "quantile" else "TTIR_REGION_UNSUPPORTED"
     assert (report.status, report.reason) == ("UNKNOWN", reason)
+    if case == "quantile":
+        assert report.diagnostic == "unsupported pointer/bit reinterpretation"
     assert len(report.launches) == 3
     assert sum(launch.stores for launch in report.launches) == components
     first, second = report.launches[1:]

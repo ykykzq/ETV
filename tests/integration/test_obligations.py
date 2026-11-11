@@ -64,7 +64,7 @@ def test_mandatory_obligations(tmp_path, mutation, reason):
 
 @pytest.mark.parametrize(
     "mutation,reason",
-    [("output_load", "UNDEFINED_LOAD_REACHABLE"), ("no_writer", "INVALID_PAIRSPEC")],
+    [("output_load", "INPLACE_MEMORY_DEPENDENCY_UNPROVED"), ("no_writer", "INVALID_PAIRSPEC")],
 )
 def test_parameterized_state_checks(tmp_path, mutation, reason):
     path, _ = case_copy(tmp_path, "add")

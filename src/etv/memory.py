@@ -2,12 +2,14 @@
 
 from dataclasses import dataclass, replace
 from math import prod
+from typing import Callable
 
 import z3
 
 from .errors import ETVError, ResourceLimit, UnsupportedSemantics
 from .ir import (
     BOOL,
+    FLOAT,
     INDEX,
     Expr,
     ProgramPair,
@@ -70,6 +72,23 @@ class _Builder:
 
     def fact(self, name: str, detail: str = "") -> None:
         self.obligations.append(Obligation(name, "structural", "closed", self.dependencies, detail))
+
+    def observation_value(self, value: Expr, side: str) -> Expr:
+        """Encode only a final value; never change its writer, mask or address."""
+        if self.spec.observation.encoding_for_side(side) == "bool_to_numeric_01":
+            if value.type != BOOL:
+                raise _Stop("UNKNOWN", "OBSERVATION_VALUE_TYPE_MISMATCH")
+            return simplify(
+                Expr("select", FLOAT, (value, const(1, FLOAT), const(0, FLOAT))),
+                self.spec.index_bits,
+            )
+        role = self.spec.observation.role_for_side(side)
+        expected = next(
+            role_type.element for role_type in self.spec.roles if role_type.name == role
+        )
+        if value.type != expected:
+            raise _Stop("UNKNOWN", "OBSERVATION_VALUE_TYPE_MISMATCH")
+        return value
 
     def premises_valid(self) -> None:
         nonempty = query(z3.BoolVal(True), self.premises, self.spec.limits.smt_timeout_ms)
@@ -139,6 +158,48 @@ class _Builder:
             raise _Stop("UNKNOWN", "NO_ALIAS_NOT_DECLARED")
         self.fact("memory.no_alias", "declared separation covers all read/write role pairs")
 
+    def no_inplace_dependencies(self) -> None:
+        """Snapshot composition requires no unproved same-step read/write overlap.
+
+        Earlier initialization does not make an in-place update safe: another
+        program or lane may write an address before it is read. A shared logical
+        role is insufficient evidence of disjoint access regions or ordering.
+        """
+        for side, sequence in (("lhs", self.pair.lhs), ("rhs", self.pair.rhs)):
+            for index, step in enumerate(sequence.steps):
+                written = {s.storage.logical_role for kernel in step for s in kernel.stores}
+                reads: set[str] = set()
+                for kernel in step:
+                    expressions = kernel.effects + tuple(
+                        expr
+                        for store in kernel.stores
+                        for expr in (store.value, store.mask, store.offset)
+                    )
+                    for expression in expressions:
+                        for node in walk(expression):
+                            if node.op == "load":
+                                storage = node.attr("storage")
+                                assert isinstance(storage, StorageRef)
+                                reads.add(storage.logical_role)
+                overlap = reads & written
+                if overlap:
+                    self.obligations.append(
+                        Obligation(
+                            f"memory.{side}.step{index}.read_write_dependencies",
+                            "structural",
+                            "unproved",
+                            self.dependencies,
+                            "Same-step read/write storage roles: "
+                            + ", ".join(sorted(overlap))
+                            + "; cross-program/lane access independence or ordering is not proved.",
+                        )
+                    )
+                    raise _Stop("UNKNOWN", "INPLACE_MEMORY_DEPENDENCY_UNPROVED")
+        self.fact(
+            "memory.read_write_independence",
+            "No storage role is both loaded and written within any side's execution step.",
+        )
+
     def resolve_fixed(
         self,
         expr: Expr,
@@ -146,7 +207,26 @@ class _Builder:
         written: set[str],
         replacements: tuple[tuple[str, Expr], ...],
     ) -> Expr:
+        # State, written roles and lane/program bindings are fixed during this
+        # call. Cache only within that snapshot; later execution steps can read
+        # different values from the same storage and must start a fresh cache.
         expr = simplify(substitute(expr, replacements), self.spec.index_bits)
+        cache: dict[Expr, Expr] = {}
+
+        def resolve(node: Expr) -> Expr:
+            if node not in cache:
+                cache[node] = self._resolve_fixed_node(node, state, written, resolve)
+            return cache[node]
+
+        return resolve(expr)
+
+    def _resolve_fixed_node(
+        self,
+        expr: Expr,
+        state: dict[tuple[str, int], Expr],
+        written: set[str],
+        resolve: Callable[[Expr], Expr],
+    ) -> Expr:
         if expr.op == "load":
             storage = expr.attr("storage")
             assert isinstance(storage, StorageRef)
@@ -156,7 +236,7 @@ class _Builder:
             except (KeyError, UnsupportedSemantics):
                 raise _Stop("UNKNOWN", "DYNAMIC_MEMORY_ACCESS") from None
             if not enabled:
-                return self.resolve_fixed(default, state, written, ())
+                return resolve(default)
             try:
                 address = int(evaluate(offset, index_bits=self.spec.index_bits))
             except (KeyError, UnsupportedSemantics):
@@ -177,13 +257,38 @@ class _Builder:
             Expr(
                 expr.op,
                 expr.type,
-                tuple(self.resolve_fixed(a, state, written, ()) for a in expr.args),
+                tuple(resolve(a) for a in expr.args),
                 expr.attrs,
             ),
             self.spec.index_bits,
         )
 
-    def fixed_side(self, sequence: ProgramSequence, side: str, numel: int) -> dict[int, Expr]:
+    def observation_offsets(self, side: str, numel: int) -> tuple[int, ...]:
+        if not self.spec.observation.layouts:
+            return tuple(range(numel))
+        layout = self.spec.observation.layouts[0 if side == "lhs" else 1]
+        if prod(layout.shape) != numel:
+            raise _Stop("UNKNOWN", "OBSERVATION_LAYOUT_SIZE_MISMATCH")
+        offsets = tuple(
+            layout.offset
+            + sum(
+                ((index // prod(layout.shape[axis + 1 :])) % size) * layout.stride[axis]
+                for axis, size in enumerate(layout.shape)
+            )
+            for index in range(numel)
+        )
+        self.fact(
+            f"memory.{side}.observation_layout", f"{numel} logical elements projected to storage"
+        )
+        return offsets
+
+    def fixed_side(
+        self,
+        sequence: ProgramSequence,
+        side: str,
+        observed_offsets: tuple[int, ...],
+    ) -> dict[int, Expr]:
+        observed = set(observed_offsets)
         state: dict[tuple[str, int], Expr] = {}
         written = {
             s.storage.logical_role for step in sequence.steps for k in step for s in k.stores
@@ -214,7 +319,10 @@ class _Builder:
                             address = int(evaluate(offset, index_bits=self.spec.index_bits))
                             role = store.storage.logical_role
                             index = str(address)
-                            if role == self.spec.observation.role and not 0 <= address < numel:
+                            if (
+                                role == self.spec.observation.role_for_side(side)
+                                and address not in observed
+                            ):
                                 witness = Counterexample(
                                     index,
                                     (("program", str(pid)), ("lane", str(lane))),
@@ -255,14 +363,14 @@ class _Builder:
         return {
             offset: value
             for (role, offset), value in state.items()
-            if role == self.spec.observation.role
+            if role == self.spec.observation.role_for_side(side)
         }
 
     @staticmethod
     def undefined_reason(expr: Expr) -> str:
         if any(e.op == "undefined" for e in walk(expr)):
             return "UNDEFINED_LOAD_REACHABLE"
-        if any(e.op in ("fdiv", "sqrt", "rsqrt", "log", "acosh", "pow") for e in walk(expr)):
+        if any(e.type.kind == "abstract_float" for e in walk(expr)):
             return "FLOAT_DEFINEDNESS_NOT_PROVED"
         return "INTEGER_DEFINEDNESS_NOT_PROVED"
 
@@ -270,8 +378,16 @@ class _Builder:
         numel = int(evaluate(self.spec.observation.numel, index_bits=self.spec.index_bits))
         if numel > self.spec.limits.max_instances:
             raise ResourceLimit("observation element enumeration")
-        lhs = self.fixed_side(self.pair.lhs, "lhs", numel)
-        rhs = self.fixed_side(self.pair.rhs, "rhs", numel)
+        lhs_offsets = self.observation_offsets("lhs", numel)
+        rhs_offsets = self.observation_offsets("rhs", numel)
+        lhs_storage = self.fixed_side(self.pair.lhs, "lhs", lhs_offsets)
+        rhs_storage = self.fixed_side(self.pair.rhs, "rhs", rhs_offsets)
+        lhs = {
+            i: lhs_storage[offset] for i, offset in enumerate(lhs_offsets) if offset in lhs_storage
+        }
+        rhs = {
+            i: rhs_storage[offset] for i, offset in enumerate(rhs_offsets) if offset in rhs_storage
+        }
         expected = (
             set(range(numel))
             if self.spec.observation.require_full_coverage
@@ -296,7 +412,14 @@ class _Builder:
                 raise _Stop("DISPROVED", reason, witness)
         self.fact("memory.coverage", f"{len(expected)} observed elements")
         self.fact("memory.address_mask", "equal final active address domains; no duplicate writes")
-        return tuple(RootPair(lhs[i], rhs[i], const(i)) for i in sorted(expected))
+        return tuple(
+            RootPair(
+                self.observation_value(lhs[i], "lhs"),
+                self.observation_value(rhs[i], "rhs"),
+                const(i),
+            )
+            for i in sorted(expected)
+        )
 
     def symbolic_value(
         self,
@@ -376,6 +499,14 @@ class _Builder:
     def symbolic(self) -> tuple[RootPair, ...]:
         if len(self.spec.lhs) != 1 or len(self.spec.rhs) != 1:
             raise _Stop("UNKNOWN", "PARAMETERIZED_LAUNCH_DAG_UNSUPPORTED")
+        for layout in self.spec.observation.layouts:
+            if layout.offset or any(
+                size > 1 and stride != prod(layout.shape[axis + 1 :])
+                for axis, (size, stride) in enumerate(zip(layout.shape, layout.stride, strict=True))
+            ):
+                raise _Stop("UNKNOWN", "SYMBOLIC_OBSERVATION_LAYOUT_UNSUPPORTED")
+            if self.spec.observation.numel != const(prod(layout.shape)):
+                raise _Stop("UNKNOWN", "SYMBOLIC_OBSERVATION_LAYOUT_SIZE_UNSUPPORTED")
         # This encoding requires proofs for every intermediate integer range.
         self.encoder = Encoder(self.spec.index_bits, mathematical_int=True)
         key = var("k")
@@ -388,7 +519,7 @@ class _Builder:
             if len(kernel.stores) != 1:
                 raise _Stop("UNKNOWN", "PARAMETERIZED_MULTI_STORE_UNSUPPORTED")
             store = kernel.stores[0]
-            if store.storage.logical_role != self.spec.observation.role:
+            if store.storage.logical_role != self.spec.observation.role_for_side(side):
                 raise _Stop("UNKNOWN", "OBSERVATION_WRITER_MISSING")
             size = prod(store.lane_shape)
             candidate = (
@@ -445,7 +576,7 @@ class _Builder:
                 observed_domain,
                 self.undefined_reason(expr),
             )
-            values.append(expr)
+            values.append(self.observation_value(expr, side))
         domain_expr = Expr(
             "and",
             BOOL,
@@ -465,10 +596,15 @@ class _Builder:
 def build_obligations(pair: ProgramPair, spec: PairSpec) -> ObligationSet:
     builder = _Builder(pair, spec)
     try:
-        if len(spec.lhs) > 1 and len(spec.rhs) > 1:
-            raise _Stop("UNKNOWN", "BOTH_SIDES_MULTI_LAUNCH_UNSUPPORTED")
         builder.premises_valid()
         builder.no_alias()
+        builder.no_inplace_dependencies()
+        if spec.observation.value_representation is not None:
+            builder.fact(
+                "observation.encoding.injective",
+                "Boolean encoding is injective: false -> exact 0, true -> exact 1, and 0 != 1. "
+                "The numeric side is unchanged; equality to the encoded Boolean is a proof obligation.",
+            )
         if spec.parameters:
             roots = builder.symbolic()
         else:
@@ -484,7 +620,16 @@ def build_obligations(pair: ProgramPair, spec: PairSpec) -> ObligationSet:
                 try:
                     roots = trial.symbolic()
                     builder = trial
-                except (_Stop, UnsupportedSemantics, ResourceLimit):
+                except _Stop as stop:
+                    if stop.reason == "SMT_UNKNOWN":
+                        # A solver budget was exhausted on a required symbolic
+                        # obligation. Retain that actual UNKNOWN evidence;
+                        # restarting a much larger enumeration can otherwise
+                        # consume the process budget and lose the report.
+                        builder = trial
+                        raise
+                    roots = builder.fixed()
+                except (UnsupportedSemantics, ResourceLimit):
                     roots = builder.fixed()
             else:
                 roots = builder.fixed()

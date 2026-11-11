@@ -3,8 +3,10 @@
 [Chinese](README_cn.md)
 
 ETV verifies observable-memory equivalence of TTIR programs under explicit launch,
-ABI, shape and storage premises. Floats denote mathematical real numbers, not
-IEEE-754 execution.
+ABI, shape and storage premises. Floating intermediates use mathematical reals
+and explicit signed infinities; external floating inputs remain finite reals.
+This is a partial abstraction, not full IEEE-754 execution. See
+[the infinity model](docs/infinity-model.md).
 
 ```mermaid
 flowchart LR

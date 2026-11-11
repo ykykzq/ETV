@@ -6,6 +6,7 @@ import z3
 from etv.ir import BOOL, FLOAT, Expr, Type, const
 from etv.semantics import evaluate
 from etv.smt import Encoder, query
+from etv.extended_smt import real
 
 
 @given(st.integers(2, 64), st.integers(-(2**65), 2**65), st.integers(-(2**65), 2**65))
@@ -44,6 +45,8 @@ def test_casts_match_z3(source, target, value):
         typ = FLOAT if op.endswith("tofp") else Type("int", target)
         expr = Expr(op, typ, (const(value, Type("int", source)),))
         encoded = z3.simplify(Encoder(64).encode(expr))
+        if typ == FLOAT:
+            encoded = z3.simplify(real(encoded))
         actual = (
             Fraction(encoded.numerator_as_long(), encoded.denominator_as_long())
             if typ == FLOAT

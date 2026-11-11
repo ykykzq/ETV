@@ -114,7 +114,7 @@ CUDA 生成使用独立的 PyTorch 2.8.0 benchmark 环境；其 Triton 依赖不
 参数化 launch DAG、循环、其他归约、原子操作、shared memory、barrier、多维 grid 和动态 rank 显式返回
 `UNKNOWN`。
 
-结论依赖声明的 ABI、host 顺序、storage 分离和自定义前提，不证明 IEEE 舍入、NaN/Inf/
+结论依赖声明的 ABI、host 顺序、storage 分离和自定义前提，不证明 IEEE 舍入、NaN/
 signed-zero 行为、容差等价或 host 正确性。报告包含依赖事实和规则命中次数，不是独立
 proof certificate。可选 LLM 候选和划分均有资源限制；非法候选回退到整图验证。详见
 [健全性](docs/soundness.md)和[支持的 TTIR](docs/supported_ttir.md)。
@@ -146,3 +146,6 @@ CUDA 采集是单独手动触发的 workflow。扩展边界见[架构](docs/arch
 ## 许可证
 
 [MIT](LICENSE)。
+
+TTIR 中显式 ±Inf 已使用扩展实数特殊值建模，外部浮点输入仍限定为有限实数；
+NaN 产生式须通过定义域检查。详见 [无穷值模型](docs/infinity-model.md)。

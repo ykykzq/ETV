@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass
 from fractions import Fraction
+from math import prod
 from pathlib import Path
 from typing import Literal, cast
 
 from .errors import InputError
+from .host import HostOperation, parse_host_operation
 from .ir import BOOL, FLOAT, INDEX, Expr, Type, const, parse_type, var
 from .jsonio import (
     JSON,
@@ -83,6 +85,7 @@ class LaunchSpec:
     index_bits: int | None
     max_instances: int
     canonical_boolean_storage: bool = False
+    host_operation: HostOperation | None = None
 
 
 @dataclass(frozen=True)
@@ -109,11 +112,41 @@ class RewriteSource:
 
 
 @dataclass(frozen=True)
+class ObservationLayout:
+    shape: tuple[int, ...]
+    stride: tuple[int, ...]
+    offset: int = 0
+
+
+@dataclass(frozen=True)
+class ObservationRepresentation:
+    kind: str
+    roles: tuple[str, str]
+    encodings: tuple[str, str]
+
+
+@dataclass(frozen=True)
 class Observation:
     role: str
     numel: Expr
     require_full_coverage: bool
     require_disjoint: tuple[str, ...]
+    layouts: tuple[ObservationLayout, ...] = ()
+    value_representation: ObservationRepresentation | None = None
+
+    def role_for_side(self, side: str) -> str:
+        if side not in ("lhs", "rhs"):
+            raise ValueError("unknown observation side")
+        if self.value_representation is None:
+            return self.role
+        return self.value_representation.roles[0 if side == "lhs" else 1]
+
+    def encoding_for_side(self, side: str) -> str:
+        if side not in ("lhs", "rhs"):
+            raise ValueError("unknown observation side")
+        if self.value_representation is None:
+            return "identity"
+        return self.value_representation.encodings[0 if side == "lhs" else 1]
 
 
 @dataclass(frozen=True)
@@ -135,6 +168,14 @@ class PairSpec:
     assumptions_for_llm: tuple[str, ...]
     partition: PartitionConfig
     llm: LLMConfig
+    execution_scope: str = "ttir-only"
+
+
+def parse_execution_scope(value: JSON) -> str:
+    scope = string(value)
+    if scope not in ("ttir-only", "ttir-with-host-ops"):
+        raise InputError("INVALID_PAIRSPEC", "unknown execution_scope")
+    return scope
 
 
 ARITIES = {
@@ -230,10 +271,37 @@ def _launches(
     limits: Limits,
     external: bool,
     canonical_boolean_storage: bool = False,
+    execution_scope: str = "ttir-only",
 ) -> tuple[LaunchSpec, ...]:
     result: list[LaunchSpec] = []
     for raw in array(value):
-        item = obj(raw, "id file function step grid stores abi bindings")
+        host_operation = None
+        item: dict[str, JSON]
+        if mapping(raw).get("kind") == "host_op":
+            if execution_scope == "ttir-only":
+                raise InputError(
+                    "HOST_STEP_OUTSIDE_TTIR_ONLY", "host_op requires ttir-with-host-ops scope"
+                )
+            host = obj(raw, "kind id file expected_sha256 event step abi stores")
+            host_operation = parse_host_operation(
+                resolve_file(root, string(host["file"]), external),
+                string(host["expected_sha256"]),
+                integer(host["event"], 0),
+                side,
+                integer(host["step"], 0),
+            )
+            item = {
+                "id": host["id"],
+                "file": host["file"],
+                "function": host_operation.operator,
+                "step": host["step"],
+                "grid": {"programs": prod(host_operation.output.shape)},
+                "stores": host["stores"],
+                "abi": host["abi"],
+                "bindings": {},
+            }
+        else:
+            item = obj(raw, "id file function step grid stores abi bindings")
         bindings = _bindings(item["bindings"], symbols, scalar_constants=True)
         local = {**symbols, **dict(bindings)}
         programs = config_expr(obj(item["grid"], "programs")["programs"], local)
@@ -241,28 +309,34 @@ def _launches(
             raise InputError("INVALID_PAIRSPEC", "grid must be integer")
         abi: list[Endpoint] = []
         for name, raw_endpoint in sorted(mapping(item["abi"]).items()):
-            ep = obj(raw_endpoint, "kind name", "index offset")
-            kind = string(ep["kind"])
-            if name not in roles or kind not in ("block", "scalar", "scalar_block"):
-                raise InputError("INVALID_PAIRSPEC", f"invalid ABI role/kind: {name}")
-            if (kind == "block") != (roles[name].kind == "buffer"):
-                raise InputError("INVALID_PAIRSPEC", f"endpoint kind disagrees with role: {name}")
-            if ("index" in ep) != (kind == "scalar_block"):
-                raise InputError("INVALID_PAIRSPEC", "scalar_block requires an index")
-            if "offset" in ep and kind == "scalar":
-                raise InputError("INVALID_PAIRSPEC", "scalar endpoint cannot have an offset")
-            arg = string(ep["name"])
-            if not arg.startswith("arg") or not arg[3:].isdigit():
-                raise InputError("INVALID_PAIRSPEC", "ABI names are positional argN")
-            abi.append(
-                Endpoint(
-                    name,
-                    cast(Literal["block", "scalar", "scalar_block"], kind),
-                    arg,
-                    integer(ep.get("offset", 0)),
-                    integer(ep["index"], 0) if "index" in ep else None,
+            endpoints = raw_endpoint if isinstance(raw_endpoint, list) else [raw_endpoint]
+            if not endpoints:
+                raise InputError("INVALID_PAIRSPEC", "empty ABI endpoint list")
+            for raw_item in endpoints:
+                ep = obj(raw_item, "kind name", "index offset")
+                kind = string(ep["kind"])
+                if name not in roles or kind not in ("block", "scalar", "scalar_block"):
+                    raise InputError("INVALID_PAIRSPEC", f"invalid ABI role/kind: {name}")
+                if (kind == "block") != (roles[name].kind == "buffer"):
+                    raise InputError(
+                        "INVALID_PAIRSPEC", f"endpoint kind disagrees with role: {name}"
+                    )
+                if ("index" in ep) != (kind == "scalar_block"):
+                    raise InputError("INVALID_PAIRSPEC", "scalar_block requires an index")
+                if "offset" in ep and kind == "scalar":
+                    raise InputError("INVALID_PAIRSPEC", "scalar endpoint cannot have an offset")
+                arg = string(ep["name"])
+                if not arg.startswith("arg") or not arg[3:].isdigit():
+                    raise InputError("INVALID_PAIRSPEC", "ABI names are positional argN")
+                abi.append(
+                    Endpoint(
+                        name,
+                        cast(Literal["block", "scalar", "scalar_block"], kind),
+                        arg,
+                        integer(ep.get("offset", 0)),
+                        integer(ep["index"], 0) if "index" in ep else None,
+                    )
                 )
-            )
         if len({ep.name for ep in abi}) != len(abi):
             raise InputError("INVALID_PAIRSPEC", "duplicate physical endpoint")
         if {ep.name for ep in abi} & dict(bindings).keys():
@@ -290,6 +364,7 @@ def _launches(
                 bits,
                 limits.max_instances,
                 canonical_boolean_storage,
+                host_operation,
             )
         )
     if not result or [x.step for x in result] != sorted(x.step for x in result):
@@ -304,7 +379,10 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
     )
     if top["format"] != "etv-pair-v3":
         raise InputError("INVALID_PAIRSPEC", "expected etv-pair-v3")
-    meta = obj(top["metadata"], "pair_id semantic_mode limits", "target partition llm")
+    meta = obj(
+        top["metadata"], "pair_id semantic_mode limits", "target partition llm execution_scope"
+    )
+    execution_scope = parse_execution_scope(meta.get("execution_scope", "ttir-only"))
     if meta["semantic_mode"] != "abstract_float":
         raise InputError("INVALID_PAIRSPEC", "only abstract_float is defined")
     target = obj(meta.get("target", {}), "", "index_bits boolean_storage")
@@ -435,6 +513,7 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
         limits,
         allow_external,
         boolean_storage == "canonical_i8",
+        execution_scope,
     )
     rhs = _launches(
         programs["rhs"],
@@ -446,20 +525,59 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
         limits,
         allow_external,
         boolean_storage == "canonical_i8",
+        execution_scope,
     )
     if len({x.id for x in lhs + rhs}) != len(lhs + rhs):
         raise InputError("INVALID_PAIRSPEC", "launch ids must be globally unique")
     for launch in lhs + rhs:
         for ep in launch.abi:
-            predicates.append(Predicate(f"abi.{launch.id}.{ep.role}", "abi", str(ep)))
+            repeated = sum(other.role == ep.role for other in launch.abi) > 1
+            suffix = "." + ep.name if repeated else ""
+            predicates.append(Predicate(f"abi.{launch.id}.{ep.role}{suffix}", "abi", str(ep)))
         for name, expr in launch.bindings:
             predicates.append(Predicate(f"binding.{launch.id}.{name}", "binding", name, expr))
-    observation = obj(top["observation"], "role numel require_full_coverage require_disjoint")
+    observation = obj(
+        top["observation"],
+        "role numel require_full_coverage require_disjoint",
+        "layouts value_representation",
+    )
     obs_role = string(observation["role"])
-    if obs_role not in roles or roles[obs_role].kind != "buffer":
-        raise InputError("INVALID_PAIRSPEC", "undeclared observation buffer")
-    for launches in (lhs, rhs):
-        if not any(s.role == obs_role for launch in launches for s in launch.stores):
+    representation = None
+    physical_roles = (obs_role, obs_role)
+    if "value_representation" in observation:
+        raw_repr = obj(observation["value_representation"], "kind lhs rhs")
+        if raw_repr["kind"] != "boolean_numeric_01":
+            raise InputError("INVALID_PAIRSPEC", "unknown observation value representation")
+        sides = [obj(raw_repr[side], "role encoding") for side in ("lhs", "rhs")]
+        physical_roles = (string(sides[0]["role"]), string(sides[1]["role"]))
+        encodings = (string(sides[0]["encoding"]), string(sides[1]["encoding"]))
+        if sorted(encodings) != ["bool_to_numeric_01", "identity"]:
+            raise InputError("INVALID_PAIRSPEC", "boolean_numeric_01 requires one bool encoding")
+        for role_name, encoding in zip(physical_roles, encodings, strict=True):
+            expected = BOOL if encoding == "bool_to_numeric_01" else FLOAT
+            if role_name not in roles or roles[role_name].element != expected:
+                raise InputError(
+                    "INVALID_PAIRSPEC", "observation encoding disagrees with role type"
+                )
+        if not boolean(observation["require_full_coverage"]):
+            raise InputError(
+                "INVALID_PAIRSPEC", "encoded observation requires full output coverage"
+            )
+        representation = ObservationRepresentation("boolean_numeric_01", physical_roles, encodings)
+        predicates.append(
+            Predicate(
+                "observation.value_representation",
+                "observation_encoding",
+                "Injective comparison encoding only: false maps to exact numeric 0 and true "
+                "to exact numeric 1; float values remain unchanged. No byte or dtype equality "
+                "is claimed, and no input/output value is assumed to satisfy this equality. "
+                + str(representation),
+            )
+        )
+    for role_name, launches in zip(physical_roles, (lhs, rhs), strict=True):
+        if role_name not in roles or roles[role_name].kind != "buffer":
+            raise InputError("INVALID_PAIRSPEC", "undeclared observation buffer")
+        if not any(s.role == role_name for launch in launches for s in launch.stores):
             raise InputError("INVALID_PAIRSPEC", "observation has no selected store")
     obs_numel = config_expr(observation["numel"], symbols)
     if obs_numel.type != INDEX:
@@ -467,6 +585,19 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
     required = tuple(sorted(string(x) for x in array(observation["require_disjoint"])))
     if len(set(required)) != len(required) or not set(required) <= roles.keys():
         raise InputError("INVALID_PAIRSPEC", "unknown/duplicate disjoint role")
+    layouts: list[ObservationLayout] = []
+    if "layouts" in observation:
+        raw_layouts = obj(observation["layouts"], "lhs rhs")
+        for side in ("lhs", "rhs"):
+            layout = obj(raw_layouts[side], "shape stride offset")
+            shape = tuple(integer(x, 1) for x in array(layout["shape"]))
+            stride = tuple(integer(x, 0) for x in array(layout["stride"]))
+            if len(shape) != len(stride):
+                raise InputError("INVALID_PAIRSPEC", "observation shape/stride rank mismatch")
+            layouts.append(ObservationLayout(shape, stride, integer(layout["offset"], 0)))
+            predicates.append(
+                Predicate(f"observation.layout.{side}", "observation_layout", str(layouts[-1]))
+            )
     sources = []
     for raw in array(top["rewrites"]):
         source = obj(raw, "file", "expected_sha256")
@@ -491,9 +622,17 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
         tuple(params),
         tuple(sorted(predicates, key=lambda p: p.id)),
         tuple(sorted(disjoint)),
-        Observation(obs_role, obs_numel, boolean(observation["require_full_coverage"]), required),
+        Observation(
+            obs_role,
+            obs_numel,
+            boolean(observation["require_full_coverage"]),
+            required,
+            tuple(layouts),
+            representation,
+        ),
         tuple(sources),
         tuple(string(x) for x in array(assumptions["for_llm"])),
         partition,
         llm,
+        execution_scope,
     )

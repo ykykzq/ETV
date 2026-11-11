@@ -5,9 +5,10 @@ from functools import lru_cache
 from typing import Mapping
 
 from .errors import UnsupportedSemantics
+from .extended_float import Infinity, evaluate_special
 from .ir import BOOL, INDEX, Expr, Type, const, signed, trunc_div
 
-Value = int | bool | Fraction
+Value = int | bool | Fraction | Infinity
 CASTS = frozenset(
     "extsi extui trunci index_cast index_castui sitofp uitofp extf truncf fptosi fptoui".split()
 )
@@ -20,9 +21,15 @@ COMPARISONS = frozenset("eq ne lt le gt ge".split())
 
 
 def arity(op: str) -> int:
-    if op in CASTS | FLOAT_UNARY | {"fneg", "not", "coordinate", "to_index", "read"}:
+    if op in CASTS | FLOAT_UNARY | {"fneg", "not", "coordinate", "to_index", "read", "isnan"}:
         return 1
-    if op in FLOAT_BINARY | INTEGER_BINARY | COMPARISONS | {"and", "or", "xor"}:
+    if op in FLOAT_BINARY | INTEGER_BINARY | COMPARISONS | {
+        "and",
+        "or",
+        "xor",
+        "ordered",
+        "unordered",
+    }:
         return 2
     if op in {"select", "fma", "load"}:
         return 3
@@ -41,6 +48,8 @@ def validate_expr(expr: Expr) -> None:
         )
     elif expr.op in INTEGER_BINARY:
         valid = expr.type.kind in ("int", "index") and all(t == expr.type for t in types)
+    elif expr.op in {"ordered", "unordered", "isnan"}:
+        valid = expr.type == BOOL and all(t.kind == "abstract_float" for t in types)
     elif expr.op in COMPARISONS:
         valid = expr.type == BOOL and types[0] == types[1]
     elif expr.op in {"and", "or", "xor"}:
@@ -81,8 +90,8 @@ def evaluate(
     op = expr.op
     if op == "const":
         value = expr.attr("value")
-        assert isinstance(value, (int, bool, Fraction))
-        return value
+        assert isinstance(value, (int, bool, Fraction)) or value in ("+inf", "-inf")
+        return value  # type: ignore[return-value]
     if op == "var":
         return env[str(expr.attr("name"))]
     if op == "input":
@@ -96,6 +105,12 @@ def evaluate(
     values = tuple(evaluate(a, env, index_bits) for a in expr.args)
     a = values[0]
     b = values[1] if len(values) > 1 else 0
+    if op in ("ordered", "unordered", "isnan"):
+        return op == "ordered"
+    if any(isinstance(v, str) for v in values):
+        return evaluate_special(op, values)
+    # All special values were handled above.
+    assert not isinstance(a, str) and not isinstance(b, str)
     result: Value
     if op in ("coordinate", "to_index"):
         if expr.type.kind == "int":
@@ -181,7 +196,9 @@ def evaluate(
     elif op == "nearbyint":
         result = round(Fraction(a))
     elif op == "fma":
-        result = a * b + values[2]
+        c = values[2]
+        assert not isinstance(c, str)
+        result = a * b + c
     else:
         raise UnsupportedSemantics("EXACT_EVALUATION_UNAVAILABLE", op)
     if expr.type.kind == "int":
@@ -195,7 +212,11 @@ def simplify(expr: Expr, index_bits: int | None = None) -> Expr:
     if not expr.args:
         return expr
     args = tuple(simplify(a, index_bits) for a in expr.args)
-    result = Expr(expr.op, expr.type, args, expr.attrs)
+    result = (
+        expr
+        if all(new is old for new, old in zip(args, expr.args, strict=True))
+        else Expr(expr.op, expr.type, args, expr.attrs)
+    )
     if expr.op == "select" and args[0].op == "const":
         return args[1 if args[0].attr("value") else 2]
     if all(a.op == "const" for a in args):

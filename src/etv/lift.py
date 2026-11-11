@@ -5,7 +5,7 @@ from fractions import Fraction
 from math import prod
 
 from .errors import InputError, ResourceLimit, UnsupportedSemantics
-from .frontend import IRType, Operation, TTIRModule
+from .frontend import IRType, Operation, TTIRModule, operations
 from .ir import BOOL, FLOAT, INDEX, Expr, Kernel, StorageRef, Store, Type, const, substitute, var
 from .pairspec import LaunchSpec
 from .semantics import CASTS, FLOAT_UNARY, validate_expr
@@ -132,9 +132,14 @@ def _constant(op: Operation, typ: Type, result_shape: tuple[int, ...]) -> Expr:
     attr = op.attribute("value")
     if attr.kind not in ("dense", "integer", "float") or not attr.values or None in attr.values:
         raise UnsupportedSemantics("TTIR_CONSTANT_UNSUPPORTED", attr.assembly)
-    if any(not isinstance(v, (int, Fraction)) for v in attr.values):
+    if "nan" in attr.values:
+        raise UnsupportedSemantics("TTIR_NAN_CONSTANT_UNSUPPORTED", attr.assembly)
+    if any(
+        not isinstance(v, (int, Fraction)) and not (typ == FLOAT and v in ("+inf", "-inf"))
+        for v in attr.values
+    ):
         raise UnsupportedSemantics("TTIR_CONSTANT_UNSUPPORTED", attr.assembly)
-    values = tuple(const(v, typ) for v in attr.values if isinstance(v, (int, Fraction)))
+    values = tuple(const(v, typ) for v in attr.values if isinstance(v, (int, Fraction, str)))
     if attr.kind != "dense" or attr.splat:
         return values[0]
     if len(values) != prod(result_shape):
@@ -147,7 +152,12 @@ def _constant(op: Operation, typ: Type, result_shape: tuple[int, ...]) -> Expr:
     return result
 
 
-def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
+def _pointwise(
+    op: Operation, args: tuple[Expr, ...], typ: Type, normalize_nonzero: bool = False
+) -> Expr:
+    # Exceptional-value assumptions such as ninf require a separate model.
+    if any(attr.name == "fastmath" and op.integer("fastmath") != 0 for attr in op.attributes):
+        raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "nonzero fastmath flags")
     name = op.name
     attrs: tuple[tuple[str, str | int], ...] = ()
     if name == "arith.cmpi":
@@ -170,7 +180,10 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
     elif name == "arith.cmpf":
         predicate = op.integer("predicate")
         if predicate in (0, 14, 7, 15):
-            return const(predicate in (7, 15), BOOL)
+            # There is no NaN in the supported extended-real domain, but the
+            # operands can contain an unproved/invalid operation such as Inf-Inf.
+            # Retain them so the definedness obligation cannot disappear.
+            return Expr("ordered" if predicate in (7, 15) else "unordered", BOOL, args)
         names = {
             1: "eq",
             2: "gt",
@@ -203,8 +216,29 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
     elif name == "tt.extern_elementwise":
         symbol = op.string("symbol")
         symbol = symbol.removeprefix("__nv_")
-        # The declared abstract_float domain contains finite mathematical reals.
-        # CUDA's isnan returns an integer, not an IEEE floating-point value.
+        if symbol in ("isinff", "isinfd"):
+            source = op.operands[0].type.element or op.operands[0].type if op.operands else None
+            if not (
+                normalize_nonzero
+                and op.integer("pure") != 0
+                and len(args) == 1
+                and args[0].type == FLOAT
+                and typ == Type("int", 32)
+                and source is not None
+                and source.kind == "float"
+                and source.bits == (32 if symbol == "isinff" else 64)
+            ):
+                raise UnsupportedSemantics(
+                    "TTIR_OP_UNSUPPORTED", "libdevice isinf requires exclusively zero/nonzero uses"
+                )
+            # Libdevice promises a nonzero integer for infinity, not exactly 1.
+            # The caller has checked every SSA use is eq/ne against zero; only
+            # under this condition is a normalized internal 0/1 representative
+            # observationally exact. A raw integer result must never escape.
+            is_infinite = Expr("eq", BOOL, (Expr("absf", FLOAT, args), const("+inf", FLOAT)))
+            return Expr("select", typ, (is_infinite, const(1, typ), const(0, typ)))
+        # CUDA's isnan returns an integer. Keep its operand's definedness even
+        # though finite reals and the supported infinities are never NaN.
         if (
             symbol in ("isnan", "isnanf")
             and op.integer("pure") != 0
@@ -212,7 +246,7 @@ def _pointwise(op: Operation, args: tuple[Expr, ...], typ: Type) -> Expr:
             and args[0].type == FLOAT
             and typ.kind == "int"
         ):
-            return const(0, typ)
+            return Expr("select", typ, (Expr("isnan", BOOL, args), const(1, typ), const(0, typ)))
         if op.integer("pure") == 0 or symbol not in EXTERN:
             raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", name + ":" + symbol)
         operator = EXTERN[symbol]
@@ -279,10 +313,16 @@ def _reduce(op: Operation, source: Tensor) -> Tensor:
     if shape(op.results[0].type) != result_shape:
         raise UnsupportedSemantics("TTIR_SHAPE_UNSUPPORTED", "reduction result")
     tail = prod(source.shape[axis + 1 :])
-    base = index_expr(
-        "add",
-        index_expr("mul", index_expr("div", var("__lane"), const(tail)), const(extent * tail)),
-        index_expr("rem", var("__lane"), const(tail)),
+    # A scalar result has one logical lane. Leaving a free __lane here would
+    # let a later splat/reduction reindex the scalar's original input elements.
+    base = (
+        index_expr(
+            "add",
+            index_expr("mul", index_expr("div", var("__lane"), const(tail)), const(extent * tail)),
+            index_expr("rem", var("__lane"), const(tail)),
+        )
+        if result_shape
+        else const(0)
     )
     terms = [
         scalar(reindex(source, index_expr("add", base, const(i * tail)), result_shape))
@@ -297,6 +337,41 @@ def _reduce(op: Operation, source: Tensor) -> Tensor:
     return Tensor(result_shape, terms[0])
 
 
+def _nonzero_only_isinf_uses(block_operations: tuple[Operation, ...]) -> frozenset[int]:
+    """Identify libdevice predicates whose integer return is observed only as truth."""
+    nested = tuple(child for op in block_operations for child in operations(op))
+    definitions = {value.id: op for op in nested for value in op.results}
+    allowed: set[int] = set()
+    for op in nested:
+        if op.name != "tt.extern_elementwise" or len(op.results) != 1:
+            continue
+        if op.string("symbol").removeprefix("__nv_") not in ("isinff", "isinfd"):
+            continue
+        value_id = op.results[0].id
+        users = [user for user in nested if any(v.id == value_id for v in user.operands)]
+        if not users:
+            continue
+        for user in users:
+            if (
+                user.name != "arith.cmpi"
+                or user.integer("predicate") not in (0, 1)
+                or len(user.operands) != 2
+            ):
+                break
+            other = next((v for v in user.operands if v.id != value_id), None)
+            producer = definitions.get(other.id) if other is not None else None
+            if producer is None or producer.name != "arith.constant":
+                break
+            attr = producer.attribute("value")
+            if attr.kind not in ("integer", "dense") or not attr.values:
+                break
+            if not all(type(value) is int and value == 0 for value in attr.values):
+                break
+        else:
+            allowed.add(op.ordinal)
+    return frozenset(allowed)
+
+
 def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
     function = module.function
     if len(function.regions) != 1 or len(function.regions[0]) != 1:
@@ -305,6 +380,7 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
     for operation in block.operations:
         if operation.regions and operation.name != "tt.reduce":
             raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", operation.name)
+    normalized_isinf = _nonzero_only_isinf_uses(block.operations)
     values: dict[str, Tensor] = {}
     endpoints = {ep.name: ep for ep in launch.abi}
     bindings = dict(launch.bindings)
@@ -357,6 +433,19 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             continue
         if op.regions:
             raise UnsupportedSemantics("TTIR_REGION_UNSUPPORTED", op.name)
+        if op.name == "gpu.barrier":
+            if op.operands or op.results or op.attributes:
+                raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "nonstandard gpu.barrier")
+            if store_count:
+                raise UnsupportedSemantics(
+                    "GPU_BARRIER_MEMORY_DEPENDENCE_UNSUPPORTED", "gpu.barrier after a store"
+                )
+            # The accepted straight-line prefix has only pure expressions and
+            # global-memory loads: all other effects (including atomics, async
+            # operations and shared-memory operations) are unsupported. With no
+            # prior writes to publish, this uniform barrier changes no value in
+            # the launch's snapshot-read / simultaneous-write memory model.
+            continue
         if op.name == "tt.return":
             if op.operands:
                 raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "return value")
@@ -440,7 +529,7 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
         elif op.name == "tt.splat":
             if args[0].shape:
                 raise UnsupportedSemantics("TTIR_SHAPE_UNSUPPORTED", "splat source")
-            result = Tensor(out_shape, args[0].term)
+            result = reindex(args[0], const(0), out_shape)
         elif op.name == "tt.broadcast":
             result = broadcast(args[0], out_shape)
         elif op.name in ("tt.expand_dims", "tt.reshape"):
@@ -556,7 +645,10 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             )
         else:
             assert typ is not None
-            result = Tensor(out_shape, _pointwise(op, tuple(scalar(a) for a in args), typ))
+            result = Tensor(
+                out_shape,
+                _pointwise(op, tuple(scalar(a) for a in args), typ, op.ordinal in normalized_isinf),
+            )
             if op.name in ("arith.index_cast", "arith.index_castui") and launch.index_bits is None:
                 raise UnsupportedSemantics("INDEX_WIDTH_REQUIRED", op.name)
         values[op.results[0].id] = result

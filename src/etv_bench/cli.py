@@ -7,7 +7,7 @@ import shlex
 import subprocess
 
 from .capture import collect
-from .pair import pair_capture
+from .pair import EXECUTION_SCOPES, pair_capture
 from .run import run_case
 from .summarize import summarize
 from .review import review_case
@@ -25,6 +25,12 @@ def main() -> int:
     pair = commands.add_parser("pair")
     pair.add_argument("capture", type=Path)
     pair.add_argument("--verifier", default="etv")
+    pair.add_argument(
+        "--execution-scope",
+        choices=EXECUTION_SCOPES,
+        default="ttir-only",
+        help="verify only captured TTIR by default; host semantics require explicit opt-in",
+    )
     run = commands.add_parser("run")
     run.add_argument("manifest", type=Path)
     run.add_argument("--out", required=True, type=Path)
@@ -52,7 +58,15 @@ def main() -> int:
                 )
             }
         elif args.command == "pair":
-            result = {"manifest": str(pair_capture(args.capture, shlex.split(args.verifier)))}
+            result = {
+                "manifest": str(
+                    pair_capture(
+                        args.capture,
+                        shlex.split(args.verifier),
+                        execution_scope=args.execution_scope,
+                    )
+                )
+            }
         elif args.command == "run":
             result = run_case(args.manifest, args.out, shlex.split(args.verifier))
         elif args.command == "summarize":

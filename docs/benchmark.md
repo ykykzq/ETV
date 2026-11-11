@@ -25,7 +25,7 @@ CUDA driver compiles and warms both sides before capturing:
   --out build/captured_add --repository https://github.com/ykykzq/ETV \
   --commit YOUR_CHECKED_OUT_COMMIT --test-id generated_add
 .venv-benchmark/bin/etv-bench pair build/captured_add/capture.json \
-  --verifier .venv-verifier/bin/etv
+  --verifier .venv-verifier/bin/etv --execution-scope ttir-only
 .venv-benchmark/bin/etv-bench run build/captured_add/manifest.json \
   --out build/captured_add/result --verifier .venv-verifier/bin/etv
 ```
@@ -42,6 +42,38 @@ retains device/storage identity, allocation base, element offset, dtype, shape a
 stride. Storage references stay alive to prevent allocation reuse from merging
 unrelated buffers. Integers equal to 1 remain slots unless the compiler signature
 classifies them as constexpr.
+
+The pytest collector additionally enables `etv-host-operations-v1` events. A
+Torch dispatch mode records actual pre/post-processing effects; a function mode
+records known Python scalar constructors without inspecting arbitrary tensor
+contents. Reference-side modes wrap the compiled backend's runtime callable,
+so they do not cause Dynamo to replace the compiled reference with eager code.
+The final tensor views are recorded separately for logical-output observation.
+Unsupported effects are explicit diagnostics; stochastic states are not assumed
+to correspond merely because both sides use a seed.
+
+Pair generation defaults to `--execution-scope ttir-only`. Host events remain in
+the capture and provenance files, but are excluded from proof steps and internal
+buffer producers. A TTIR load that depends on a host-produced or host-modified
+buffer, or a final observation produced by a host post-operation, is diagnosed as
+`host dependency outside ttir-only execution scope`. The generator does not add
+zero-initialization premises, promote host constants to inputs, replace the final
+observed buffer, or reduce full-coverage requirements. Output shape/stride/offset
+descriptions remain available to identify the logical observation.
+
+To run the distinct composition experiment, opt in explicitly:
+
+```bash
+.venv-benchmark/bin/etv-bench pair build/captured_add/capture.json \
+  --verifier .venv-verifier/bin/etv --execution-scope ttir-with-host-ops
+```
+
+Both scopes are written to `pair.json` metadata and provenance. Composition uses
+the verifier's trusted host-operation semantics; it does not verify PyTorch's
+implementation or turn those operations into captured TTIR. In particular, a
+`diag` composition can prove equivalent after a captured zero-fill, while the
+original TTIR-only pair still fails full-output write coverage. Such verdicts
+must be reported under their respective execution scopes.
 
 Pairing invokes `etv parse`, traces structured pointer owners, checks TTIR arity
 against compiler slots, assigns output/internal roles, and creates one launch with
@@ -135,3 +167,22 @@ remain unsupported. The 16 replayed mismatches concern output-write masks in
 captured `diag_1d` fragments: host-side zero initialization is outside those TTIR
 fragments. They do not establish 16 incorrect full operators. Conclusions use
 the finite-real abstraction, not IEEE floating-point numerical equivalence.
+
+## Host-operation recapture iteration
+
+`tools/prepare_host_recapture.py prepare` selects the 77 missing-input and 24
+missing-output cases from the audited baseline, validates the frozen corpus,
+and writes a targeted selection lock. `--include-diag` also selects the 16
+initialization-omission cases. Run that lock with `run_representatives.py` in
+the pinned benchmark environment, then use `prepare_host_recapture.py merge`
+to build a new immutable corpus. The original 1,365 identities remain unchanged.
+Every attempted recapture and old/new capture hash is audited. Failed recaptures
+retain an explicitly marked original record; they never count as enriched.
+
+Run `run_formal_suite.py` on the new corpus with an explicit execution scope;
+the default is the strict `ttir-only` experiment. A composition run requires
+`--execution-scope ttir-with-host-ops` and a separate output directory.
+`export_host_iteration.py` requires
+a completed actual run and its recapture audit; it exports per-case transitions,
+host-step provenance and fresh proof auditing for local reports. This workflow
+does not infer new verification results from unit tests or from source inspection.

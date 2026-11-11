@@ -26,6 +26,9 @@ def main():
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument(
+        "--execution-scope", choices=("ttir-only", "ttir-with-host-ops"), default="ttir-only"
+    )
     args = parser.parse_args()
     frozen = read(args.captures / "corpus.lock.json", {})
 
@@ -53,6 +56,7 @@ def main():
             "upstream": read(case / "upstream.json"),
             "capture": read(case / "case_status.json"),
             "status": "NOT_VERIFIED",
+            "execution_scope": args.execution_scope,
         }
         report_dir = out / case_id
         report_dir.mkdir(exist_ok=True)
@@ -68,6 +72,8 @@ def main():
                         str(case / "capture.json"),
                         "--verifier",
                         shlex.join(command),
+                        "--execution-scope",
+                        args.execution_scope,
                     ],
                     env=env,
                     stdout=log,
@@ -86,6 +92,8 @@ def main():
             row["diagnostics"] = provenance.get("diagnostics", [])
             if row.get("pair_returncode") == 0 and manifest.get("status") == "ready":
                 report = read(case / "validation" / "report.json", {})
+                if report.get("execution_scope") != args.execution_scope:
+                    raise ValueError("verification report scope differs from requested scope")
                 row.update(
                     status=report.get("status", "NOT_VERIFIED"),
                     reason=report.get("reason"),
@@ -126,6 +134,7 @@ def main():
                 "nodeid": nodeid,
                 "case_id": case_id,
                 "status": "NOT_VERIFIED",
+                "execution_scope": args.execution_scope,
                 "analysis_error": traceback.format_exc(),
             }
             report_dir = out / case_id
@@ -138,6 +147,7 @@ def main():
     check_frozen()
     summary = {
         "selected": len(rows),
+        "execution_scope": args.execution_scope,
         "verdicts": dict(Counter(r["status"] for r in rows)),
         "reasons": dict(Counter(r.get("reason") for r in rows)),
         "wall_seconds": round(time.monotonic() - started, 3),

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from typing import Literal, TypeAlias
+from types import NotImplementedType
 
 
 @dataclass(frozen=True, order=True)
@@ -64,13 +65,63 @@ class Expr:
         if len({key for key, _ in self.attrs}) != len(self.attrs):
             raise ValueError("duplicate attribute")
 
+    def __hash__(self) -> int:
+        # Expr graphs share subexpressions. Dataclass's recursive tuple hash
+        # expands that DAG into a tree on every dictionary/cache lookup.
+        # This memo is deliberately not a dataclass field: it is implementation
+        # state, never semantic identity or part of JSON report serialization.
+        cached = self.__dict__.get("_structural_hash")
+        if cached is None:
+            cached = hash((self.op, self.type, self.args, self.attrs))
+            object.__setattr__(self, "_structural_hash", cached)
+        assert isinstance(cached, int)
+        return cached
+
+    def __eq__(self, other: object) -> bool | NotImplementedType:
+        if self is other:
+            return True
+        if not isinstance(other, Expr) or type(self) is not type(other):
+            return NotImplemented
+        if hash(self) != hash(other):
+            return False
+        # Structural equality must visit a pair of shared DAG nodes once. A
+        # hash match alone is never evidence of equality (collisions are legal).
+        pending = [(self, other)]
+        seen: set[tuple[int, int]] = set()
+        while pending:
+            left, right = pending.pop()
+            if left is right:
+                continue
+            key = (id(left), id(right))
+            if key in seen:
+                continue
+            seen.add(key)
+            if (
+                type(left) is not type(right)
+                or left.op != right.op
+                or left.type != right.type
+                or left.attrs != right.attrs
+                or len(left.args) != len(right.args)
+            ):
+                return False
+            pending.extend(zip(left.args, right.args, strict=True))
+        return True
+
+    def __reduce__(self) -> tuple[object, tuple[object, ...]]:
+        # Python randomizes string hashes per interpreter. Do not send the
+        # parent's cached hash to egglog's multiprocessing-spawn worker.
+        return (type(self), (self.op, self.type, self.args, self.attrs))
+
     def attr(self, name: str) -> ScalarAttr:
         return dict(self.attrs)[name]
 
 
-def const(value: int | bool | Fraction, typ: Type = INDEX) -> Expr:
+def const(value: int | bool | Fraction | str, typ: Type = INDEX) -> Expr:
     if typ.kind == "abstract_float":
-        value = Fraction(value)
+        if value not in ("+inf", "-inf"):
+            value = Fraction(value)
+    elif isinstance(value, str):
+        raise ValueError("special constants require abstract_float")
     elif typ.kind == "int":
         assert typ.bits is not None
         value = signed(int(value), typ.bits)
@@ -93,11 +144,31 @@ def trunc_div(a: int, b: int) -> int:
     return (abs(a) // abs(b)) * (-1 if (a < 0) != (b < 0) else 1)
 
 
+def _free_variables(expr: Expr) -> frozenset[str]:
+    cached = expr.__dict__.get("_free_variables")
+    if cached is None:
+        cached = (
+            frozenset((str(expr.attr("name")),))
+            if expr.op == "var"
+            else frozenset().union(*(_free_variables(arg) for arg in expr.args))
+        )
+        object.__setattr__(expr, "_free_variables", cached)
+    assert isinstance(cached, frozenset)
+    return cached
+
+
 @lru_cache(maxsize=100000)
 def substitute(expr: Expr, items: tuple[tuple[str, Expr], ...]) -> Expr:
+    if not items:
+        return expr
     if expr.op == "var":
         return dict(items).get(str(expr.attr("name")), expr)
-    return Expr(expr.op, expr.type, tuple(substitute(a, items) for a in expr.args), expr.attrs)
+    if not any(name in _free_variables(expr) for name, _ in items):
+        return expr
+    args = tuple(substitute(arg, items) for arg in expr.args)
+    if all(new is old for new, old in zip(args, expr.args, strict=True)):
+        return expr
+    return Expr(expr.op, expr.type, args, expr.attrs)
 
 
 def walk(expr: Expr) -> tuple[Expr, ...]:

@@ -87,6 +87,19 @@ class LaunchFact:
     function: str
     reads: tuple[str, ...] = ()
     writes: tuple[str, ...] = ()
+    kind: str = "ttir"
+
+
+@dataclass(frozen=True)
+class ComparisonContract:
+    kind: str
+    encoding: str | None
+    logical_role: str
+    physical_roles: tuple[tuple[str, str], ...]
+    physical_elements: tuple[tuple[str, str], ...]
+    encodings: tuple[tuple[str, str], ...]
+    bit_identical: bool = False
+    output_dtype_equality_claimed: bool = False
 
 
 @dataclass(frozen=True)
@@ -108,3 +121,5 @@ class VerificationReport:
     unsupported: tuple[str, ...] = ()
     trusted_axioms: tuple[str, ...] = ()
     diagnostic: str = ""
+    execution_scope: str = "ttir-only"
+    comparison_contract: ComparisonContract | None = None

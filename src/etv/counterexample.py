@@ -11,6 +11,7 @@ from .pairspec import PairSpec
 from .result import Counterexample
 from .semantics import Value, evaluate
 from .smt import Encoder
+from . import extended_smt as ef
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,14 @@ class ValueCheck:
 
 
 def _number(value: z3.ExprRef) -> Value:
+    if value.sort() == ef.FLOAT_SORT:
+        if z3.is_true(z3.simplify(value == ef.POS_INF)):
+            return "+inf"
+        if z3.is_true(z3.simplify(value == ef.NEG_INF)):
+            return "-inf"
+        if z3.is_true(z3.simplify(ef.is_finite(value))):
+            return _number(z3.simplify(ef.real(value)))
+        raise ValueError("non-concrete extended-real model value")
     if z3.is_true(value):
         return True
     if z3.is_false(value):
@@ -80,6 +89,6 @@ def find_counterexample(root: RootPair, spec: PairSpec) -> ValueCheck:
             True,
             str(left),
             str(right),
-            "Evaluate the typed observation roots at the reported index with the exact scalar/array model. Both evaluators reproduce unequal rational values.",
+            "Evaluate the typed observation roots at the reported index with the exact scalar/array model. Both evaluators reproduce unequal exact finite or signed-infinite values.",
         ),
     )

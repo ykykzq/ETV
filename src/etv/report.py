@@ -32,6 +32,10 @@ def report_json(report: VerificationReport) -> dict[str, Any]:
     conditional = any(
         rule.used and rule.admission == "admitted_unverified" for rule in report.rewrites
     )
+    contract = serialize(report.comparison_contract)
+    if report.comparison_contract is not None:
+        for key in ("physical_roles", "physical_elements", "encodings"):
+            contract[key] = dict(getattr(report.comparison_contract, key))
     return {
         "schema_version": 1,
         "tool": {"name": "ETV", "version": __version__, "dependencies": dict(report.versions)},
@@ -39,12 +43,23 @@ def report_json(report: VerificationReport) -> dict[str, Any]:
         "pair_id": report.pair_id,
         "status": report.status,
         "reason": report.reason,
+        "execution_scope": report.execution_scope,
+        "comparison_contract": contract,
         "inputs": {
             "spec": next((i for i in inputs if i["kind"] == "spec"), None),
             "programs": [i for i in inputs if i["kind"] == "ttir"],
+            "host_operations": [i for i in inputs if i["kind"] == "host_capture"],
             "rewrites": [i for i in inputs if i["kind"] == "rewrite"],
         },
-        "semantics": {"mode": "abstract_float", "target": {"index_bits": report.index_bits}},
+        "semantics": {
+            "mode": "abstract_float",
+            "float_domain": "extended_real",
+            "input_float_domain": "finite_real",
+            "special_values": ["+inf", "-inf"],
+            "nan_policy": "unsupported; require reachable operations to stay in extended reals",
+            "rounding": "none",
+            "target": {"index_bits": report.index_bits},
+        },
         "predicates": serialize(report.predicates),
         "obligations": serialize(report.obligations),
         "rewrites": {
@@ -63,7 +78,8 @@ def report_json(report: VerificationReport) -> dict[str, Any]:
             "partitions": serialize(report.partitions),
         },
         "launches": serialize(report.launches),
-        "physical_launch_count": len(report.launches),
+        "physical_launch_count": sum(launch.kind == "ttir" for launch in report.launches),
+        "execution_step_count": len(report.launches),
         "component_count": sum(launch.stores for launch in report.launches),
         "counterexample": serialize(report.counterexample),
         "unsupported": list(report.unsupported),
@@ -74,7 +90,9 @@ def report_json(report: VerificationReport) -> dict[str, Any]:
             else "formal_under_declared_predicates",
             "trusted_axioms": list(report.trusted_axioms),
             "does_not_prove": [
-                "IEEE-754 rounding, NaN, infinity or signed zero",
+                "IEEE-754 rounding, NaN or signed zero",
+                "arbitrary NaN/infinity in external floating inputs",
+                "bit-identical memory or output dtype equality",
                 "numerical tolerance equivalence",
                 "host launch correctness",
                 "independent proof certificate",
@@ -86,6 +104,8 @@ def report_json(report: VerificationReport) -> dict[str, Any]:
 def render_markdown(data: dict[str, Any]) -> str:
     lines = [f"# {data['pair_id']}", "", f"**{data['status']}**: `{data['reason']}`", ""]
     for key in (
+        "execution_scope",
+        "comparison_contract",
         "semantics",
         "soundness",
         "inputs",

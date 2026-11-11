@@ -59,8 +59,15 @@ py::str integerValue(const llvm::APInt &value) {
 }
 
 py::object floatValue(const llvm::APFloat &value) {
-  if (!value.isFinite() || llvm::APFloat::semanticsSizeInBits(value.getSemantics()) > 64)
+  if (llvm::APFloat::semanticsSizeInBits(value.getSemantics()) > 64)
     return py::none();
+  // Keep APFloat's category and sign; no host float conversion, finite sentinel,
+  // or parsing of the printed MLIR literal is involved for special values.
+  if (value.isInfinity() || value.isNaN()) {
+    py::dict special;
+    special["special"] = value.isNaN() ? "nan" : value.isNegative() ? "-inf" : "+inf";
+    return special;
+  }
   llvm::APFloat converted(value);
   bool losesInfo;
   converted.convert(llvm::APFloat::IEEEdouble(), llvm::APFloat::rmNearestTiesToEven, &losesInfo);

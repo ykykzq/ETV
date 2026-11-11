@@ -7,8 +7,9 @@ from typing import Mapping
 import z3
 
 from .errors import UnsupportedSemantics
+from . import extended_smt as ef
 from .ir import BOOL, Expr
-from .semantics import CASTS, width
+from .semantics import CASTS, FLOAT_BINARY, FLOAT_UNARY, width
 
 
 def _wrap(value: z3.ArithRef, bits: int) -> z3.ArithRef:
@@ -27,12 +28,16 @@ class Encoder:
         index_bits: int | None = None,
         environment: Mapping[str, z3.ExprRef] | None = None,
         mathematical_int: bool = False,
+        extended_float_variables: bool = False,
     ) -> None:
         self.index_bits = index_bits
         self.environment = dict(environment or {})
         self.cache: dict[Expr, z3.ExprRef] = {}
+        self.defined_cache: dict[Expr, z3.BoolRef] = {}
         self.exact = True
         self.mathematical_int = mathematical_int
+        self.extended_float_variables = extended_float_variables
+        self.float_conditions: dict[Expr, z3.BoolRef] = {}
 
     def encode(self, expr: Expr) -> z3.ExprRef:
         if expr not in self.cache:
@@ -46,9 +51,8 @@ class Encoder:
             if expr.type == BOOL:
                 return z3.BoolVal(bool(value))
             if expr.type.kind == "abstract_float":
-                assert isinstance(value, (int, Fraction))
-                fraction = Fraction(value)
-                return z3.RealVal(f"{fraction.numerator}/{fraction.denominator}")
+                assert isinstance(value, (int, Fraction, str))
+                return ef.number(value)
             return z3.IntVal(value)
         if op in ("var", "input", "undefined"):
             name = (
@@ -57,7 +61,18 @@ class Encoder:
                 else "undefined"
             )
             if name in self.environment:
-                return self.environment[name]
+                value = self.environment[name]
+                return (
+                    ef.finite(value)
+                    if expr.type.kind == "abstract_float" and value.sort() != ef.FLOAT_SORT
+                    else value
+                )
+            if expr.type.kind == "abstract_float":
+                return (
+                    z3.Const(name, ef.FLOAT_SORT)
+                    if self.extended_float_variables
+                    else ef.finite(z3.Real(name))
+                )
             sort = (
                 z3.BoolSort()
                 if expr.type == BOOL
@@ -81,7 +96,7 @@ class Encoder:
             if expr.type.kind == "int":
                 assert expr.type.bits is not None
                 return _wrap(value, expr.type.bits)
-            return value
+            return ef.finite(value) if expr.type.kind == "abstract_float" else value
         args = [self.encode(a) for a in expr.args]
         a = args[0]
         b = args[1] if len(args) > 1 else None
@@ -91,6 +106,7 @@ class Encoder:
             if op in ("extf", "truncf"):
                 return a
             if op in ("fptosi", "fptoui"):
+                a = ef.real(a)
                 value = z3.If(a >= 0, z3.ToInt(a), -z3.ToInt(-a))
                 return _wrap(value, width(expr.type, self.index_bits))
             if expr.args[0].type == BOOL:
@@ -98,10 +114,22 @@ class Encoder:
             source = width(expr.args[0].type, self.index_bits)
             a = a % (1 << source) if op in ("extui", "uitofp", "index_castui") else _wrap(a, source)
             if op in ("sitofp", "uitofp"):
-                return z3.ToReal(a)
+                return ef.finite(z3.ToReal(a))
             if expr.type == BOOL:
                 return a % 2 == 1
             return _wrap(a, width(expr.type, self.index_bits))
+        if op in FLOAT_BINARY | FLOAT_UNARY | {"fneg", "fma"}:
+            result, condition, exact = ef.operation(op, args)
+            self.float_conditions[expr] = condition
+            self.exact = self.exact and exact
+            return result
+        if op in ("ordered", "unordered", "isnan"):
+            return z3.BoolVal(op == "ordered")
+        if (
+            op in ("eq", "ne", "lt", "le", "gt", "ge")
+            and expr.args[0].type.kind == "abstract_float"
+        ):
+            return ef.compare(op, a, b)
         if op in ("add", "fadd"):
             result = a + b
         elif op in ("sub", "fsub"):
@@ -176,6 +204,15 @@ class Encoder:
         return result
 
     def defined(self, expr: Expr) -> z3.BoolRef:
+        # Expressions are immutable DAG nodes. Rebuilding a shared child's
+        # predicate once per incoming path can turn a small DAG into an
+        # exponential traversal. The cache belongs to this encoder because
+        # definitions depend on its environment, index width and integer mode.
+        if expr not in self.defined_cache:
+            self.defined_cache[expr] = self._defined(expr)
+        return self.defined_cache[expr]
+
+    def _defined(self, expr: Expr) -> z3.BoolRef:
         if expr.op == "undefined":
             return z3.BoolVal(False)
         if expr.op == "select":
@@ -186,7 +223,10 @@ class Encoder:
             )
         conditions = [self.defined(arg) for arg in expr.args]
         op = expr.op
-        if op in ("div", "rem", "fdiv"):
+        if op in FLOAT_BINARY | FLOAT_UNARY | {"fneg", "fma"}:
+            self.encode(expr)
+            conditions.append(self.float_conditions[expr])
+        elif op in ("div", "rem"):
             a, b = (self.encode(arg) for arg in expr.args)
             conditions.append(b != 0)
             if expr.type.kind == "int":
@@ -199,13 +239,12 @@ class Encoder:
             conditions.append(self.encode(expr.args[1]) % (1 << bits) < bits)
         elif op in ("fptosi", "fptoui"):
             bits = width(expr.type, self.index_bits)
-            a = self.encode(expr.args[0])
+            tagged = self.encode(expr.args[0])
+            conditions.append(ef.is_finite(tagged))
+            a = ef.real(tagged)
             value = z3.If(a >= 0, z3.ToInt(a), -z3.ToInt(-a))
             low, high = (-(1 << (bits - 1)), 1 << (bits - 1)) if op == "fptosi" else (0, 1 << bits)
             conditions.extend((value >= low, value < high))
-        elif op in ("sqrt", "rsqrt", "log", "acosh", "pow"):
-            a = self.encode(expr.args[0])
-            conditions.append(a >= 0 if op == "sqrt" else a >= 1 if op == "acosh" else a > 0)
         if expr.op == "var" and expr.type.kind == "int":
             assert expr.type.bits is not None
             a = self.encode(expr)

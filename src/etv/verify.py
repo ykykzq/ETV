@@ -11,15 +11,17 @@ from .eqsat import saturate_roots
 from .errors import ETVError, InputError
 from .frontend import parse_ttir
 from .heuristics import propose
+from .host import lift_host
 from .ir import ProgramPair, ProgramSequence, walk
-from .jsonio import digest
+from .jsonio import digest, mapping, read_json
 from .lift import lift_kernel, scalar_type
 from .logging import event
 from .memory import build_obligations
-from .pairspec import PairSpec, parse_pair_spec
+from .pairspec import PairSpec, parse_execution_scope, parse_pair_spec
 from .partition import propose_plan
 from .partition_proof import check_plan
 from .result import (
+    ComparisonContract,
     EqualityFact,
     InputRecord,
     LaunchFact,
@@ -48,7 +50,12 @@ def _manifest(spec: PairSpec, spec_hash: str) -> tuple[InputRecord, ...]:
 
     result = [InputRecord(spec.path.name, spec_hash, "spec")]
     result.extend(
-        InputRecord(name(launch.file), digest(launch.file), "ttir", launch.id)
+        InputRecord(
+            name(launch.file),
+            digest(launch.file),
+            "host_capture" if launch.host_operation is not None else "ttir",
+            launch.id,
+        )
         for launch in spec.lhs + spec.rhs
     )
     result.extend(InputRecord(name(r.file), digest(r.file), "rewrite") for r in spec.rewrites)
@@ -56,8 +63,14 @@ def _manifest(spec: PairSpec, spec_hash: str) -> tuple[InputRecord, ...]:
 
 
 def _programs(spec: PairSpec, run_id: str) -> ProgramPair:
+    if spec.execution_scope == "ttir-only" and any(
+        launch.host_operation is not None for launch in spec.lhs + spec.rhs
+    ):
+        raise InputError("HOST_STEP_OUTSIDE_TTIR_ONLY", "host semantics excluded by scope")
     modules = {}
     for launch in spec.lhs + spec.rhs:
+        if launch.host_operation is not None:
+            continue
         key = (launch.file, launch.function)
         if key not in modules:
             modules[key] = parse_ttir(*key)
@@ -74,13 +87,23 @@ def _programs(spec: PairSpec, run_id: str) -> ProgramPair:
     for launches in (spec.lhs, spec.rhs):
         kernels = []
         for launch in launches:
-            kernel = lift_kernel(modules[(launch.file, launch.function)], launch)
-            arguments = modules[(launch.file, launch.function)].function.regions[0][0].arguments
             role_types = {role.name: role.element for role in spec.roles}
-            for endpoint in launch.abi:
-                typ = arguments[int(endpoint.name.removeprefix("arg"))].type
-                if scalar_type(typ.element or typ) != role_types[endpoint.role]:
-                    raise InputError("ABI_ROLE_MISSING", "role type disagrees with TTIR argument")
+            if launch.host_operation is not None:
+                kernel = lift_host(launch)
+                buffers = launch.host_operation.inputs + (launch.host_operation.output,)
+                for endpoint in launch.abi:
+                    element = buffers[int(endpoint.name.removeprefix("arg"))].element
+                    if element != role_types[endpoint.role]:
+                        raise InputError("ABI_ROLE_MISSING", "role type disagrees with host buffer")
+            else:
+                kernel = lift_kernel(modules[(launch.file, launch.function)], launch)
+                arguments = modules[(launch.file, launch.function)].function.regions[0][0].arguments
+                for endpoint in launch.abi:
+                    typ = arguments[int(endpoint.name.removeprefix("arg"))].type
+                    if scalar_type(typ.element or typ) != role_types[endpoint.role]:
+                        raise InputError(
+                            "ABI_ROLE_MISSING", "role type disagrees with TTIR argument"
+                        )
             kernels.append((launch.step, kernel))
             event(
                 run_id,
@@ -108,10 +131,15 @@ def _verify(spec: PairSpec, report: VerificationReport) -> VerificationReport:
     frontend_facts = tuple(
         Obligation(
             "frontend." + launch.id,
-            "parse_verify_lift",
+            "checked_host_semantics" if launch.host_operation is not None else "parse_verify_lift",
             "closed",
             ("input." + launch.id,),
-            launch.function,
+            (
+                f"{launch.function}; capture event {launch.host_operation.event}; "
+                "abstract_float host semantics, not compiler TTIR"
+                if launch.host_operation is not None
+                else launch.function
+            ),
         )
         for launch in spec.lhs + spec.rhs
     )
@@ -143,6 +171,17 @@ def _verify(spec: PairSpec, report: VerificationReport) -> VerificationReport:
             reason=memory.reason,
             counterexample=memory.counterexample,
         )
+    # Enumerated programs can have thousands of roots and memory obligations.
+    # Keep their common proof prerequisites as one explicit DAG node instead of
+    # repeating the entire obligation list in every serialized equality fact.
+    memory_closed = Obligation(
+        "memory.closed",
+        "dependency_group",
+        "closed",
+        tuple(obligation.id for obligation in report.obligations),
+        "All frontend and observable-memory obligations are discharged.",
+    )
+    report = replace(report, obligations=report.obligations + (memory_closed,))
     proposal = propose(spec, memory.roots)
     if proposal.diagnostic:
         event(
@@ -230,7 +269,7 @@ def _verify(spec: PairSpec, report: VerificationReport) -> VerificationReport:
         for f in registry.facts
     )
     deps = (
-        tuple(o.id for o in report.obligations)
+        (memory_closed.id,)
         + tuple(f.id for f in facts if f.used)
         + tuple(p.id for p in report.partitions if p.status == "proved")
     )
@@ -261,7 +300,13 @@ def _verify(spec: PairSpec, report: VerificationReport) -> VerificationReport:
             diagnostic=result.reason,
         )
     if all(result.merged):
-        return replace(report, status="PROVED", reason="OBSERVABLE_MEMORY_EQUIVALENT")
+        return replace(
+            report,
+            status="PROVED",
+            reason="LOGICAL_BOOLEAN_OUTPUT_EQUIVALENT"
+            if spec.observation.value_representation is not None
+            else "OBSERVABLE_MEMORY_EQUIVALENT",
+        )
     checks = []
     for i, (root, merged) in enumerate(zip(memory.roots, result.merged, strict=True)):
         if merged:
@@ -302,10 +347,28 @@ def verify(spec_path: Path, allow_external: bool = False) -> VerificationReport:
     try:
         spec_hash = digest(spec_path)
         report = replace(report, inputs=(InputRecord(spec_path.name, spec_hash, "spec"),))
+        metadata = mapping(mapping(read_json(spec_path)).get("metadata"))
+        report = replace(
+            report,
+            execution_scope=parse_execution_scope(metadata.get("execution_scope", "ttir-only")),
+        )
         spec = parse_pair_spec(spec_path, allow_external)
         if digest(spec_path) != spec_hash:
             raise InputError("FILE_HASH_MISMATCH", str(spec_path))
         inputs = _manifest(spec, spec_hash)
+        physical_roles = tuple(
+            (side, spec.observation.role_for_side(side)) for side in ("lhs", "rhs")
+        )
+        role_types = {role.name: str(role.element) for role in spec.roles}
+        representation = spec.observation.value_representation
+        comparison_contract = ComparisonContract(
+            "logical-value-under-encoding" if representation else "typed-observable-values",
+            representation.kind if representation else None,
+            spec.observation.role,
+            physical_roles,
+            tuple((side, role_types[role]) for side, role in physical_roles),
+            tuple((side, spec.observation.encoding_for_side(side)) for side in ("lhs", "rhs")),
+        )
         launches = tuple(
             LaunchFact(
                 launch.id,
@@ -322,12 +385,15 @@ def verify(spec_path: Path, allow_external: bool = False) -> VerificationReport:
                     )
                 ),
                 tuple(sorted({s.role for s in launch.stores})),
+                kind="host_op" if launch.host_operation is not None else "ttir",
             )
             for launch in spec.lhs + spec.rhs
         )
         report = replace(
             report,
             pair_id=spec.pair_id,
+            execution_scope=spec.execution_scope,
+            comparison_contract=comparison_contract,
             inputs=inputs,
             index_bits=spec.index_bits,
             predicates=spec.predicates,

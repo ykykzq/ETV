@@ -180,25 +180,45 @@ def capture_call(directory, nodeid, function, arguments):
         import torch._inductor.config
 
         torch._inductor.config.use_static_cuda_launcher = False
-        status["capture_configuration"] = {"use_static_cuda_launcher": False}
-        # A copied argument set preserves input values from before the upstream call.
-        inputs = clone_arguments(arguments)
-        capture = Capture(directory)
-        capture.inputs(tensor_inputs(inputs))
-        reference_inputs = {k: v for k, v in inputs.items() if k != "out" or v is not None}
+        status["capture_configuration"] = {
+            "use_static_cuda_launcher": False,
+            "host_operations": "etv-host-operations-v1",
+            "reference_host_capture": "compiled_backend_runtime",
+            "input_preparation": "independent_equal_initial_input_clones",
+        }
+        # Input preparation is outside both captured programs. Clone the same
+        # original state twice before either program can mutate it; each clone
+        # preserves the original allocation aliases, strides and view offsets.
+        lhs_inputs = clone_arguments(arguments)
+        rhs_inputs = clone_arguments(arguments)
+        capture = Capture(directory, capture_host_operations=True)
+        capture.inputs(tensor_inputs(lhs_inputs))
+        capture.inputs(tensor_inputs(rhs_inputs))
+        reference_inputs = {k: v for k, v in rhs_inputs.items() if k != "out" or v is not None}
 
         def invoke_reference(**kwargs):
             return expected(**kwargs)
 
-        compiled = torch.compile(invoke_reference, fullgraph=True)
+        from torch._dynamo.backends.registry import lookup_backend
+
+        from .host_capture import instrument_compiled_callable
+
+        inductor = lookup_backend("inductor")
+
+        def capture_backend(graph, example_inputs, **kwargs):
+            return instrument_compiled_callable(capture, inductor(graph, example_inputs, **kwargs))
+
+        compiled = torch.compile(invoke_reference, backend=capture_backend, fullgraph=True)
         compiled(**clone_arguments(reference_inputs))
         torch.cuda.synchronize()
         with capture.side("lhs"):
-            lhs = function(**inputs)
+            lhs = function(**lhs_inputs)
         if not isinstance(lhs, torch.Tensor):
             raise ValueError("multiple/non-tensor outputs require separate observations")
         capture.outputs("lhs", {"Output": lhs})
-        with capture.side("rhs"):
+        # Modes enter inside the backend-produced runtime so Dynamo sees the same
+        # mode stack as warmup and cannot substitute eager reference execution.
+        with capture.side("rhs", host_mode=False):
             rhs = compiled(**reference_inputs)
         if not isinstance(rhs, torch.Tensor):
             raise ValueError("multiple/non-tensor reference outputs")
@@ -216,6 +236,7 @@ def capture_call(directory, nodeid, function, arguments):
         status.update(
             status="captured" if complete else "capture_incomplete",
             launches=len(capture.launches),
+            host_operations=len(capture.host_operations),
             diagnostics=capture.diagnostics,
         )
     except Exception as exc:

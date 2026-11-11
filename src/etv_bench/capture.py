@@ -1,6 +1,6 @@
 """Selected runtime launch capture through Python profiling, without patching Triton."""
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import importlib
 import importlib.metadata
 import json
@@ -16,7 +16,7 @@ from typing import Any, Iterator
 
 
 class Capture:
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, *, capture_host_operations: bool = False) -> None:
         self.directory = directory
         self.directory.mkdir(parents=True, exist_ok=True)
         self.launches: list[dict[str, Any]] = []
@@ -27,6 +27,17 @@ class Capture:
         self.diagnostics: list[str] = []
         self.output_sizes: dict[str, int] = {}
         self.storage_refs: list[Any] = []
+        self.capture_host_operations = capture_host_operations
+        self.host_operations: list[dict[str, Any]] = []
+        self.output_views: dict[str, dict[str, Any]] = {"lhs": {}, "rhs": {}}
+        self.steps = {"lhs": 0, "rhs": 0}
+
+    def next_step(self) -> int:
+        if self.current_side not in self.steps:
+            raise ValueError("an event requires an active capture side")
+        step = self.steps[self.current_side]
+        self.steps[self.current_side] += 1
+        return step
 
     def argument(self, value: Any, compiler_type: str | None = None) -> dict[str, Any]:
         if hasattr(value, "untyped_storage"):
@@ -42,6 +53,8 @@ class Capture:
                 "offset": (value.data_ptr() - base) // value.element_size(),
                 "element_size": value.element_size(),
                 "dtype": str(value.dtype),
+                "device": str(value.device),
+                "storage_nbytes": storage.nbytes(),
                 "shape": list(value.shape),
                 "stride": list(value.stride()),
             }
@@ -74,6 +87,7 @@ class Capture:
             if argument["kind"] != "buffer":
                 raise ValueError("outputs must be tensors")
             self.outputs_by_side[side][argument["storage_id"]] = role
+            self.output_views[side][role] = argument
             if role == "Output":
                 self.output_sizes[side] = value.numel()
 
@@ -139,7 +153,7 @@ class Capture:
                 {
                     "side": self.current_side,
                     "ordinal": ordinal,
-                    "step": ordinal,
+                    "step": self.next_step(),
                     "file": str(path.relative_to(self.directory)),
                     "function": kernel.name,
                     "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
@@ -154,16 +168,23 @@ class Capture:
             self.diagnostics.append("capture mapping incomplete: " + type(exc).__name__)
 
     @contextmanager
-    def side(self, side: str) -> Iterator[None]:
+    def side(self, side: str, *, host_mode: bool = True) -> Iterator[None]:
         if side not in ("lhs", "rhs") or self.current_side is not None:
             raise ValueError("invalid or nested capture side")
         previous = sys.getprofile()
         if previous is not None:
             raise RuntimeError("an existing profiler is active")
         self.current_side = side
-        sys.setprofile(self._profile)
         try:
-            yield
+            if self.capture_host_operations and host_mode:
+                from .host_capture import capture_host_operations
+
+                host_context = capture_host_operations(self)
+            else:
+                host_context = nullcontext()
+            with host_context:
+                sys.setprofile(self._profile)
+                yield
         finally:
             sys.setprofile(previous)
             self.current_side = None
@@ -192,6 +213,11 @@ class Capture:
             "outputs": self.outputs_by_side,
             "diagnostics": self.diagnostics,
         }
+        if self.capture_host_operations:
+            data["host_capture_format"] = "etv-host-operations-v1"
+            data["host_operations"] = self.host_operations
+            data["output_views"] = self.output_views
+            data["rng_contract"] = "unpaired; no shared seed or mask is assumed"
         if self.output_sizes.keys() == {"lhs", "rhs"} and len(set(self.output_sizes.values())) == 1:
             data["output_numel"] = self.output_sizes["lhs"]
         path = self.directory / "capture.json"

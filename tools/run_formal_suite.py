@@ -17,11 +17,17 @@ def write(path, value):
 
 
 def hashes():
-    return {
+    result = {
         str(p): hashlib.sha256(p.read_bytes()).hexdigest()
         for folder in ("src/etv", "src/etv_bench", "tools")
         for p in sorted(Path(folder).rglob("*.py"))
     }
+    result.update({
+        str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(Path("native").rglob("*"))
+        if p.is_file() and p.suffix in {".cpp", ".h", ".hpp"}
+    })
+    return result
 
 
 def main():
@@ -30,6 +36,9 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--python", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument(
+        "--execution-scope", choices=("ttir-only", "ttir-with-host-ops"), default="ttir-only"
+    )
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     lock = json.loads((args.frozen / "suite.lock.json").read_text())
@@ -51,6 +60,8 @@ def main():
         str(args.workers),
         "--timeout",
         "180",
+        "--execution-scope",
+        args.execution_scope,
     ]
     with (args.out / "analysis.log").open("w") as log:
         process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
@@ -62,6 +73,7 @@ def main():
                 "started": started,
                 "source_sha256": source,
                 "selected": len(lock["selected"]),
+                "execution_scope": args.execution_scope,
                 "corpus_lock_sha256": hashlib.sha256(
                     (args.frozen / "corpus.lock.json").read_bytes()
                 ).hexdigest(),
