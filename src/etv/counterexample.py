@@ -27,6 +27,8 @@ def _number(value: z3.ExprRef) -> Value:
             return "+inf"
         if z3.is_true(z3.simplify(value == ef.NEG_INF)):
             return "-inf"
+        if z3.is_true(z3.simplify(value == ef.NAN)):
+            return "nan"
         if z3.is_true(z3.simplify(ef.is_finite(value))):
             return _number(z3.simplify(ef.real(value)))
         raise ValueError("non-concrete extended-real model value")
@@ -89,6 +91,6 @@ def find_counterexample(root: RootPair, spec: PairSpec) -> ValueCheck:
             True,
             str(left),
             str(right),
-            "Evaluate the typed observation roots at the reported index with the exact scalar/array model. Both evaluators reproduce unequal exact finite or signed-infinite values.",
+            "Both evaluators reproduce different abstract values at the reported output index.",
         ),
     )

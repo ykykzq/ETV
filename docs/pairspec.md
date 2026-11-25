@@ -28,14 +28,26 @@ implementation, or its CUDA library kernels correct.
 ## Launches and ABI
 
 Launch fields are `id`, `file`, exact `function`, nonnegative `step`,
-`grid: {"programs": EXPR}`, `stores`, `abi`, `bindings`. Steps are ordered within
-a side. Same-step launches read the prior state and commit together only after
-the verifier rules out shared read/write storage roles within that step; possible
-cross-program/lane or inter-launch dependencies return
+`grid: {"programs": EXPR}`, `stores`, `abi`, `bindings`. A fixed multidimensional
+launch carries `grid.shape: [x, y, z]` with positive extents whose product equals
+`programs`. The benchmark binds these extents to the runtime launch record.
+Steps are ordered within
+a side. Same-step launches read the prior state and commit together after
+the verifier checks read/write independence. On fixed grids it enumerates the
+active addresses of overlapping roles. A scalar load can read the latest earlier
+scalar store to its address when all overlapping accesses are ordered within one
+program. Earlier loads use the state at their own instruction position.
+Unresolved cross-program/lane or inter-launch dependencies return
 `UNKNOWN(INPLACE_MEMORY_DEPENDENCY_UNPROVED)`. A multi-store
 kernel is one launch with multiple store entries. Store indices count `tt.store`
-operations in the selected acyclic function; all effects, including internal
-writes, must be declared.
+operations in depth-first order in the selected function. A store in a region
+keeps its static index for every execution. All stores, including internal
+writes, must be declared. Internal storage starts uninitialized even if a
+branch or zero-trip loop suppresses its producer.
+The optional buffer role field `initial_input: true` represents an arbitrary
+initial input buffer even when a launch also writes it. The strict capture
+export binds the field to the captured input allocation and corresponding ABI
+slots. The field carries no constant values or host execution steps.
 
 ABI maps logical roles to physical arguments `arg0`, `arg1`, etc. Each role maps
 to one endpoint object, or a nonempty list of endpoint objects for views of the

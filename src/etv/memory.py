@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, replace
 from math import prod
-from typing import Callable
+from typing import Callable, Iterator
 
 import z3
 
@@ -12,10 +12,12 @@ from .ir import (
     FLOAT,
     INDEX,
     Expr,
+    Kernel,
     ProgramPair,
     ProgramSequence,
     RootPair,
     StorageRef,
+    Store,
     const,
     substitute,
     var,
@@ -60,14 +62,20 @@ class _Builder:
         name: str,
         bad: z3.BoolRef,
         premises: tuple[z3.BoolRef, ...] = (),
-        reason: str = "SMT_UNKNOWN",
+        reason: str | Callable[[], str] = "SMT_UNKNOWN",
     ) -> QueryResult:
-        answer = query(bad, self.premises + premises, self.spec.limits.smt_timeout_ms)
+        bad = z3.simplify(bad)
+        answer = (
+            QueryResult("unsat")
+            if z3.is_false(bad)
+            else query(bad, self.premises + premises, self.spec.limits.smt_timeout_ms)
+        )
         self.obligations.append(
             Obligation(name, "smt", answer.status, self.dependencies, answer.detail, answer.model)
         )
         if answer.status != "unsat":
-            raise _Stop("UNKNOWN", "SMT_UNKNOWN" if answer.status == "unknown" else reason)
+            failure = reason() if callable(reason) else reason
+            raise _Stop("UNKNOWN", "SMT_UNKNOWN" if answer.status == "unknown" else failure)
         return answer
 
     def fact(self, name: str, detail: str = "") -> None:
@@ -158,22 +166,90 @@ class _Builder:
             raise _Stop("UNKNOWN", "NO_ALIAS_NOT_DECLARED")
         self.fact("memory.no_alias", "declared separation covers all read/write role pairs")
 
-    def no_inplace_dependencies(self) -> None:
-        """Snapshot composition requires no unproved same-step read/write overlap.
+    def fixed_accesses(
+        self, offset: Expr, mask: Expr, programs: int, lanes: int
+    ) -> Iterator[tuple[int, int]]:
+        for pid in range(programs):
+            for lane in range(lanes):
+                coords = (("__pid", const(pid)), ("__lane", const(lane)))
+                if evaluate(substitute(mask, coords), index_bits=self.spec.index_bits):
+                    yield (
+                        pid,
+                        int(evaluate(substitute(offset, coords), index_bits=self.spec.index_bits)),
+                    )
 
-        Earlier initialization does not make an in-place update safe: another
-        program or lane may write an address before it is read. A shared logical
-        role is insufficient evidence of disjoint access regions or ordering.
-        """
+    def snapshot_safe(self, step: tuple[Kernel, ...], roles: set[str]) -> bool:
+        """Prove every shared address is either disjoint or ordered within one program."""
+        writers: dict[tuple[str, int], list[tuple[int, int, Store]]] = {}
+        work = 0
+        try:
+            for index, kernel in enumerate(step):
+                programs = int(evaluate(kernel.programs, index_bits=self.spec.index_bits))
+                for store in kernel.stores:
+                    role = store.storage.logical_role
+                    if role not in roles:
+                        continue
+                    lanes = prod(store.lane_shape)
+                    work += programs * lanes
+                    if work > self.spec.limits.max_instances:
+                        return False
+                    for pid, address in self.fixed_accesses(
+                        store.offset, store.mask, programs, lanes
+                    ):
+                        writers.setdefault((role, address), []).append((index, pid, store))
+            for index, kernel in enumerate(step):
+                programs = int(evaluate(kernel.programs, index_bits=self.spec.index_bits))
+                for read in kernel.reads:
+                    storage = read.value.attr("storage")
+                    assert isinstance(storage, StorageRef)
+                    role = storage.logical_role
+                    if role not in roles:
+                        continue
+                    offset, mask, _ = read.value.args
+                    mask = Expr("select", BOOL, (read.guard, mask, const(False, BOOL)))
+                    lanes = prod(read.lane_shape)
+                    work += programs * lanes
+                    if work > self.spec.limits.max_instances:
+                        return False
+                    for pid, address in self.fixed_accesses(offset, mask, programs, lanes):
+                        for writer, owner, store in writers.get((role, address), ()):
+                            if writer != index or owner != pid or store.order is None:
+                                return False
+                            if not read.lane_shape and not store.lane_shape:
+                                # A scalar store can supply a later scalar load. Conditions
+                                # are checked before writes and cannot use this forwarding.
+                                if read.order < store.order or (
+                                    read.order > store.order
+                                    and not kernel.control_conditions
+                                    and dict(read.value.attrs).get("order") == read.order
+                                ):
+                                    continue
+                            if not (
+                                lanes == prod(store.lane_shape) == 1
+                                and read.order < store.order
+                                and read.value in walk(store.value)
+                            ):
+                                return False
+            return True
+        except (KeyError, UnsupportedSemantics, ZeroDivisionError):
+            return False
+
+    def no_inplace_dependencies(self) -> bool:
+        fixed_only = False
         for side, sequence in (("lhs", self.pair.lhs), ("rhs", self.pair.rhs)):
             for index, step in enumerate(sequence.steps):
                 written = {s.storage.logical_role for kernel in step for s in kernel.stores}
                 reads: set[str] = set()
+                unordered_reads: set[str] = set()
                 for kernel in step:
-                    expressions = kernel.effects + tuple(
-                        expr
-                        for store in kernel.stores
-                        for expr in (store.value, store.mask, store.offset)
+                    expressions = (
+                        kernel.effects
+                        + kernel.control_conditions
+                        + tuple(
+                            expr
+                            for store in kernel.stores
+                            for expr in (store.value, store.mask, store.offset)
+                        )
                     )
                     for expression in expressions:
                         for node in walk(expression):
@@ -181,8 +257,24 @@ class _Builder:
                                 storage = node.attr("storage")
                                 assert isinstance(storage, StorageRef)
                                 reads.add(storage.logical_role)
+                                if not kernel.reads:
+                                    unordered_reads.add(storage.logical_role)
                 overlap = reads & written
                 if overlap:
+                    if (
+                        not self.spec.parameters
+                        and overlap.isdisjoint(unordered_reads)
+                        and self.snapshot_safe(step, overlap)
+                    ):
+                        fixed_only = True
+                        self.fact(
+                            f"memory.{side}.step{index}.read_write_dependencies",
+                            (
+                                "Enumerated active addresses are disjoint or the singleton store "
+                                "and load are ordered in the same program."
+                            ),
+                        )
+                        continue
                     self.obligations.append(
                         Obligation(
                             f"memory.{side}.step{index}.read_write_dependencies",
@@ -195,10 +287,12 @@ class _Builder:
                         )
                     )
                     raise _Stop("UNKNOWN", "INPLACE_MEMORY_DEPENDENCY_UNPROVED")
-        self.fact(
-            "memory.read_write_independence",
-            "No storage role is both loaded and written within any side's execution step.",
-        )
+        if not fixed_only:
+            self.fact(
+                "memory.read_write_independence",
+                "No storage role is both loaded and written within any side's execution step.",
+            )
+        return fixed_only
 
     def resolve_fixed(
         self,
@@ -206,6 +300,7 @@ class _Builder:
         state: dict[tuple[str, int], Expr],
         written: set[str],
         replacements: tuple[tuple[str, Expr], ...],
+        earlier_stores: dict[tuple[str, int], list[tuple[int, Expr]]] | None = None,
     ) -> Expr:
         # State, written roles and lane/program bindings are fixed during this
         # call. Cache only within that snapshot; later execution steps can read
@@ -215,7 +310,9 @@ class _Builder:
 
         def resolve(node: Expr) -> Expr:
             if node not in cache:
-                cache[node] = self._resolve_fixed_node(node, state, written, resolve)
+                cache[node] = self._resolve_fixed_node(
+                    node, state, written, resolve, earlier_stores
+                )
             return cache[node]
 
         return resolve(expr)
@@ -226,7 +323,18 @@ class _Builder:
         state: dict[tuple[str, int], Expr],
         written: set[str],
         resolve: Callable[[Expr], Expr],
+        earlier_stores: dict[tuple[str, int], list[tuple[int, Expr]]] | None,
     ) -> Expr:
+        if expr.op in ("float_to_bits", "bits_to_float"):
+            raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "observable float bit pattern")
+        if expr.op == "select":
+            condition, yes, no = expr.args
+            guard = resolve(condition)
+            if guard.op == "const":
+                return resolve(yes if guard.attr("value") else no)
+            return simplify(
+                Expr("select", expr.type, (guard, resolve(yes), resolve(no))), self.spec.index_bits
+            )
         if expr.op == "load":
             storage = expr.attr("storage")
             assert isinstance(storage, StorageRef)
@@ -248,6 +356,12 @@ class _Builder:
             if address < 0:
                 raise _Stop("UNKNOWN", "UNDEFINED_LOAD_REACHABLE")
             key = (storage.logical_role, address)
+            if earlier_stores is not None:
+                order = dict(expr.attrs).get("order")
+                if isinstance(order, int):
+                    for write_order, stored in reversed(earlier_stores.get(key, [])):
+                        if write_order < order:
+                            return stored
             if key in state:
                 return state[key]
             if storage.logical_role in written:
@@ -290,14 +404,38 @@ class _Builder:
     ) -> dict[int, Expr]:
         observed = set(observed_offsets)
         state: dict[tuple[str, int], Expr] = {}
-        written = {
-            s.storage.logical_role for step in sequence.steps for k in step for s in k.stores
-        }
+        launches = self.spec.lhs if side == "lhs" else self.spec.rhs
+        # Inactive branches and zero-trip loops can eliminate all materialized
+        # stores to a role. Its declared producer still makes it internal.
+        written = {store.role for launch in launches for store in launch.stores}
+        written.update(
+            store.storage.logical_role
+            for step in sequence.steps
+            for kernel in step
+            for store in kernel.stores
+        )
+        written.difference_update(role.name for role in self.spec.roles if role.initial_input)
         instances = 0
         for step_index, step in enumerate(sequence.steps):
             pending: dict[tuple[str, int], Expr] = {}
-            for kernel in step:
+            structured_writes: set[tuple[str, int]] = set()
+            singleton_owners: dict[tuple[str, int], tuple[int, int]] = {}
+            for kernel_index, kernel in enumerate(step):
                 programs = int(evaluate(kernel.programs, index_bits=self.spec.index_bits))
+                local_writes: dict[int, dict[tuple[str, int], list[tuple[int, Expr]]]] = {}
+                instances += programs * len(kernel.control_conditions)
+                if instances > self.spec.limits.max_instances:
+                    raise ResourceLimit("structured control flow condition instances")
+                for i, condition in enumerate(kernel.control_conditions):
+                    for pid in range(programs):
+                        coords = (("__pid", const(pid)), ("__lane", const(0)))
+                        test = self.resolve_fixed(condition, state, written, coords)
+                        if test.op != "const":
+                            self.check(
+                                f"defined.{kernel.launch_id}.condition{i}.{pid}",
+                                z3.Not(self.encoder.defined(test)),
+                                reason="CONTROL_CONDITION_DEFINEDNESS_NOT_PROVED",
+                            )
                 for store in kernel.stores:
                     count = programs * prod(store.lane_shape)
                     instances += count
@@ -307,6 +445,8 @@ class _Builder:
                         for lane in range(prod(store.lane_shape)):
                             replace = (("__pid", const(pid)), ("__lane", const(lane)))
                             mask = simplify(substitute(store.mask, replace), self.spec.index_bits)
+                            if store.structured and mask.op != "const":
+                                mask = self.resolve_fixed(mask, state, written, replace)
                             try:
                                 active = bool(evaluate(mask, index_bits=self.spec.index_bits))
                             except (KeyError, UnsupportedSemantics):
@@ -336,25 +476,43 @@ class _Builder:
                                 )
                                 raise _Stop("DISPROVED", "ADDRESS_MISMATCH", witness)
                             if (role, address) in pending:
-                                witness = Counterexample(
-                                    index,
-                                    (("step", str(step_index)),),
-                                    index,
-                                    index,
-                                    True,
-                                    True,
-                                    None,
-                                    None,
-                                    "Enumerate the declared step: two active writers target this role and offset.",
-                                )
-                                raise _Stop("DISPROVED", "WRITE_RACE", witness)
-                            value = self.resolve_fixed(store.value, state, written, replace)
+                                if store.structured or (role, address) in structured_writes:
+                                    if not (
+                                        store.order is not None
+                                        and not store.lane_shape
+                                        and singleton_owners.get((role, address))
+                                        == (kernel_index, pid)
+                                    ):
+                                        raise _Stop("UNKNOWN", "STRUCTURED_WRITE_ORDER_UNPROVED")
+                                else:
+                                    witness = Counterexample(
+                                        index,
+                                        (("step", str(step_index)),),
+                                        index,
+                                        index,
+                                        True,
+                                        True,
+                                        None,
+                                        None,
+                                        "Enumerate the declared step: two active writers target this role and offset.",
+                                    )
+                                    raise _Stop("DISPROVED", "WRITE_RACE", witness)
+                            value = self.resolve_fixed(
+                                store.value, state, written, replace, local_writes.get(pid)
+                            )
                             self.check(
                                 f"defined.{side}.{step_index}.{role}.{address}",
                                 z3.Not(self.encoder.defined(value)),
-                                reason=self.undefined_reason(value),
+                                reason=lambda: self.undefined_reason(value),
                             )
                             pending[(role, address)] = value
+                            if store.order is not None and not store.lane_shape:
+                                singleton_owners[(role, address)] = (kernel_index, pid)
+                                local_writes.setdefault(pid, {}).setdefault(
+                                    (role, address), []
+                                ).append((store.order, value))
+                            if store.structured:
+                                structured_writes.add((role, address))
             state.update(pending)
             self.fact(f"memory.{side}.step{step_index}", f"{len(pending)} simultaneous writes")
         self.fact(
@@ -516,6 +674,9 @@ class _Builder:
         values: list[Expr] = []
         for side, sequence in (("lhs", self.pair.lhs), ("rhs", self.pair.rhs)):
             kernel = sequence.steps[0][0]
+            if kernel.control_conditions or any(store.structured for store in kernel.stores):
+                # The fixed path checks the per-program control decisions and all writers.
+                raise _Stop("UNKNOWN", "SYMBOLIC_STRUCTURED_EFFECTS_UNSUPPORTED")
             if len(kernel.stores) != 1:
                 raise _Stop("UNKNOWN", "PARAMETERIZED_MULTI_STORE_UNSUPPORTED")
             store = kernel.stores[0]
@@ -567,9 +728,11 @@ class _Builder:
                 "UNIQUE_WRITER_NOT_PROVED",
             )
             expr = substitute(store.value, candidate)
-            expr = self.symbolic_value(
-                expr, observed_domain, key, f"memory.{side}", {store.storage.logical_role}
-            )
+            launches = self.spec.lhs if side == "lhs" else self.spec.rhs
+            written = {selected.role for launch in launches for selected in launch.stores}
+            written.add(store.storage.logical_role)
+            written.difference_update(role.name for role in self.spec.roles if role.initial_input)
+            expr = self.symbolic_value(expr, observed_domain, key, f"memory.{side}", written)
             self.check(
                 f"defined.{side}.value",
                 z3.Not(self.encoder.defined(expr)),
@@ -598,7 +761,7 @@ def build_obligations(pair: ProgramPair, spec: PairSpec) -> ObligationSet:
     try:
         builder.premises_valid()
         builder.no_alias()
-        builder.no_inplace_dependencies()
+        fixed_only = builder.no_inplace_dependencies()
         if spec.observation.value_representation is not None:
             builder.fact(
                 "observation.encoding.injective",
@@ -613,7 +776,7 @@ def build_obligations(pair: ProgramPair, spec: PairSpec) -> ObligationSet:
             # obligation is still discharged. Unsupported layouts fall back to
             # complete enumeration, including concrete counterexample replay.
             numel = int(evaluate(spec.observation.numel, index_bits=spec.index_bits))
-            symbolic = numel > 256 and len(spec.lhs) == len(spec.rhs) == 1
+            symbolic = not fixed_only and numel > 256 and len(spec.lhs) == len(spec.rhs) == 1
             if symbolic:
                 trial = _Builder(pair, spec)
                 trial.obligations = list(builder.obligations)
@@ -685,6 +848,15 @@ def _replay_memory_model(
                             programs=concrete(kernel.programs),
                             parameters=tuple(concrete(p) for p in kernel.parameters),
                             effects=tuple(concrete(e) for e in kernel.effects),
+                            reads=tuple(
+                                replace(
+                                    read, value=concrete(read.value), guard=concrete(read.guard)
+                                )
+                                for read in kernel.reads
+                            ),
+                            control_conditions=tuple(
+                                concrete(e) for e in kernel.control_conditions
+                            ),
                             stores=tuple(
                                 replace(
                                     store,

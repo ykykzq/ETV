@@ -240,8 +240,6 @@ def export(run, corpus, baseline_path, replay_path=None, *, allow_same_strict_co
         row["control_flow"] = any(
             CONTROL_FLOW.search(path.read_text()) for path in directory.glob("*/*.ttir")
         )
-        if row["control_flow"] and row["status"] in ("PROVED", "DISPROVED"):
-            raise ValueError("a control-flow case unexpectedly obtained a conclusion")
         row["category"] = category(row, capture)
         row["parameters"] = retained[identity].get("parameters", {})
         row["baseline_status"] = original[identity]["status"]

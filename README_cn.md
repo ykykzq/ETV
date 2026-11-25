@@ -111,7 +111,8 @@ CUDA 生成使用独立的 PyTorch 2.8.0 benchmark 环境；其 Triton 依赖不
 穷举全部 program/lane/store；大规模单 launch 用例先尝试覆盖全部元素的符号证明，无法完成时
 回退到完整穷举。参数化路径目前支持每侧一个 launch、一个 store，且需要证明
 规范线性 writer。固定规模支持单侧多 launch，以及静态单输入结合律归约。双侧多 launch、
-参数化 launch DAG、循环、其他归约、原子操作、shared memory、barrier、多维 grid 和动态 rank 显式返回
+支持简单 `scf.if` 与静态 `scf.for`，详见 [TTIR 支持范围](docs/supported_ttir.md)。
+参数化 launch DAG、动态循环、其他归约、原子操作、shared memory、多维 grid 和动态 rank 显式返回
 `UNKNOWN`。
 
 结论依赖声明的 ABI、host 顺序、storage 分离和自定义前提，不证明 IEEE 舍入、NaN/
@@ -147,5 +148,5 @@ CUDA 采集是单独手动触发的 workflow。扩展边界见[架构](docs/arch
 
 [MIT](LICENSE)。
 
-TTIR 中显式 ±Inf 已使用扩展实数特殊值建模，外部浮点输入仍限定为有限实数；
-NaN 产生式须通过定义域检查。详见 [无穷值模型](docs/infinity-model.md)。
+TTIR 中显式 ±Inf 与 NaN 使用独立标签。外部浮点输入限定为有限实数。
+输出比较按 NaN 值类相等，仍检查各操作的定义域。详见 [特殊值模型](docs/infinity-model.md)。

@@ -1,16 +1,12 @@
-"""Partial extended-real semantics: finite exact reals and signed infinities.
-
-NaN and signed zero are deliberately absent. Invalid combinations are undefined,
-not converted into finite sentinels. External floating inputs remain finite.
-"""
+"""Partial floating semantics with exact finite reals and tagged special values."""
 
 from fractions import Fraction
 from typing import Literal, TypeAlias
 
 from .errors import UnsupportedSemantics
 
-Infinity: TypeAlias = Literal["+inf", "-inf"]
-ExtendedReal: TypeAlias = Fraction | int | bool | Infinity
+SpecialFloat: TypeAlias = Literal["+inf", "-inf", "nan"]
+ExtendedReal: TypeAlias = Fraction | int | bool | SpecialFloat
 
 
 def is_infinite(value: object) -> bool:
@@ -52,9 +48,17 @@ def compare(op: str, a: ExtendedReal, b: ExtendedReal) -> bool:
 
 
 def evaluate_special(op: str, values: tuple[ExtendedReal, ...]) -> ExtendedReal:
-    """Evaluate operations with at least one infinity, without host floats."""
+    """Evaluate supported special-value operations without host floats."""
     a = values[0]
     b = values[1] if len(values) > 1 else 0
+    if "nan" in values:
+        if op in ("eq", "ne", "lt", "le", "gt", "ge"):
+            return False
+        if op in ("fmin", "fmax"):
+            return b if a == "nan" else a
+        if op in ("extf", "truncf", "fneg", "absf", "fadd", "fsub", "fmul", "fdiv", "fma"):
+            return "nan"
+        undefined()
     ai, bi = is_infinite(a), is_infinite(b)
     if op in ("eq", "ne", "lt", "le", "gt", "ge"):
         return compare(op, a, b)

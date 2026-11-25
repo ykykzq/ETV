@@ -39,9 +39,7 @@ def test_unknown_special_tag_fails_closed(raw):
 def test_nan_tag_is_not_replaced_by_real_or_infinity():
     attr = Attribute("value", "float", "NaN", ("nan",))
     op = Operation(0, "arith.constant", (), (), (attr,), 0, (), "", "")
-    with pytest.raises(UnsupportedSemantics) as error:
-        _constant(op, FLOAT, ())
-    assert error.value.reason == "TTIR_NAN_CONSTANT_UNSUPPORTED"
+    assert _constant(op, FLOAT, ()).attr("value") == "nan"
 
 
 @pytest.mark.parametrize("special", ["+inf", "-inf"])

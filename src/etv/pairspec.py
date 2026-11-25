@@ -54,6 +54,7 @@ class Role:
     name: str
     kind: Literal["buffer", "scalar"]
     element: Type
+    initial_input: bool = False
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ class LaunchSpec:
     max_instances: int
     canonical_boolean_storage: bool = False
     host_operation: HostOperation | None = None
+    grid_shape: tuple[int, int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -304,9 +306,18 @@ def _launches(
             item = obj(raw, "id file function step grid stores abi bindings")
         bindings = _bindings(item["bindings"], symbols, scalar_constants=True)
         local = {**symbols, **dict(bindings)}
-        programs = config_expr(obj(item["grid"], "programs")["programs"], local)
+        grid = obj(item["grid"], "programs", "shape")
+        programs = config_expr(grid["programs"], local)
         if programs.type != INDEX:
             raise InputError("INVALID_PAIRSPEC", "grid must be integer")
+        grid_shape = None
+        if "shape" in grid:
+            extent = tuple(integer(n, 1) for n in array(grid["shape"]))
+            if len(extent) != 3 or programs != const(prod(extent)):
+                raise InputError(
+                    "INVALID_PAIRSPEC", "grid shape must match the fixed program count"
+                )
+            grid_shape = (extent[0], extent[1], extent[2])
         abi: list[Endpoint] = []
         for name, raw_endpoint in sorted(mapping(item["abi"]).items()):
             endpoints = raw_endpoint if isinstance(raw_endpoint, list) else [raw_endpoint]
@@ -365,6 +376,7 @@ def _launches(
                 limits.max_instances,
                 canonical_boolean_storage,
                 host_operation,
+                grid_shape,
             )
         )
     if not result or [x.step for x in result] != sorted(x.step for x in result):
@@ -426,7 +438,7 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
     pred = obj(top["predicates"], "roles bindings parameters constraints disjoint custom")
     roles: dict[str, Role] = {}
     for name, raw_role in sorted(mapping(pred["roles"]).items()):
-        role = obj(raw_role, "kind element")
+        role = obj(raw_role, "kind element", "initial_input")
         kind = string(role["kind"])
         if kind not in ("buffer", "scalar"):
             raise InputError("INVALID_PAIRSPEC", "invalid role kind")
@@ -434,7 +446,10 @@ def parse_pair_spec(path: Path, allow_external: bool = False) -> PairSpec:
             typ = parse_type(string(role["element"]))
         except ValueError as exc:
             raise InputError("INVALID_PAIRSPEC", str(exc)) from exc
-        roles[name] = Role(name, cast(Literal["buffer", "scalar"], kind), typ)
+        initial_input = boolean(role.get("initial_input", False))
+        if initial_input and kind != "buffer":
+            raise InputError("INVALID_PAIRSPEC", "initial_input requires a buffer role")
+        roles[name] = Role(name, cast(Literal["buffer", "scalar"], kind), typ, initial_input)
     params: list[Parameter] = []
     symbols: dict[str, Expr] = {}
     for name, raw_param in sorted(mapping(pred["parameters"]).items()):

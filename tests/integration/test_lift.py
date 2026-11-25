@@ -510,15 +510,14 @@ def test_official_dense_mixed_infinities_keep_lane_order(tmp_path):
     ]
 
 
-def test_official_nan_has_explicit_unsupported_reason(tmp_path):
+def test_official_nan_is_kept_as_a_distinct_value(tmp_path):
     text = """module { tt.func @kernel(%out: !tt.ptr<f32>) {
       %v = arith.constant 0x7FC00000 : f32
       tt.store %out, %v : !tt.ptr<f32>
       tt.return
     } }"""
-    with pytest.raises(ETVError) as error:
-        lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
-    assert error.value.reason == "TTIR_NAN_CONSTANT_UNSUPPORTED"
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    assert evaluate(kernel.stores[0].value) == "nan"
 
 
 @pytest.mark.parametrize("predicate", ["ord", "uno", "false", "true"])
@@ -666,3 +665,117 @@ def test_nonzero_fastmath_is_not_ignored_with_infinity_model(tmp_path, flags):
             lift_text(tmp_path, text, abi)
         assert error.value.reason == "TTIR_OP_UNSUPPORTED"
         assert error.value.detail == "nonzero fastmath flags"
+
+
+@pytest.mark.parametrize("predicate, expected", [("ogt", 7), ("olt", -3)])
+def test_compare_select_reduction_over_extended_reals(tmp_path, predicate, expected):
+    text = f"""module {{ tt.func @kernel(%out: !tt.ptr<f32>) {{
+      %v = arith.constant dense<[1.0, -3.0, 7.0, 2.0]> : tensor<4xf32>
+      %r = "tt.reduce"(%v) <{{axis = 0 : i32}}> ({{
+      ^bb0(%a: f32, %b: f32):
+        %better = arith.cmpf {predicate}, %a, %b : f32
+        %nan = arith.cmpf une, %a, %a : f32
+        %choose = arith.ori %better, %nan : i1
+        %result = arith.select %choose, %a, %b : f32
+        tt.reduce.return %result : f32
+      }}) : (tensor<4xf32>) -> f32
+      tt.store %out, %r : !tt.ptr<f32>
+      tt.return
+    }} }}"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    assert evaluate(kernel.stores[0].value) == expected
+
+
+def test_pure_external_double_exp(tmp_path):
+    text = """module { tt.func @kernel(%x: f64, %out: !tt.ptr<f64>) {
+      %y = "tt.extern_elementwise"(%x) <{libname = "", libpath = "",
+           symbol = "__nv_exp", pure = true}> : (f64) -> f64
+      tt.store %out, %y : !tt.ptr<f64>
+      tt.return
+    } }"""
+    kernel = lift_text(
+        tmp_path, text, (Endpoint("Input", "scalar", "arg0"), Endpoint("Output", "block", "arg1"))
+    )
+    assert kernel.stores[0].value.op == "exp"
+
+
+def test_argmax_reduction_uses_smallest_index_on_ties(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<i32>) {
+      %values = arith.constant dense<[4.0, 7.0, 7.0, 2.0]> : tensor<4xf32>
+      %indices = arith.constant dense<[0, 9, 3, 2]> : tensor<4xi32>
+      %best:2 = "tt.reduce"(%values, %indices) <{axis = 0 : i32}> ({
+      ^bb0(%a: f32, %i: i32, %b: f32, %j: i32):
+        %eq = arith.cmpf oeq, %a, %b : f32
+        %index = arith.cmpi slt, %i, %j : i32
+        %tie = arith.andi %eq, %index : i1
+        %greater = arith.cmpf ogt, %a, %b : f32
+        %take = arith.ori %greater, %tie : i1
+        %value = arith.select %take, %a, %b : f32
+        %position = arith.select %take, %i, %j : i32
+        tt.reduce.return %value, %position : f32, i32
+      }) : (tensor<4xf32>, tensor<4xi32>) -> (f32, i32)
+      tt.store %out, %best#1 : !tt.ptr<i32>
+      tt.return
+    } }"""
+    abi = (Endpoint("Output", "block", "arg0"),)
+    kernel = lift_text(tmp_path, text, abi)
+    assert evaluate(kernel.stores[0].value) == 3
+    with pytest.raises(ETVError, match="lexicographic"):
+        lift_text(tmp_path, text.replace("%take, %i, %j", "%take, %j, %i"), abi)
+
+
+def test_bitcast_xor_lane_routing_preserves_float_values(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<f32>) {
+      %source = arith.constant dense<[4.0, -7.0]> : tensor<2xf32>
+      %bits = tt.bitcast %source : tensor<2xf32> -> tensor<2xi32>
+      %parity = "tt.reduce"(%bits) <{axis = 0 : i32}> ({
+      ^bb0(%x: i32, %y: i32):
+        %xor = arith.xori %x, %y : i32
+        tt.reduce.return %xor : i32
+      }) : (tensor<2xi32>) -> i32
+      %b = tt.splat %parity : i32 -> tensor<2xi32>
+      %flipped = arith.xori %bits, %b : tensor<2xi32>
+      %values = tt.bitcast %flipped : tensor<2xi32> -> tensor<2xf32>
+      %i = tt.make_range {start = 0 : i32, end = 2 : i32} : tensor<2xi32>
+      %base = tt.splat %out : !tt.ptr<f32> -> tensor<2x!tt.ptr<f32>>
+      %p = tt.addptr %base, %i : tensor<2x!tt.ptr<f32>>, tensor<2xi32>
+      tt.store %p, %values : tensor<2x!tt.ptr<f32>>
+      tt.return
+    } }"""
+    result = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    from etv.semantics import simplify
+
+    assert [
+        evaluate(simplify(substitute(result.stores[0].value, (("__lane", const(i)),))))
+        for i in range(2)
+    ] == [-7, 4]
+
+
+@pytest.mark.parametrize(
+    "predicate,expected",
+    [("oeq", False), ("one", False), ("une", True), ("ord", False), ("uno", True), ("true", True)],
+)
+def test_official_nan_predicates(tmp_path, predicate, expected):
+    text = f"""module {{ tt.func @kernel(%out: !tt.ptr<i1>) {{
+      %nan = arith.constant 0x7FC00000 : f32
+      %value = arith.cmpf {predicate}, %nan, %nan : f32
+      tt.store %out, %value : !tt.ptr<i1>
+      tt.return
+    }} }}"""
+    kernel = lift_text(tmp_path, text, (Endpoint("Output", "block", "arg0"),))
+    assert evaluate(kernel.stores[0].value) is expected
+
+
+def test_acosh_external_handles_inputs_below_one_and_at_one(tmp_path):
+    text = """module { tt.func @kernel(%x: f32, %out: !tt.ptr<f32>) {
+      %y = "tt.extern_elementwise"(%x) <{libname = "", libpath = "",
+           symbol = "__nv_acoshf", pure = true}> : (f32) -> f32
+      tt.store %out, %y : !tt.ptr<f32>
+      tt.return
+    } }"""
+    kernel = lift_text(
+        tmp_path, text, (Endpoint("Input", "scalar", "arg0"), Endpoint("Output", "block", "arg1"))
+    )
+    value = kernel.stores[0].value
+    assert evaluate(value, {"scalar.Input": Fraction(0)}) == "nan"
+    assert evaluate(value, {"scalar.Input": Fraction(1)}) == 0

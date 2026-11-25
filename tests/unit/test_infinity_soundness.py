@@ -134,3 +134,28 @@ def test_finite_input_isinf_is_false_only_under_current_declared_input_domain():
     solver = z3.Solver()
     solver.add(extended.defined(pred), extended.encode(pred))
     assert solver.check() == z3.sat
+
+
+@pytest.mark.parametrize("op", ["sqrt", "rsqrt", "exp", "exp2"])
+def test_positive_transcendental_results_cannot_cause_division_by_zero(op):
+    x = var("x", FLOAT)
+    value = floating(op, x)
+    division = floating("fdiv", const(1, FLOAT), value)
+    encoder = Encoder()
+    solver = z3.Solver()
+    solver.add(encoder.encode(Expr("gt", BOOL, (x, const(0, FLOAT)))))
+    solver.add(z3.Not(encoder.defined(division)))
+    assert solver.check() == z3.unsat
+
+
+def test_nan_observation_is_distinct_from_a_finite_value(tmp_path, monkeypatch):
+    report = verify_values(tmp_path, monkeypatch, const("nan", FLOAT), const(0, FLOAT))
+    assert (report.status, report.reason) == ("DISPROVED", "COMPUTE_MISMATCH")
+    assert report.counterexample is not None
+    assert (report.counterexample.lhs_value, report.counterexample.rhs_value) == ("nan", "0")
+
+
+def test_nan_payload_is_abstracted_in_output_equality(tmp_path, monkeypatch):
+    value = const("nan", FLOAT)
+    report = verify_values(tmp_path, monkeypatch, value, floating("fadd", value, const(1, FLOAT)))
+    assert report.status == "PROVED"

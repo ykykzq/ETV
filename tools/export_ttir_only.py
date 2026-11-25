@@ -9,6 +9,7 @@ import argparse
 from collections import Counter
 import importlib.util
 import json
+from math import prod
 from pathlib import Path
 import re
 
@@ -34,6 +35,9 @@ STRICT_REASONS = {
     "INPLACE_MEMORY_DEPENDENCY_UNPROVED": "原地 / 跨 lane 读写依赖未证明",
     "TTIR_NAN_CONSTANT_UNSUPPORTED": "NaN 常量尚未支持",
     "SMT_UNKNOWN": "SMT 求解未决 / 达到预算",
+    "CONTROL_CONDITION_DEFINEDNESS_NOT_PROVED": "分支条件定义性未证明",
+    "STRUCTURED_WRITE_ORDER_UNPROVED": "控制流内重复写入顺序未证明",
+    "SYMBOLIC_STRUCTURED_EFFECTS_UNSUPPORTED": "参数化控制流写入暂不支持",
 }
 read, digest, counts = legacy.read, legacy.digest, legacy.counts
 
@@ -59,7 +63,12 @@ def strict_category(row):
             return "TTIR 输出在显式布尔 0/1 编码下逻辑值等价"
         return "TTIR 执行片段的可观察内存等价"
     if row["status"] == "DISPROVED":
-        return "TTIR 执行片段不等价"
+        return {
+            "MASK_MISMATCH": "TTIR 写入覆盖不一致",
+            "COVERAGE_MISMATCH": "TTIR 输出覆盖不完整",
+            "ADDRESS_MISMATCH": "TTIR 写入地址违反观察契约",
+            "WRITE_RACE": "TTIR 写入冲突",
+        }.get(row.get("reason"), "TTIR 数值反例")
     # A syntax scan is a separate structural statistic, never a root cause.
     # For an actual formal report, its stopping reason takes precedence over
     # capture/pair diagnostics (which may describe an earlier construction step).
@@ -67,7 +76,9 @@ def strict_category(row):
     if row["status"] == "UNKNOWN" and reason:
         diagnostic = row.get("diagnostic") or row.get("audit", {}).get("diagnostic", "")
         if reason == "TTIR_REGION_UNSUPPORTED" and str(diagnostic).startswith(("scf.", "cf.")):
-            return "分支 / 循环暂不支持"
+            return "控制流形式超出当前支持范围"
+        if reason == "RESOURCE_LIMIT" and str(diagnostic).startswith(("scf.for:", "structured control flow")):
+            return "控制流展开达到资源限制"
         return STRICT_REASONS.get(reason, legacy.REASONS.get(reason, reason))
     diagnostics = row.get("diagnostics", [])
     if any(text.startswith(SCOPE_DEPENDENCY) for text in diagnostics):
@@ -96,16 +107,19 @@ def strict_category(row):
 def target_groups(cases):
     """Freeze target membership by corrected baseline evidence, not new verdicts."""
     groups = []
-    categories = TARGET_CATEGORIES | {"nonfinite_constants": "非有限浮点常量未支持"}
+    categories = TARGET_CATEGORIES | {
+        "nonfinite_constants": "非有限浮点常量未支持",
+        "structured_control": "控制流形式超出当前支持范围",
+    }
     for key, category in categories.items():
         members = [
             row for row in cases
             if row["baseline_status"] == (
-                "UNKNOWN" if key == "nonfinite_constants" else "NOT_VERIFIED"
+                "UNKNOWN" if key in ("nonfinite_constants", "structured_control") else "NOT_VERIFIED"
             )
             and row["baseline_category"] == category
         ]
-        if key == "nonfinite_constants" and not members:
+        if key in ("nonfinite_constants", "structured_control") and not members:
             continue
         groups.append({
             "key": key,
@@ -233,6 +247,13 @@ def audit_pair_scope(pair_path, capture, corpus_case, *, require_complete):
     ):
         raise ValueError("TTIR-only observation does not cover the original full output")
     comparison_contract = audit_output_representation(pair, capture, pair_path)
+    initial_roles = {
+        role for role, definition in pair.get("predicates", {}).get("roles", {}).items()
+        if definition.get("initial_input") is True
+    }
+    captured_inputs = capture.get("input_roles", {})
+    if not initial_roles <= set(captured_inputs.values()):
+        raise ValueError("initial input role has no captured input allocation")
     captured = {}
     for launch in capture["launches"]:
         key = (launch["side"], launch["file"], launch["function"])
@@ -254,6 +275,20 @@ def audit_pair_scope(pair_path, capture, corpus_case, *, require_complete):
             if key not in captured or key in matched:
                 raise ValueError("PairSpec launch is not a unique captured physical TTIR")
             actual = captured[key]
+            if "grid" in actual:
+                grid = program.get("grid", {})
+                if grid.get("programs") != prod(actual["grid"]) or grid.get(
+                    "shape", [grid.get("programs"), 1, 1]
+                ) != actual["grid"]:
+                    raise ValueError("PairSpec grid disagrees with captured launch")
+            for role, endpoints in program.get("abi", {}).items():
+                if role not in initial_roles:
+                    continue
+                slots = {f"arg{slot['slot']}": slot["runtime"] for slot in actual["slots"]}
+                for endpoint in endpoints if isinstance(endpoints, list) else [endpoints]:
+                    runtime = slots.get(endpoint["name"], {})
+                    if captured_inputs.get(runtime.get("storage_id")) != role:
+                        raise ValueError("initial input endpoint disagrees with captured allocation")
             work_artifact = recapture.contained(pair_path.parent, program["file"])
             if digest(work_artifact) != actual["sha256"]:
                 raise ValueError("generated pair uses changed or synthetic TTIR bytes")
@@ -285,6 +320,7 @@ def audit_pair_scope(pair_path, capture, corpus_case, *, require_complete):
         "full_output_observation": True,
         "comparison_contract": comparison_contract,
         "boolean_storage_premise": pair["metadata"].get("target", {}).get("boolean_storage"),
+        "initial_input_roles": sorted(initial_roles),
         "captured_physical_launch_count": len(captured),
         "pair_physical_launch_count": len(matched),
         "omitted_capture_launches": len(captured) - len(matched),

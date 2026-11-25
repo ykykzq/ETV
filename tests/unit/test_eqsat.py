@@ -13,7 +13,8 @@ def test_official_egglog_applies_formal_rule(tmp_path):
     x = var("x", FLOAT)
     lhs = Expr("fadd", FLOAT, (x, const(0, FLOAT)))
     rules = admit_rules(spec, RootPair(lhs, x, const(0)))
-    assert all(f.admission == "formal" for f in rules.facts)
+    identity = next(f for f in rules.facts if f.id == "builtin.fadd_zero")
+    assert identity.admission == "formal"
     result = saturate(lhs, x, rules, replace(Limits(), egraph_timeout_ms=10000))
     assert result.reason == "", result
     assert result.merged == (True,)

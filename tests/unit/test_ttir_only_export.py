@@ -43,7 +43,8 @@ def experiment(tmp_path, monkeypatch):
         for side in ("lhs", "rhs"):
             artifact = directory / side / "launch-000.ttir"
             artifact.parent.mkdir()
-            artifact.write_text("module {} // recorded " + side)
+            control = "  scf.for %i = %lb to %ub step %step\n" if index == 0 else ""
+            artifact.write_text(f"module {{\n{control}}} // recorded {side}")
             launches.append(
                 {
                     "side": side,
@@ -225,6 +226,8 @@ def test_strict_export_audits_scope_hashes_and_ignores_excluded_host_diagnostics
     assert result["scope_audit"]["report_host_inputs"] == 0
     assert result["proof_audit"]["counterexamples_replayed"] == 0
     assert result["proof_audit"]["whole_operator_numeric_counterexamples_confirmed"] is None
+    assert result["cases"][0]["control_flow"] is True
+    assert result["cases"][0]["status"] == "PROVED"
     assert result["cases"][1]["category"] == "TTIR 操作未支持"
     assert result["cases"][2]["category"] == "TTIR-only 范围外的宿主数据依赖 / 最终输出"
     assert result["cases"][0]["scope_audit"]["physical_launches"][0]["capture_step"] == 2
@@ -275,7 +278,7 @@ def test_structural_control_flow_does_not_override_actual_pair_failure(diagnosti
 
 
 @pytest.mark.parametrize("reason,diagnostic,expected", [
-    ("TTIR_REGION_UNSUPPORTED", "scf.for", "分支 / 循环暂不支持"),
+    ("TTIR_REGION_UNSUPPORTED", "scf.for", "控制流形式超出当前支持范围"),
     ("TTIR_REGION_UNSUPPORTED", "tt.reduce", "复杂 reduction region 未支持"),
     ("TTIR_OP_UNSUPPORTED", "unsupported bitcast", "TTIR 操作未支持"),
     ("INPLACE_MEMORY_DEPENDENCY_UNPROVED", "cross-lane dependency", "原地 / 跨 lane 读写依赖未证明"),

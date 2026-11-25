@@ -46,6 +46,8 @@ class Encoder:
 
     def _encode(self, expr: Expr) -> z3.ExprRef:
         op = expr.op
+        if op in ("float_to_bits", "bits_to_float"):
+            raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "observable float bit pattern")
         if op == "const":
             value = expr.attr("value")
             if expr.type == BOOL:
@@ -124,7 +126,12 @@ class Encoder:
             self.exact = self.exact and exact
             return result
         if op in ("ordered", "unordered", "isnan"):
-            return z3.BoolVal(op == "ordered")
+            has_nan = z3.Or(*(arg == ef.NAN for arg in args))
+            return z3.Not(has_nan) if op == "ordered" else has_nan
+        if op == "isinf":
+            return z3.Or(a == ef.POS_INF, a == ef.NEG_INF)
+        if op in ("float_true", "float_false"):
+            return z3.BoolVal(op == "float_true")
         if (
             op in ("eq", "ne", "lt", "le", "gt", "ge")
             and expr.args[0].type.kind == "abstract_float"
@@ -213,6 +220,8 @@ class Encoder:
         return self.defined_cache[expr]
 
     def _defined(self, expr: Expr) -> z3.BoolRef:
+        if expr.op in ("float_to_bits", "bits_to_float"):
+            raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "observable float bit pattern")
         if expr.op == "undefined":
             return z3.BoolVal(False)
         if expr.op == "select":

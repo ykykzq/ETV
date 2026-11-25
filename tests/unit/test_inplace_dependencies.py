@@ -1,10 +1,13 @@
 """Aliased read/write access needs a dependence proof, not snapshot semantics."""
 
 import importlib
+import json
+from dataclasses import replace
 
 import pytest
 
 from etv.ir import BOOL, FLOAT, INDEX, Expr, Kernel, ProgramPair, ProgramSequence, StorageRef, Store
+from etv.ir import MemoryRead
 from etv.ir import const, var, walk
 from etv.memory import build_obligations
 from etv.pairspec import parse_pair_spec
@@ -226,3 +229,73 @@ def test_real_ttir_initialized_alias_update_is_not_a_proof(tmp_path):
         report
     )
     assert not report.equalities
+
+
+def test_declared_internal_producer_with_zero_active_stores_remains_uninitialized(tmp_path):
+    producer = kernel("lhs.0", "Internal", const(0), const(1, FLOAT))
+    consumer = kernel("lhs.1", "Output", const(0), load("Internal", const(0)))
+    reference = kernel("rhs.0", "Output", const(0), load("Internal", const(0), "rhs"))
+    _, spec, pair = case(tmp_path, ((producer,), (consumer,)), ((reference,),), numel=1)
+    without_writes = replace(producer, stores=())
+    pair = replace(pair, lhs=ProgramSequence(((without_writes,), (consumer,))))
+    memory = build_obligations(pair, spec)
+    assert (memory.status, memory.reason) == ("UNKNOWN", "UNDEFINED_LOAD_REACHABLE")
+
+
+@pytest.mark.parametrize("store_offset", [1, 0])
+def test_ordered_scalar_update_of_captured_input(tmp_path, store_offset):
+    incoming = load("Input", const(0))
+    update = kernel("lhs.0", "Input", const(store_offset), incoming)
+    after = kernel("lhs.1", "Output", const(0), load("Input", const(store_offset)))
+    reference = kernel("rhs.0", "Output", const(0), load("Input", const(0), "rhs"))
+    path, _, pair = case(tmp_path, ((update,), (after,)), ((reference,),), numel=1)
+    data = json.loads(path.read_text())
+    data["predicates"]["roles"]["Input"]["initial_input"] = True
+    spec = parse_pair_spec(write(tmp_path, data))
+    update = replace(
+        update,
+        stores=(replace(update.stores[0], order=1),),
+        effects=(incoming,),
+        reads=(MemoryRead(incoming, (), 0),),
+    )
+    pair = replace(pair, lhs=ProgramSequence(((update,), (after,))))
+    outcome = build_obligations(pair, spec)
+    assert outcome.status == "closed", outcome.reason
+    assert outcome.roots[0].lhs == outcome.roots[0].rhs
+
+
+@pytest.mark.parametrize("programs", [1, 2])
+def test_structured_scalar_overwrite_requires_one_program_per_address(tmp_path, programs):
+    writer = kernel("lhs.0", "Output", const(0), const(2, FLOAT), programs)
+    last = replace(writer.stores[0], structured=True, order=1)
+    first = replace(last, store_index=1, value=const(1, FLOAT), order=0)
+    writer = replace(writer, stores=(first, last))
+    reference = kernel("rhs.0", "Output", const(0), const(2, FLOAT))
+    _, spec, pair = case(tmp_path, ((writer,),), ((reference,),), numel=1)
+    result = build_obligations(pair, spec)
+    if programs == 1:
+        assert result.status == "closed", result.reason
+        assert result.roots[0].lhs == const(2, FLOAT)
+    else:
+        assert (result.status, result.reason) == ("UNKNOWN", "STRUCTURED_WRITE_ORDER_UNPROVED")
+
+
+def test_single_program_loads_the_most_recent_scalar_store(tmp_path):
+    address = const(0)
+    read = load("Internal", address)
+    read = replace(read, attrs=(("order", 1),) + read.attrs)
+    initial = kernel("lhs.0", "Internal", address, const(7, FLOAT))
+    output = kernel("lhs.0", "Output", address, read)
+    lhs = replace(
+        initial,
+        stores=(
+            replace(initial.stores[0], order=0),
+            replace(output.stores[0], store_index=1, order=2),
+        ),
+        reads=(MemoryRead(read, (), 1),),
+    )
+    reference = kernel("rhs.0", "Output", address, const(7, FLOAT))
+    _, spec, pair = case(tmp_path, ((lhs,),), ((reference,),), numel=1)
+    result = build_obligations(pair, spec)
+    assert result.status == "closed", result.reason
+    assert result.roots[0].lhs == const(7, FLOAT)

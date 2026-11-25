@@ -118,7 +118,7 @@ class Expr:
 
 def const(value: int | bool | Fraction | str, typ: Type = INDEX) -> Expr:
     if typ.kind == "abstract_float":
-        if value not in ("+inf", "-inf"):
+        if value not in ("+inf", "-inf", "nan"):
             value = Fraction(value)
     elif isinstance(value, str):
         raise ValueError("special constants require abstract_float")
@@ -157,14 +157,19 @@ def _free_variables(expr: Expr) -> frozenset[str]:
     return cached
 
 
-@lru_cache(maxsize=100000)
 def substitute(expr: Expr, items: tuple[tuple[str, Expr], ...]) -> Expr:
+    if not items:
+        return expr
+    relevant = _free_variables(expr)
+    return _substitute(expr, tuple(item for item in items if item[0] in relevant))
+
+
+@lru_cache(maxsize=100000)
+def _substitute(expr: Expr, items: tuple[tuple[str, Expr], ...]) -> Expr:
     if not items:
         return expr
     if expr.op == "var":
         return dict(items).get(str(expr.attr("name")), expr)
-    if not any(name in _free_variables(expr) for name, _ in items):
-        return expr
     args = tuple(substitute(arg, items) for arg in expr.args)
     if all(new is old for new, old in zip(args, expr.args, strict=True)):
         return expr
@@ -196,6 +201,16 @@ class Store:
     mask: Expr
     value: Expr
     lane_shape: tuple[int, ...] = ()
+    structured: bool = False
+    order: int | None = None
+
+
+@dataclass(frozen=True)
+class MemoryRead:
+    value: Expr
+    lane_shape: tuple[int, ...]
+    order: int
+    guard: Expr = const(True, BOOL)
 
 
 @dataclass(frozen=True)
@@ -208,6 +223,8 @@ class Kernel:
     source_hash: str
     parameters: tuple[Expr, ...] = ()
     effects: tuple[Expr, ...] = ()
+    control_conditions: tuple[Expr, ...] = ()
+    reads: tuple[MemoryRead, ...] = ()
 
 
 @dataclass(frozen=True)

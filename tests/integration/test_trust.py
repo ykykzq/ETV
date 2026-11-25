@@ -81,10 +81,13 @@ def test_real_multilaunch_regions_and_counts(case, components):
     report = verify(ROOT / "examples/real" / case / "pair.json")
     # Quantile's reduction and infinity padding now lift; the subsequent
     # pointer/bit reinterpretation still lies outside this abstraction.
-    reason = "TTIR_OP_UNSUPPORTED" if case == "quantile" else "TTIR_REGION_UNSUPPORTED"
+    reason = "TTIR_OP_UNSUPPORTED" if case == "quantile" else "ABI_ROLE_MISSING"
     assert (report.status, report.reason) == ("UNKNOWN", reason)
     if case == "quantile":
         assert report.diagnostic == "unsupported pointer/bit reinterpretation"
+    else:
+        missing = "arg8" if case == "argsort" else "arg6"
+        assert report.diagnostic == f"lhs.0:{missing}"
     assert len(report.launches) == 3
     assert sum(launch.stores for launch in report.launches) == components
     first, second = report.launches[1:]

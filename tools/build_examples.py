@@ -218,9 +218,10 @@ def main() -> None:
     for side in ("lhs", "rhs"):
         text = kernel(side).replace(
             "    tt.return",
-            """    %zero = arith.constant 0 : index
-    %upper = arith.constant 1 : index
-    scf.for %i = %zero to %upper step %upper {
+            """    scf.while : () -> () {
+      %stop = arith.constant false
+      scf.condition(%stop)
+    } do {
       scf.yield
     }
     tt.return""",

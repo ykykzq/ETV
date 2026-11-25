@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from math import prod
 from pathlib import Path
 import re
 import subprocess
@@ -360,7 +361,11 @@ def pair_capture(
     unused_arguments: dict[tuple[str, int], set[int]] = {}
     for launch in capture["launches"]:
         try:
-            if not launch["selected_runtime_launch"] or launch["grid"][1:] != [1, 1]:
+            if (
+                not launch["selected_runtime_launch"]
+                or len(launch["grid"]) != 3
+                or any(type(n) is not int or n < 1 for n in launch["grid"])
+            ):
                 raise ValueError("launch selection or grid unsupported")
             artifact = _contained(root, launch["file"])
             if (
@@ -393,7 +398,7 @@ def pair_capture(
         return latest(excluded_host_writes.get(key, [])) > latest(ttir_writes.get(key, []))
 
     programs: dict[str, list[dict[str, Any]]] = {"lhs": [], "rhs": []}
-    roles: dict[str, dict[str, str]] = {}
+    roles: dict[str, dict[str, Any]] = {}
     storage_roles: dict[tuple[str, str], str] = {}
     role_identities: dict[tuple[str, str], set[str]] = {}
     unused_storage_roles: dict[tuple[str, str], str] = {}
@@ -496,7 +501,8 @@ def pair_capture(
                 "file": launch["file"],
                 "function": launch["function"],
                 "step": launch["step"],
-                "grid": {"programs": launch["grid"][0]},
+                "grid": {"programs": prod(launch["grid"])}
+                | ({"shape": launch["grid"]} if launch["grid"][1:] != [1, 1] else {}),
                 "abi": abi,
                 "bindings": bindings,
                 "stores": [{"index": i, "role": slot_roles[slot]} for i, slot in enumerate(writes)],
@@ -548,6 +554,17 @@ def pair_capture(
             )
     for program in programs.values():
         program.sort(key=lambda launch: launch["step"])
+    if execution_scope == "ttir-only":
+        captured_inputs = set(capture.get("input_roles", {}).values())
+        written_roles = {
+            store["role"]
+            for sequence in programs.values()
+            for launch in sequence
+            for store in launch["stores"]
+        }
+        for role in captured_inputs & written_roles:
+            if roles[role]["kind"] == "buffer":
+                roles[role]["initial_input"] = True
     for side in ("lhs", "rhs"):
         for identity in capture["outputs"].get(side, {}):
             if excluded_host_dependency(side, identity):

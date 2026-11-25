@@ -8,9 +8,11 @@ FLOAT_SORT = z3.Datatype("ETVExtendedReal")
 FLOAT_SORT.declare("Finite", ("finite_value", z3.RealSort()))
 FLOAT_SORT.declare("PositiveInfinity")
 FLOAT_SORT.declare("NegativeInfinity")
+FLOAT_SORT.declare("NaN")
 FLOAT_SORT = FLOAT_SORT.create()
 POS_INF = FLOAT_SORT.PositiveInfinity
 NEG_INF = FLOAT_SORT.NegativeInfinity
+NAN = FLOAT_SORT.NaN
 
 
 def finite(value: z3.ExprRef | int) -> z3.ExprRef:
@@ -22,6 +24,8 @@ def number(value: int | Fraction | str) -> z3.ExprRef:
         return POS_INF
     if value == "-inf":
         return NEG_INF
+    if value == "nan":
+        return NAN
     fraction = Fraction(value)
     return finite(z3.RealVal(f"{fraction.numerator}/{fraction.denominator}"))
 
@@ -55,6 +59,10 @@ def less(a: z3.ExprRef, b: z3.ExprRef) -> z3.BoolRef:
 
 
 def compare(op: str, a: z3.ExprRef, b: z3.ExprRef) -> z3.BoolRef:
+    return z3.And(a != NAN, b != NAN, _compare_non_nan(op, a, b))
+
+
+def _compare_non_nan(op: str, a: z3.ExprRef, b: z3.ExprRef) -> z3.BoolRef:
     if op == "eq":
         return a == b
     if op == "ne":
@@ -91,6 +99,19 @@ def multiply(a: z3.ExprRef, b: z3.ExprRef) -> tuple[z3.ExprRef, z3.BoolRef]:
 def operation(op: str, args: list[z3.ExprRef]) -> tuple[z3.ExprRef, z3.BoolRef, bool]:
     """Return value, local definedness, and exactness of supported operation."""
     a = args[0]
+    if op in ("fmin", "fmax"):
+        b = args[1]
+        best = less(a, b) if op == "fmin" else less(b, a)
+        return z3.If(a == NAN, b, z3.If(b == NAN, a, z3.If(best, a, b))), z3.BoolVal(True), True
+    value, valid, exact = _operation_non_nan(op, args)
+    non_nan = z3.And(*(arg != NAN for arg in args))
+    if op in ("fneg", "absf", "fadd", "fsub", "fmul", "fdiv", "fma"):
+        return z3.If(non_nan, value, NAN), z3.Or(z3.Not(non_nan), valid), exact
+    return value, z3.And(non_nan, valid), exact
+
+
+def _operation_non_nan(op: str, args: list[z3.ExprRef]) -> tuple[z3.ExprRef, z3.BoolRef, bool]:
+    a = args[0]
     b = args[1] if len(args) > 1 else a
     true = z3.BoolVal(True)
     if op == "fadd":
@@ -118,8 +139,6 @@ def operation(op: str, args: list[z3.ExprRef]) -> tuple[z3.ExprRef, z3.BoolRef, 
         return negate(a), true, True
     if op == "absf":
         return z3.If(is_negative(a), negate(a), a), true, True
-    if op in ("fmin", "fmax"):
-        return z3.If(less(a, b) if op == "fmin" else less(b, a), a, b), true, True
     if op in ("floor", "ceil", "nearbyint"):
         x = real(a)
         if op == "floor":
@@ -139,8 +158,17 @@ def operation(op: str, args: list[z3.ExprRef]) -> tuple[z3.ExprRef, z3.BoolRef, 
     # Finite transcendental functions retain the existing uninterpreted semantics.
     # Infinity limits are exact only where listed. No arithmetic limit is inferred.
     finite_args = [real(arg) for arg in args]
-    function = z3.Function("math." + op, *[z3.RealSort() for _ in args], z3.RealSort())
-    value = finite(function(*finite_args))
+    symbol = "sqrt" if op == "rsqrt" else op
+    function = z3.Function("math." + symbol, *[z3.RealSort() for _ in args], z3.RealSort())
+    result = function(*finite_args)
+    if op in ("sqrt", "rsqrt", "exp", "exp2", "pow"):
+        # Every positive real is still representable by the uninterpreted result.
+        result = z3.If(result > 0, result, z3.RealVal(1))
+    if op == "sqrt":
+        result = z3.If(finite_args[0] == 0, z3.RealVal(0), result)
+    elif op == "rsqrt":
+        result = 1 / result
+    value = finite(result)
     valid = z3.And(*(is_finite(arg) for arg in args))
     if op in ("sqrt", "rsqrt", "log", "acosh", "pow"):
         x = real(a)

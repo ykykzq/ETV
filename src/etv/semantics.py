@@ -5,10 +5,10 @@ from functools import lru_cache
 from typing import Mapping
 
 from .errors import UnsupportedSemantics
-from .extended_float import Infinity, evaluate_special
-from .ir import BOOL, INDEX, Expr, Type, const, signed, trunc_div
+from .extended_float import SpecialFloat, evaluate_special
+from .ir import BOOL, FLOAT, INDEX, Expr, Type, const, signed, trunc_div, walk
 
-Value = int | bool | Fraction | Infinity
+Value = int | bool | Fraction | SpecialFloat
 CASTS = frozenset(
     "extsi extui trunci index_cast index_castui sitofp uitofp extf truncf fptosi fptoui".split()
 )
@@ -21,7 +21,15 @@ COMPARISONS = frozenset("eq ne lt le gt ge".split())
 
 
 def arity(op: str) -> int:
-    if op in CASTS | FLOAT_UNARY | {"fneg", "not", "coordinate", "to_index", "read", "isnan"}:
+    if op in CASTS | FLOAT_UNARY | {
+        "fneg",
+        "not",
+        "coordinate",
+        "to_index",
+        "read",
+        "isnan",
+        "isinf",
+    }:
         return 1
     if op in FLOAT_BINARY | INTEGER_BINARY | COMPARISONS | {
         "and",
@@ -29,6 +37,8 @@ def arity(op: str) -> int:
         "xor",
         "ordered",
         "unordered",
+        "float_true",
+        "float_false",
     }:
         return 2
     if op in {"select", "fma", "load"}:
@@ -48,7 +58,7 @@ def validate_expr(expr: Expr) -> None:
         )
     elif expr.op in INTEGER_BINARY:
         valid = expr.type.kind in ("int", "index") and all(t == expr.type for t in types)
-    elif expr.op in {"ordered", "unordered", "isnan"}:
+    elif expr.op in {"ordered", "unordered", "isnan", "isinf", "float_true", "float_false"}:
         valid = expr.type == BOOL and all(t.kind == "abstract_float" for t in types)
     elif expr.op in COMPARISONS:
         valid = expr.type == BOOL and types[0] == types[1]
@@ -90,7 +100,7 @@ def evaluate(
     op = expr.op
     if op == "const":
         value = expr.attr("value")
-        assert isinstance(value, (int, bool, Fraction)) or value in ("+inf", "-inf")
+        assert isinstance(value, (int, bool, Fraction)) or value in ("+inf", "-inf", "nan")
         return value  # type: ignore[return-value]
     if op == "var":
         return env[str(expr.attr("name"))]
@@ -102,11 +112,17 @@ def evaluate(
         )
     if op == "undefined":
         raise UnsupportedSemantics("UNDEFINED_LOAD_REACHABLE")
+    if op in ("float_to_bits", "bits_to_float"):
+        raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "observable float bit pattern")
     values = tuple(evaluate(a, env, index_bits) for a in expr.args)
     a = values[0]
     b = values[1] if len(values) > 1 else 0
     if op in ("ordered", "unordered", "isnan"):
-        return op == "ordered"
+        return ("nan" not in values) if op == "ordered" else ("nan" in values)
+    if op == "isinf":
+        return a in ("+inf", "-inf")
+    if op in ("float_true", "float_false"):
+        return op == "float_true"
     if any(isinstance(v, str) for v in values):
         return evaluate_special(op, values)
     # All special values were handled above.
@@ -207,6 +223,55 @@ def evaluate(
     return Fraction(result) if expr.type.kind == "abstract_float" else result
 
 
+def _routed_float(bits: Expr, float_format: str) -> Expr | None:
+    if bits.op == "float_to_bits":
+        return bits.args[0] if bits.attr("format") == float_format else None
+    if bits.op == "select":
+        condition, yes, no = bits.args
+        left, right = _routed_float(yes, float_format), _routed_float(no, float_format)
+        if left is not None and right is not None:
+            return Expr("select", left.type, (condition, left, right))
+        return None
+    if bits.op != "xor":
+        return None
+
+    # Expand each shared XOR node once and keep parity separately from
+    # definedness. Only syntactically identical bits from the same cast cancel.
+    pending = [bits]
+    nodes: set[Expr] = set()
+    while pending:
+        node = pending.pop()
+        if node in nodes:
+            continue
+        nodes.add(node)
+        if node.op == "xor" and node.type == bits.type:
+            pending.extend(node.args)
+        elif node.op != "float_to_bits" or node.attr("format") != float_format:
+            return None
+    parity = {bits}
+    sources = set()
+    top_down = [node for node in reversed(walk(bits)) if node in nodes]
+    for node in top_down:
+        if node.op == "xor" and node.type == bits.type:
+            if node in parity:
+                parity.remove(node)
+                for child in node.args:
+                    parity.symmetric_difference_update((child,))
+        elif node.op == "float_to_bits" and node.type == bits.type:
+            sources.add(node)
+    if len(parity) != 1 or not parity <= sources:
+        return None
+    chosen = next(iter(parity))
+    value = chosen.args[0]
+    # The canceled operands must still be defined. Both select arms carry
+    # the same value, while the comparisons retain that proof obligation.
+    for source in top_down:
+        if source != chosen and source in sources:
+            dep = source.args[0]
+            value = Expr("select", FLOAT, (Expr("ordered", BOOL, (dep, dep)), value, value))
+    return value
+
+
 @lru_cache(maxsize=100000)
 def simplify(expr: Expr, index_bits: int | None = None) -> Expr:
     if not expr.args:
@@ -219,6 +284,10 @@ def simplify(expr: Expr, index_bits: int | None = None) -> Expr:
     )
     if expr.op == "select" and args[0].op == "const":
         return args[1 if args[0].attr("value") else 2]
+    if expr.op == "bits_to_float":
+        routed = _routed_float(args[0], str(expr.attr("format")))
+        if routed is not None:
+            return simplify(routed, index_bits)
     if all(a.op == "const" for a in args):
         try:
             return const(evaluate(result, index_bits=index_bits), result.type)

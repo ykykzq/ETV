@@ -122,3 +122,13 @@ def test_boolean_representation_is_an_explicit_predicate(tmp_path):
     data["metadata"]["target"]["boolean_storage"] = "arbitrary_bytes"
     with pytest.raises(InputError):
         parse_pair_spec(write(tmp_path, data))
+
+
+def test_static_multidimensional_grid_retains_axis_sizes(tmp_path):
+    data = minimal(tmp_path)
+    data["programs"]["lhs"][0]["grid"] = {"programs": 6, "shape": [2, 3, 1]}
+    spec = parse_pair_spec(write(tmp_path, data))
+    assert spec.lhs[0].grid_shape == (2, 3, 1)
+    data["programs"]["lhs"][0]["grid"]["programs"] = 5
+    with pytest.raises(InputError, match="grid shape"):
+        parse_pair_spec(write(tmp_path, data))

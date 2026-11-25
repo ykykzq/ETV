@@ -4,18 +4,18 @@
 premises and `abstract_float` semantics. It does not establish arbitrary host or
 bit-level GPU behavior.
 
-Floating intermediates denote extended mathematical reals: finite reals, positive
-infinity and negative infinity are distinct tagged values. Finite constants remain
+Floating intermediates denote finite mathematical reals and the distinct tags
+positive infinity, negative infinity and NaN. Finite constants remain
 exact rationals from official IR attributes; infinity is never replaced by a large
 finite sentinel. External floating inputs remain finite mathematical reals, which
 is explicitly reported as a model premise. This extension does not establish
 correctness for arbitrary NaN/infinity input buffers.
 
-Comparisons, min/max, selection and supported arithmetic preserve infinity tags.
-NaN is not a value in this model: reachable operations such as infinity minus the
-same infinity or zero times infinity must fail the definedness obligation. Rules
-that can match floating intermediates are checked over the extended domain; a rule
-proved only for finite real variables cannot silently be applied to infinity.
+Comparisons implement ordered and unordered predicates, and observation equality
+compares NaN by value class. Basic arithmetic propagates explicit NaN. Operations
+such as infinity minus the same infinity or zero times infinity still require
+definedness. Rules that can match floating intermediates are checked over all
+tagged values.
 Float conversions keep source/target metadata. Rounding, signed-zero distinctions,
 overflow from finite IEEE inputs, NaN payloads and numerical tolerance are outside
 the abstraction. See `infinity-model.md` for the implemented operation boundaries.
@@ -29,19 +29,23 @@ indices are mathematical integers.
 `fdiv`, `sqrt`, `rsqrt`, `log`, `acosh` and general real `pow` have explicit domains.
 Undefined loads must be unreachable from active outputs. Select definedness follows
 the selected branch. Boolean and/or simplification does not erase undefined
-dependencies. Transcendental UF encodings overapproximate values for obligations
-and cannot establish an exact numerical counterexample.
+dependencies. Transcendental SMT encodings overapproximate mathematical values
+for obligations. They retain the positive ranges of square root on positive
+inputs and finite exponentials, and model reciprocal square root as the
+reciprocal of the same positive square root. These abstractions cannot
+establish an exact numerical counterexample.
 
 External buffers are total maps over nonnegative offsets. Allocation sizes/device
 pointer validity are host premises, not inferred bounds. Internal/output storage
 starts uninitialized and becomes defined through prior steps. Explicit separation
-is required between distinct roles interacting with writers. In-place aliasing is
-outside this subset. A role both loaded and stored in one execution step returns
-`UNKNOWN(INPLACE_MEMORY_DEPENDENCY_UNPROVED)`, including previously initialized
-internal storage and dependencies between same-step launches. Snapshot reads are
-not evidence that overlapping accesses are safe across programs or lanes. This
-conservative check may reject independent address regions until their access
-independence or ordering is proved; read-only aliases remain supported.
+is required between distinct roles interacting with writers. Fixed-grid
+read/write alias checks enumerate active program/lane addresses. Accesses on
+disjoint address sets admit snapshot reads. Ordered scalar accesses in one program
+can forward the latest preceding store to a load. Loads and stores that overlap
+across programs require a separate dependence proof. Unproved aliasing returns
+`UNKNOWN(INPLACE_MEMORY_DEPENDENCY_UNPROVED)`. Structured repeated scalar
+stores within one program follow instruction order once read independence
+has been checked. Unresolved write ordering returns UNKNOWN.
 
 ## Evidence Levels
 
