@@ -299,3 +299,26 @@ def test_single_program_loads_the_most_recent_scalar_store(tmp_path):
     result = build_obligations(pair, spec)
     assert result.status == "closed", result.reason
     assert result.roots[0].lhs == const(7, FLOAT)
+
+
+@pytest.mark.parametrize("shift", [0, 1])
+def test_vector_inplace_reads_with_same_lane_ownership(tmp_path, shift):
+    lane = var("__lane")
+    pid = var("__pid")
+    address = Expr("add", INDEX, (Expr("mul", INDEX, (pid, const(2))), lane))
+    read_at = Expr("add", INDEX, (address, const(shift))) if shift else address
+    incoming = load("Internal", read_at)
+    initial = kernel("lhs.0", "Internal", pid, const(7, FLOAT), 4)
+    update = kernel("lhs.1", "Internal", address, incoming, 2)
+    update = replace(
+        update,
+        stores=(replace(update.stores[0], lane_shape=(2,), order=1),),
+        reads=(MemoryRead(incoming, (2,), 0),),
+    )
+    output = kernel("lhs.2", "Output", pid, load("Internal", pid), 4)
+    expected = kernel("rhs.0", "Output", pid, const(7, FLOAT), 4)
+    _, spec, pair = case(tmp_path, ((initial,), (update,), (output,)), ((expected,),), numel=4)
+    memory = build_obligations(pair, spec)
+    assert memory.status == ("closed" if shift == 0 else "UNKNOWN"), memory.reason
+    if shift:
+        assert memory.reason == "INPLACE_MEMORY_DEPENDENCY_UNPROVED"

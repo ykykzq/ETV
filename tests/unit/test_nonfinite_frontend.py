@@ -5,7 +5,7 @@ import pytest
 from etv.errors import UnsupportedSemantics
 from etv.frontend import Attribute, Block, IRType, Operation, Value, _attribute
 from etv.ir import FLOAT
-from etv.lift import _constant, _nonzero_only_isinf_uses
+from etv.lift import _constant, _nonzero_only_libdevice_uses
 
 
 @pytest.mark.parametrize("special", ["+inf", "-inf", "nan"])
@@ -79,7 +79,7 @@ def test_isinf_zero_use_audit_checks_nested_uses_too():
         "",
         "",
     )
-    assert _nonzero_only_isinf_uses((external, constant, compare)) == frozenset({1})
+    assert _nonzero_only_libdevice_uses((external, constant, compare)) == frozenset({1})
     escaped = Operation(4, "arith.addi", (raw, zero), (), (), 1, (), "", "")
     region = Operation(5, "tt.reduce", (), (), (), 0, ((Block(1, (), (escaped,)),),), "", "")
-    assert not _nonzero_only_isinf_uses((external, constant, compare, region))
+    assert not _nonzero_only_libdevice_uses((external, constant, compare, region))

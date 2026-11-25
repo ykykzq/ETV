@@ -105,7 +105,7 @@ def operation(op: str, args: list[z3.ExprRef]) -> tuple[z3.ExprRef, z3.BoolRef, 
         return z3.If(a == NAN, b, z3.If(b == NAN, a, z3.If(best, a, b))), z3.BoolVal(True), True
     value, valid, exact = _operation_non_nan(op, args)
     non_nan = z3.And(*(arg != NAN for arg in args))
-    if op in ("fneg", "absf", "fadd", "fsub", "fmul", "fdiv", "fma"):
+    if op in ("fneg", "absf", "fadd", "fsub", "fmul", "fdiv", "fma", "sqrt", "rsqrt"):
         return z3.If(non_nan, value, NAN), z3.Or(z3.Not(non_nan), valid), exact
     return value, z3.And(non_nan, valid), exact
 
@@ -155,6 +155,22 @@ def _operation_non_nan(op: str, args: list[z3.ExprRef]) -> tuple[z3.ExprRef, z3.
                 )
             )
         return z3.If(is_finite(a), finite(value), a), true, True
+    if op == "pow":
+        exponent = z3.simplify(real(b))
+        if (
+            z3.is_true(z3.simplify(is_finite(b)))
+            and z3.is_rational_value(exponent)
+            and exponent.denominator_as_long() == 1
+            and 1 <= exponent.numerator_as_long() <= 4
+        ):
+            n = exponent.numerator_as_long()
+            if n == 1:
+                return a, true, True
+            power = real(a)
+            for _ in range(n - 1):
+                power = power * real(a)
+            limit = POS_INF if n % 2 == 0 else a
+            return z3.If(is_finite(a), finite(power), limit), true, True
     # Finite transcendental functions retain the existing uninterpreted semantics.
     # Infinity limits are exact only where listed. No arithmetic limit is inferred.
     finite_args = [real(arg) for arg in args]
@@ -170,15 +186,25 @@ def _operation_non_nan(op: str, args: list[z3.ExprRef]) -> tuple[z3.ExprRef, z3.
         result = 1 / result
     value = finite(result)
     valid = z3.And(*(is_finite(arg) for arg in args))
-    if op in ("sqrt", "rsqrt", "log", "acosh", "pow"):
+    if op == "pow":
+        zero = z3.And(is_zero(a), is_finite(b), real(b) > 0)
+        return z3.If(zero, finite(0), value), z3.Or(zero, z3.And(valid, real(a) > 0)), False
+    if op in ("sqrt", "rsqrt"):
+        invalid = is_negative(a)
+        limit = finite(0) if op == "rsqrt" else POS_INF
+        result = z3.If(invalid, NAN, z3.If(is_finite(a), value, limit))
+        domain = true if op == "sqrt" else z3.Not(is_zero(a))
+        exact = z3.is_false(z3.simplify(z3.And(is_finite(a), real(a) > 0)))
+        return result, domain, exact
+    if op in ("log", "acosh"):
         x = real(a)
-        domain = x >= 0 if op == "sqrt" else x >= 1 if op == "acosh" else x > 0
+        domain = x >= 1 if op == "acosh" else x > 0
         valid = z3.And(valid, domain)
     if op in ("exp", "exp2", "expm1"):
         limit = z3.If(a == POS_INF, POS_INF, finite(-1 if op == "expm1" else 0))
         return z3.If(is_finite(a), value, limit), true, z3.is_false(z3.simplify(is_finite(a)))
-    if op in ("sqrt", "rsqrt", "log", "acosh"):
-        limit = finite(0) if op == "rsqrt" else POS_INF
+    if op in ("log", "acosh"):
+        limit = POS_INF
         return (
             z3.If(is_finite(a), value, limit),
             z3.Or(valid, a == POS_INF),

@@ -14,7 +14,7 @@ If that attempt cannot discharge every obligation, it falls back to complete
 enumeration, including concrete counterexample replay. No lanes are sampled. Same-step
 launches read the prior state and commit together. Duplicate active writes produce
 `WRITE_RACE`. Intermediate loads require prior writes at the same storage/offset.
-Missing masked-load defaults remain explicit undefined branches. Final visible
+A straight-line vector load may read the pre-step value when each overlapping writer is in the same program and lane, and its value depends on that earlier load. Missing masked-load defaults remain explicit undefined branches. Final visible
 output addresses determine observation roots.
 
 Parameterized verification constructs `program = k / block_size` and
@@ -29,9 +29,7 @@ or too-large replay remains `UNKNOWN`.
 
 Rule admission is local to each run. Optional partitions prove boundary equalities
 in dependency order. Saturation runs in an isolated worker with wall-clock,
-iteration and e-node limits. Final root equality must hold in egglog. If unresolved,
-an exact Z3 model can be replayed using the independent rational/integer evaluator.
-Uninterpreted transcendental encodings cannot support `DISPROVED`.
+iteration and e-node limits. For each unmerged root, the verifier can discharge the output difference formula with Z3 using a shared time budget. An unsatisfiable formula also proves equality when the encoding overapproximates the modeled operation. An exact satisfiable formula requires replay using the rational/integer evaluator to establish a difference. Roots that observe an external zero sign use SMT directly so real-valued e-classes cannot erase that distinction.
 
 ## Output Contract
 

@@ -779,3 +779,55 @@ def test_acosh_external_handles_inputs_below_one_and_at_one(tmp_path):
     value = kernel.stores[0].value
     assert evaluate(value, {"scalar.Input": Fraction(0)}) == "nan"
     assert evaluate(value, {"scalar.Input": Fraction(1)}) == 0
+
+
+def test_selected_float_can_round_trip_through_bits(tmp_path):
+    text = """module { tt.func @kernel(%out: !tt.ptr<f32>, %c: i1) {
+      %a = arith.constant 2.0 : f32
+      %b = arith.constant -3.0 : f32
+      %chosen = arith.select %c, %a, %b : f32
+      %bits = tt.bitcast %chosen : f32 -> i32
+      %value = tt.bitcast %bits : i32 -> f32
+      tt.store %out, %value : !tt.ptr<f32>
+      tt.return
+    } }"""
+    kernel = lift_text(
+        tmp_path, text, (Endpoint("Output", "block", "arg0"), Endpoint("Cond", "scalar", "arg1"))
+    )
+    from etv.semantics import simplify
+
+    assert evaluate(simplify(kernel.stores[0].value), {"scalar.Cond": False}) == -3
+
+
+def test_signbit_lowering_preserves_negative_zero_choices(tmp_path):
+    import z3
+
+    from etv.ir import BOOL, FLOAT, Expr
+    from etv.semantics import simplify
+    from etv.smt import Encoder
+
+    src = """module { tt.func @kernel(%in: !tt.ptr<f32>, %out: !tt.ptr<i1>) {
+      %x = tt.load %in : !tt.ptr<f32>
+      %i = tt.bitcast %x : f32 -> i32
+      %shift = arith.constant 31 : i32
+      %sign = arith.shrui %i, %shift : i32
+      %one = arith.constant 1 : i32
+      %bit = arith.andi %sign, %one : i32
+      %byte = arith.trunci %bit : i32 to i8
+      %out_bytes = tt.bitcast %out : !tt.ptr<i1> -> !tt.ptr<i8>
+      tt.store %out_bytes, %byte : !tt.ptr<i8>
+      tt.return
+    } }"""
+    kernel = lift_text(
+        tmp_path, src, (Endpoint("Input", "block", "arg0"), Endpoint("Output", "block", "arg1"))
+    )
+    assert simplify(kernel.stores[0].value).op == "signbit"
+    value = Expr("read", FLOAT, (const(0),), (("role", "Input"),))
+    sign = Expr("signbit", BOOL, (value,))
+    encoder = Encoder()
+    from etv.extended_smt import real
+
+    for number, outcome in ((0, False), (0, True), (-2, True), (2, False)):
+        solver = z3.Solver()
+        solver.add(real(encoder.encode(value)) == number, encoder.encode(sign) == outcome)
+        assert solver.check() == z3.sat

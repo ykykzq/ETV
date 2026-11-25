@@ -122,6 +122,13 @@ class Encoder:
             return _wrap(a, width(expr.type, self.index_bits))
         if op in FLOAT_BINARY | FLOAT_UNARY | {"fneg", "fma"}:
             result, condition, exact = ef.operation(op, args)
+            if op == "rsqrt":
+                negative_zero = self.external_zero_sign(expr.args[0])
+                if negative_zero is not None:
+                    zero = ef.is_zero(a)
+                    result = z3.If(zero, z3.If(negative_zero, ef.NEG_INF, ef.POS_INF), result)
+                    condition = z3.Or(zero, condition)
+                    exact = False
             self.float_conditions[expr] = condition
             self.exact = self.exact and exact
             return result
@@ -130,6 +137,14 @@ class Encoder:
             return z3.Not(has_nan) if op == "ordered" else has_nan
         if op == "isinf":
             return z3.Or(a == ef.POS_INF, a == ef.NEG_INF)
+        if op == "signbit":
+            negative_zero = self.external_zero_sign(expr.args[0])
+            if negative_zero is None:
+                raise UnsupportedSemantics(
+                    "TTIR_OP_UNSUPPORTED", "signbit needs an external float load"
+                )
+            self.exact = False  # The rational evaluator cannot replay a signed-zero choice.
+            return z3.Or(ef.real(a) < 0, z3.And(ef.real(a) == 0, negative_zero))
         if op in ("float_true", "float_false"):
             return z3.BoolVal(op == "float_true")
         if (
@@ -210,6 +225,16 @@ class Encoder:
             return _wrap(result, expr.type.bits)
         return result
 
+    def external_zero_sign(self, expr: Expr) -> z3.BoolRef | None:
+        while expr.op == "extf":
+            expr = expr.args[0]
+        if expr.op != "read":
+            return None
+        # Shared logical storage and offset identify the same zero sign across
+        # both programs. The ordinary real encoding still identifies both zeros.
+        signs = z3.Array("zero_sign." + str(expr.attr("role")), z3.IntSort(), z3.BoolSort())
+        return z3.Select(signs, self.encode(expr.args[0]))
+
     def defined(self, expr: Expr) -> z3.BoolRef:
         # Expressions are immutable DAG nodes. Rebuilding a shared child's
         # predicate once per incoming path can turn a small DAG into an
@@ -232,6 +257,12 @@ class Encoder:
             )
         conditions = [self.defined(arg) for arg in expr.args]
         op = expr.op
+        if op == "signbit":
+            self.encode(expr)
+        if op in {"fmin", "fmax", "fneg", "absf", "sqrt"}:
+            # These tagged operations are total once their operands are defined.
+            # A reduction tree can check definedness without encoding its values.
+            return z3.And(*conditions)
         if op in FLOAT_BINARY | FLOAT_UNARY | {"fneg", "fma"}:
             self.encode(expr)
             conditions.append(self.float_conditions[expr])

@@ -168,19 +168,20 @@ class _Builder:
 
     def fixed_accesses(
         self, offset: Expr, mask: Expr, programs: int, lanes: int
-    ) -> Iterator[tuple[int, int]]:
+    ) -> Iterator[tuple[int, int, int]]:
         for pid in range(programs):
             for lane in range(lanes):
                 coords = (("__pid", const(pid)), ("__lane", const(lane)))
                 if evaluate(substitute(mask, coords), index_bits=self.spec.index_bits):
                     yield (
                         pid,
+                        lane,
                         int(evaluate(substitute(offset, coords), index_bits=self.spec.index_bits)),
                     )
 
     def snapshot_safe(self, step: tuple[Kernel, ...], roles: set[str]) -> bool:
         """Prove every shared address is either disjoint or ordered within one program."""
-        writers: dict[tuple[str, int], list[tuple[int, int, Store]]] = {}
+        writers: dict[tuple[str, int], list[tuple[int, int, int, Store]]] = {}
         work = 0
         try:
             for index, kernel in enumerate(step):
@@ -193,10 +194,10 @@ class _Builder:
                     work += programs * lanes
                     if work > self.spec.limits.max_instances:
                         return False
-                    for pid, address in self.fixed_accesses(
+                    for pid, lane, address in self.fixed_accesses(
                         store.offset, store.mask, programs, lanes
                     ):
-                        writers.setdefault((role, address), []).append((index, pid, store))
+                        writers.setdefault((role, address), []).append((index, pid, lane, store))
             for index, kernel in enumerate(step):
                 programs = int(evaluate(kernel.programs, index_bits=self.spec.index_bits))
                 for read in kernel.reads:
@@ -211,8 +212,8 @@ class _Builder:
                     work += programs * lanes
                     if work > self.spec.limits.max_instances:
                         return False
-                    for pid, address in self.fixed_accesses(offset, mask, programs, lanes):
-                        for writer, owner, store in writers.get((role, address), ()):
+                    for pid, lane, address in self.fixed_accesses(offset, mask, programs, lanes):
+                        for writer, owner, writer_lane, store in writers.get((role, address), ()):
                             if writer != index or owner != pid or store.order is None:
                                 return False
                             if not read.lane_shape and not store.lane_shape:
@@ -224,6 +225,15 @@ class _Builder:
                                     and dict(read.value.attrs).get("order") == read.order
                                 ):
                                     continue
+                            if (
+                                read.lane_shape
+                                and read.lane_shape == store.lane_shape
+                                and lane == writer_lane
+                                and read.order < store.order
+                                and not store.structured
+                                and read.value in walk(store.value)
+                            ):
+                                continue
                             if not (
                                 lanes == prod(store.lane_shape) == 1
                                 and read.order < store.order

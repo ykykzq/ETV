@@ -11,7 +11,9 @@ External floating buffer values and scalar variables remain **finite, unbounded 
 | Negation, absolute value, float casts | Preserve or transform infinity tags. Float casts retain the existing no-rounding abstraction. |
 | Addition, subtraction, multiplication, division, fma | Exact finite-real arithmetic and defined signed-infinity combinations; opposite-infinity addition, same-infinity subtraction, zero times infinity and infinity divided by infinity fail definedness. Basic arithmetic propagates an explicit NaN. Division by zero still requires definedness. |
 | exp / exp2 / expm1 | Exact infinite limits, including exp(−Inf)=0. Finite transcendental calls retain the existing uninterpreted overapproximation. |
-| log / sqrt / rsqrt | Supported +Inf limits and finite domains. |
+| sqrt / rsqrt | Negative inputs and NaN return NaN. At an external input zero, rsqrt returns infinity with that input's sign. A computed zero in rsqrt retains a definedness obligation. |
+| log | Supported +Inf limit and positive finite domain. |
+| pow | Exact for constant integer exponents 1 through 4 in the modeled domain. Zero raised to a positive finite exponent is zero. Positive finite bases with other exponents retain an uninterpreted positive result. |
 | acosh | Uses the real formula on x > 1, zero at x = 1 and NaN below one. |
 | cosh / tanh / erf | Supported infinite limits. |
 | floor / ceil / nearbyint | Infinite values remain infinite. |
@@ -20,7 +22,7 @@ External floating buffer values and scalar variables remain **finite, unbounded 
 
 Mandatory definedness checks precede output equality. The selected branch controls select definedness; comparison/isnan operands retain dependencies. Operations with an unmodeled exceptional result retain their definedness obligations even when both outputs have identical syntax. Generic rewrite candidates are checked over all tagged extended-real values with equal definedness, so finite-only algebra is not silently generalized to infinity.
 
-The verifier still excludes IEEE rounding, finite-width floating overflow, NaN payloads and signed-zero distinctions. Integer semantics retain their existing finite-width model. No host initialization, padding, sorting or other Python/Torch operation is introduced; missing TTIR-only producers remain a separate pairing limitation. The same model applies within supported SCF regions.
+The verifier excludes IEEE rounding, finite-width floating overflow and NaN payloads. The bitcast sign predicate and rsqrt can observe the sign of external zero values in SMT. The model shares that sign per logical buffer element and treats exact float widening as preserving it. Ordinary real-valued observations still identify the two zeros. Integer semantics retain their existing finite-width model. No host initialization, padding, sorting or other Python/Torch operation is introduced; missing TTIR-only producers remain a separate pairing limitation. The same model applies within supported SCF regions.
 
 Reference: [MLIR arithmetic operations](https://mlir.llvm.org/docs/Dialects/ArithOps/) specify floating comparisons and min/max NaN behavior.
 

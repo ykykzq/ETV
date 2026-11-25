@@ -203,7 +203,7 @@ def _pointwise(
     elif name == "tt.extern_elementwise":
         symbol = op.string("symbol")
         symbol = symbol.removeprefix("__nv_")
-        if symbol in ("isinff", "isinfd"):
+        if symbol in ("isinff", "isinfd", "signbitf", "signbitd"):
             source = op.operands[0].type.element or op.operands[0].type if op.operands else None
             if not (
                 normalize_nonzero
@@ -213,17 +213,18 @@ def _pointwise(
                 and typ == Type("int", 32)
                 and source is not None
                 and source.kind == "float"
-                and source.bits == (32 if symbol == "isinff" else 64)
+                and source.bits == (32 if symbol.endswith("f") else 64)
             ):
                 raise UnsupportedSemantics(
-                    "TTIR_OP_UNSUPPORTED", "libdevice isinf requires exclusively zero/nonzero uses"
+                    "TTIR_OP_UNSUPPORTED",
+                    "libdevice " + symbol + " requires exclusively zero/nonzero uses",
                 )
             # Libdevice promises a nonzero integer for infinity, not exactly 1.
             # The caller has checked every SSA use is eq/ne against zero; only
             # under this condition is a normalized internal 0/1 representative
             # observationally exact. A raw integer result must never escape.
-            is_infinite = Expr("isinf", BOOL, args)
-            return Expr("select", typ, (is_infinite, const(1, typ), const(0, typ)))
+            test = Expr("signbit" if symbol.startswith("signbit") else "isinf", BOOL, args)
+            return Expr("select", typ, (test, const(1, typ), const(0, typ)))
         # Keep the operand's definedness when lowering the integer predicate.
         if (
             symbol in ("isnan", "isnanf")
@@ -456,7 +457,7 @@ def _reduce(op: Operation, source: Tensor) -> Tensor:
     return Tensor(result_shape, terms[0])
 
 
-def _nonzero_only_isinf_uses(block_operations: tuple[Operation, ...]) -> frozenset[int]:
+def _nonzero_only_libdevice_uses(block_operations: tuple[Operation, ...]) -> frozenset[int]:
     """Identify libdevice predicates whose integer return is observed only as truth."""
     nested = tuple(child for op in block_operations for child in operations(op))
     definitions = {value.id: op for op in nested for value in op.results}
@@ -464,7 +465,12 @@ def _nonzero_only_isinf_uses(block_operations: tuple[Operation, ...]) -> frozens
     for op in nested:
         if op.name != "tt.extern_elementwise" or len(op.results) != 1:
             continue
-        if op.string("symbol").removeprefix("__nv_") not in ("isinff", "isinfd"):
+        if op.string("symbol").removeprefix("__nv_") not in (
+            "isinff",
+            "isinfd",
+            "signbitf",
+            "signbitd",
+        ):
             continue
         value_id = op.results[0].id
         users = [user for user in nested if any(v.id == value_id for v in user.operands)]
@@ -504,7 +510,7 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
         for attr in op.attributes
     ):
         raise UnsupportedSemantics("TTIR_OP_UNSUPPORTED", "integer overflow flags in SCF kernel")
-    normalized_isinf = _nonzero_only_isinf_uses(block.operations)
+    normalized_predicates = _nonzero_only_libdevice_uses(block.operations)
     uses: dict[str, list[tuple[Operation, int]]] = {}
     definitions = {result.id: user for user in nested for result in user.results}
     for user in nested:
@@ -521,6 +527,9 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             seen.add(name)
             for user, index in uses.get(name, []):
                 if user.name == "tt.bitcast" and scalar_type(user.results[0].type) == FLOAT:
+                    continue
+                if user.name == "arith.shrui" and index == 0:
+                    # simplify checks the exact shift width before interpreting a sign bit.
                     continue
                 if user.name not in (
                     "tt.reshape",
@@ -703,17 +712,13 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
             return None
         typ = initial.term.type
         delta_term = simplify(delta.term, launch.index_bits)
-        if typ.kind != "int" or delta_term.op != "const":
+        if typ.kind != "int":
             return None
-        # Unflagged fixed-width integer operations have modular semantics.
-        delta_value = delta_term.attr("value")
-        assert isinstance(delta_value, int)
-        amount = trips * delta_value
-        combined = Expr(
-            "add",
-            typ,
-            (initial.term, const(amount if update.name == "arith.addi" else -amount, typ)),
-        )
+        # With a positive trip count this still demands the invariant delta's
+        # definedness, including when the modular multiplier wraps to zero.
+        coefficient = trips if update.name == "arith.addi" else -trips
+        amount = Expr("mul", typ, (const(coefficient, typ), delta_term))
+        combined = Expr("add", typ, (initial.term, amount))
         return (Tensor(initial.shape, simplify(combined, launch.index_bits)),)
 
     def lift_block(
@@ -777,10 +782,16 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
                 mask = guarded(active, mask)
                 value_expr = scalar(args[1])
                 if pointer.boolean_byte:
+                    value_expr = simplify(value_expr, launch.index_bits)
                     if value_expr.op == "extui" and value_expr.args[0].type == BOOL:
                         value_expr = value_expr.args[0]
                     elif value_expr.op == "const" and value_expr.attr("value") in (0, 1):
                         value_expr = const(bool(value_expr.attr("value")), BOOL)
+                    elif value_expr.op == "select" and value_expr.args[1:] == (
+                        const(1, value_expr.type),
+                        const(0, value_expr.type),
+                    ):
+                        value_expr = value_expr.args[0]
                     else:
                         raise UnsupportedSemantics(
                             "TTIR_OP_UNSUPPORTED", "noncanonical boolean byte store"
@@ -918,9 +929,16 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
                 ):
                     if source_element.kind == "float":
                         producer = definitions.get(op.operands[0].id)
-                        if (
-                            producer is not None and producer.name == "arith.select"
-                        ) or not bitcast_routes(op.results[0].id):
+                        users = uses.get(op.results[0].id, ())
+                        # Cancelling an immediate round trip is safe even when
+                        # the original value is a selection. Iterated XOR over
+                        # compound selections needs a bounded sorting summary.
+                        compound_routing = (
+                            producer is not None
+                            and producer.name == "arith.select"
+                            and any(user.name != "tt.bitcast" for user, _ in users)
+                        )
+                        if compound_routing or not bitcast_routes(op.results[0].id):
                             raise UnsupportedSemantics(
                                 "TTIR_OP_UNSUPPORTED", "unsupported pointer/bit reinterpretation"
                             )
@@ -1002,7 +1020,7 @@ def lift_kernel(module: TTIRModule, launch: LaunchSpec) -> Kernel:
                 result = Tensor(
                     out_shape,
                     _pointwise(
-                        op, tuple(scalar(a) for a in args), typ, op.ordinal in normalized_isinf
+                        op, tuple(scalar(a) for a in args), typ, op.ordinal in normalized_predicates
                     ),
                 )
                 if (

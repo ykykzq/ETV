@@ -56,7 +56,19 @@ def evaluate_special(op: str, values: tuple[ExtendedReal, ...]) -> ExtendedReal:
             return False
         if op in ("fmin", "fmax"):
             return b if a == "nan" else a
-        if op in ("extf", "truncf", "fneg", "absf", "fadd", "fsub", "fmul", "fdiv", "fma"):
+        if op in (
+            "extf",
+            "truncf",
+            "fneg",
+            "absf",
+            "fadd",
+            "fsub",
+            "fmul",
+            "fdiv",
+            "fma",
+            "sqrt",
+            "rsqrt",
+        ):
             return "nan"
         undefined()
     ai, bi = is_infinite(a), is_infinite(b)
@@ -96,6 +108,10 @@ def evaluate_special(op: str, values: tuple[ExtendedReal, ...]) -> ExtendedReal:
         )
     if op in ("exp", "exp2", "expm1"):
         return "+inf" if a == "+inf" else Fraction(-1 if op == "expm1" else 0)
+    if op in ("sqrt", "rsqrt") and a == "-inf":
+        return "nan"
+    if op == "pow" and ai and b in (1, 2, 3, 4):
+        return a if b in (1, 3) else "+inf"
     if op in ("log", "sqrt", "rsqrt", "acosh") and a == "+inf":
         return Fraction(0) if op == "rsqrt" else "+inf"
     if op == "cosh":

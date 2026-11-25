@@ -159,3 +159,57 @@ def test_nan_payload_is_abstracted_in_output_equality(tmp_path, monkeypatch):
     value = const("nan", FLOAT)
     report = verify_values(tmp_path, monkeypatch, value, floating("fadd", value, const(1, FLOAT)))
     assert report.status == "PROVED"
+
+
+def test_smt_fallback_proves_each_unmerged_output(tmp_path, monkeypatch):
+    from etv.eqsat import EqSatResult
+
+    module = importlib.import_module("etv.verify")
+    monkeypatch.setattr(
+        module,
+        "saturate_roots",
+        lambda roots, *_: EqSatResult((False,) * len(roots), 0, 0, (), "RESOURCE_LIMIT"),
+    )
+    x = var("input", FLOAT)
+    lhs = floating("fadd", x, const(0, FLOAT))
+    report = verify_values(tmp_path, monkeypatch, lhs, x)
+    assert report.status == "PROVED"
+    assert any(o.id.startswith("value.smt.") and o.status == "unsat" for o in report.obligations)
+
+
+def test_float_domain_of_square_and_zero_to_positive_power():
+    x = var("input", FLOAT)
+    for args, expected in (
+        ((const(0, FLOAT), const(3, FLOAT)), 0),
+        ((const(-2, FLOAT), const(2, FLOAT)), 4),
+    ):
+        assert evaluate(floating("pow", *args)) == expected
+    expr = floating("pow", x, const(2, FLOAT))
+    assert z3.is_true(z3.simplify(Encoder().defined(expr)))
+
+
+def test_negative_rsqrt_and_sqrt_have_nan_class():
+    for op in ("sqrt", "rsqrt"):
+        expr = floating(op, const(-1, FLOAT))
+        assert evaluate(expr) == "nan"
+        encoder = Encoder()
+        from etv.extended_smt import NAN
+
+        assert z3.is_true(z3.simplify(encoder.defined(expr)))
+        assert z3.is_true(z3.simplify(encoder.encode(expr) == NAN))
+
+
+def test_rsqrt_keeps_the_sign_of_external_zero():
+    from etv import extended_smt as tagged
+
+    read = Expr("read", FLOAT, (const(0),), (("role", "Input"),))
+    expr = floating("rsqrt", read)
+    for sign, expected in ((True, tagged.NEG_INF), (False, tagged.POS_INF)):
+        encoder = Encoder()
+        solver = z3.Solver()
+        solver.add(
+            tagged.real(encoder.encode(read)) == 0,
+            encoder.encode(Expr("signbit", BOOL, (read,))) == sign,
+            z3.Or(z3.Not(encoder.defined(expr)), encoder.encode(expr) != expected),
+        )
+        assert solver.check() == z3.unsat

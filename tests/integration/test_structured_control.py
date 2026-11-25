@@ -212,3 +212,26 @@ def test_structured_kernel_verifies_against_straight_line(tmp_path, reference_de
     if reference_delta:
         assert report.reason == "COMPUTE_MISMATCH"
         assert report.counterexample is not None
+
+
+def test_long_loop_with_invariant_integer_stride(tmp_path):
+    kernel = lift_text(
+        tmp_path,
+        """module {
+      tt.func @kernel(%out: !tt.ptr<i32>, %delta: i32) {
+        %zero = arith.constant 0 : i32
+        %one = arith.constant 1 : i32
+        %stop = arith.constant 1024 : i32
+        %result = scf.for %i = %zero to %stop step %one
+            iter_args(%acc = %zero) -> (i32) : i32 {
+          %next = arith.addi %acc, %delta : i32
+          scf.yield %next : i32
+        }
+        tt.store %out, %result : !tt.ptr<i32>
+        tt.return
+      }
+    }""",
+        (OUTPUT, Endpoint("Delta", "scalar", "arg1")),
+    )
+    assert evaluate(kernel.stores[0].value, {"scalar.Delta": 3}) == 3072
+    assert evaluate(kernel.stores[0].value, {"scalar.Delta": 2147483647}) == -1024

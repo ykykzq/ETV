@@ -16,8 +16,10 @@ compares NaN by value class. Basic arithmetic propagates explicit NaN. Operation
 such as infinity minus the same infinity or zero times infinity still require
 definedness. Rules that can match floating intermediates are checked over all
 tagged values.
-Float conversions keep source/target metadata. Rounding, signed-zero distinctions,
-overflow from finite IEEE inputs, NaN payloads and numerical tolerance are outside
+Float conversions keep source/target metadata. SMT preserves both possible signs
+of external zeros when an operation explicitly observes them. General signed-zero
+arithmetic, rounding, overflow from finite IEEE inputs, NaN payloads and numerical
+tolerance are outside
 the abstraction. See `infinity-model.md` for the implemented operation boundaries.
 
 Signless `iN` uses a signed finite-width interpretation; add/sub/mul wrap modulo

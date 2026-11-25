@@ -10,9 +10,9 @@ Official Triton 3.7.1 parsing and verification precede lifting. The modeled subs
 | `tt.addptr` | Element offsets retaining storage identity. |
 | `tt.load/store` | Float, bool and finite integer memory, masks, defaults/undefined. |
 | `scf.if/yield` | Scalar predicates and typed value merges. Branch stores with statically resolvable masks are checked for full output coverage and disjoint writes. |
-| `scf.for/yield` | Signed loops with concrete bounds and positive step, simultaneous carried-value updates, and fixed-width integer recurrence summaries. Other supported bodies use exact expansion within a 64-trip per-loop limit and the instance budget. |
+| `scf.for/yield` | Signed loops with concrete bounds and positive step, simultaneous carried-value updates, and fixed-width integer recurrence summaries for loop-invariant increments. Other supported bodies use exact expansion within a 64-trip per-loop limit and the instance budget. |
 | `tt.reduce` | Static associative reductions up to 4096 elements. Supports single-input add/mul/min/max and integer add/mul/and/or/xor. Also recognizes compare/select min/max and lexicographic value/index pairs that select an extremum with an integer tie-break. |
-| `tt.bitcast` | Bool-pointer to byte-pointer canonical boolean storage. Loads require `target.boolean_storage: canonical_i8`. Same-format float-to-integer-to-float round trips support static XOR lane routing when each output reduces to an original bit pattern. |
+| `tt.bitcast` | Bool-pointer to byte-pointer canonical boolean storage. Loads require `target.boolean_storage: canonical_i8`. Same-format round trips preserve the selected source value. Static XOR lane routing requires each output to reduce to an original bit pattern. Extracting the high sign bit from an external floating load is also supported. |
 | `tt.clampf` | Real clamp with `propagateNan = none`. |
 | `arith.constant` | Bool, arbitrary-width integer, finite rational float, signed infinity, NaN and static dense constants. |
 | `arith.addi/subi/muli/divsi/remsi` | Finite signed arithmetic and definedness. |
@@ -34,7 +34,7 @@ prefixed with `__nv_`: `acosh/acoshf`, `atan/atanf`, `ceilf`, `coshf`, `erff`,
 abstract mathematical functions, not bit-level CUDA libdevice equivalence.
 `isnan` is false for finite values and signed infinities. In the abstract model,
 `acosh` uses the real identity `log(x + sqrt((x - 1)(x + 1)))` for `x > 1`,
-returns zero at one and returns NaN below one.
+returns zero at one and returns NaN below one. The signbit library predicates are supported for zero/nonzero consumers of an external floating load, including exact widening of an input element. The verifier shares both possible zero signs across uses of the same input element.
 
 Exact replay supports rational arithmetic, integer operations/casts, booleans,
 comparisons/select, abs, min/max, floor/ceil, ties-to-even nearbyint and fma. Other

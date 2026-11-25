@@ -29,6 +29,7 @@ def arity(op: str) -> int:
         "read",
         "isnan",
         "isinf",
+        "signbit",
     }:
         return 1
     if op in FLOAT_BINARY | INTEGER_BINARY | COMPARISONS | {
@@ -58,7 +59,15 @@ def validate_expr(expr: Expr) -> None:
         )
     elif expr.op in INTEGER_BINARY:
         valid = expr.type.kind in ("int", "index") and all(t == expr.type for t in types)
-    elif expr.op in {"ordered", "unordered", "isnan", "isinf", "float_true", "float_false"}:
+    elif expr.op in {
+        "ordered",
+        "unordered",
+        "isnan",
+        "isinf",
+        "signbit",
+        "float_true",
+        "float_false",
+    }:
         valid = expr.type == BOOL and all(t.kind == "abstract_float" for t in types)
     elif expr.op in COMPARISONS:
         valid = expr.type == BOOL and types[0] == types[1]
@@ -201,6 +210,14 @@ def evaluate(
         result = -a
     elif op == "absf":
         result = abs(Fraction(a))
+    elif op == "pow" and b in (1, 2, 3, 4):
+        result = Fraction(a) ** int(b)
+    elif op == "pow" and a == 0 and b > 0:
+        result = 0
+    elif op in ("sqrt", "rsqrt") and a < 0:
+        return "nan"
+    elif op == "sqrt" and a == 0:
+        result = 0
     elif op == "fmin":
         result = min(a, b)
     elif op == "fmax":
@@ -284,6 +301,34 @@ def simplify(expr: Expr, index_bits: int | None = None) -> Expr:
     )
     if expr.op == "select" and args[0].op == "const":
         return args[1 if args[0].attr("value") else 2]
+    if (
+        expr.op == "shrui"
+        and args[0].op == "float_to_bits"
+        and args[1].op == "const"
+        and expr.type.bits is not None
+        and args[1].attr("value") == expr.type.bits - 1
+    ):
+        return Expr(
+            "select",
+            expr.type,
+            (Expr("signbit", BOOL, (args[0].args[0],)), const(1, expr.type), const(0, expr.type)),
+        )
+    source = args[0]
+    if (
+        source.op == "select"
+        and source.type.kind == "int"
+        and source.args[1] == const(1, source.type)
+        and source.args[2] == const(0, source.type)
+    ):
+        condition = source.args[0]
+        if expr.op == "and" and args[1] == const(1, source.type):
+            return source
+        if expr.op == "trunci":
+            if expr.type == BOOL:
+                return condition
+            return Expr("select", expr.type, (condition, const(1, expr.type), const(0, expr.type)))
+        if expr.op in ("eq", "ne") and args[1] == const(0, source.type):
+            return condition if expr.op == "ne" else Expr("not", BOOL, (condition,))
     if expr.op == "bits_to_float":
         routed = _routed_float(args[0], str(expr.attr("format")))
         if routed is not None:

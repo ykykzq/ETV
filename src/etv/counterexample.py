@@ -1,4 +1,4 @@
-"""Replay exact value counterexamples against the scalar evaluator."""
+"""Discharge output obligations with SMT and replay exact differences."""
 
 from dataclasses import dataclass
 from fractions import Fraction
@@ -43,23 +43,25 @@ def _number(value: z3.ExprRef) -> Value:
     raise ValueError("non-rational model value")
 
 
-def find_counterexample(root: RootPair, spec: PairSpec) -> ValueCheck:
+def check_output(root: RootPair, spec: PairSpec, timeout_ms: int) -> ValueCheck:
     encoder = Encoder(spec.index_bits)
     lhs, rhs = encoder.encode(root.lhs), encoder.encode(root.rhs)
     premises = tuple(encoder.encode(p) for p in root.premises)
-    if not encoder.exact:
-        return ValueCheck(
-            "unknown", detail="non-algebraic functions lack an exact counterexample encoding"
-        )
+    query = z3.simplify(
+        z3.And(*premises, encoder.defined(root.lhs), encoder.defined(root.rhs), lhs != rhs)
+    )
+    if z3.is_false(query):
+        return ValueCheck("unsat", detail="difference formula simplifies to false")
     solver = z3.Solver()
-    solver.set(timeout=spec.limits.smt_timeout_ms, random_seed=0)
-    query = z3.And(*premises, encoder.defined(root.lhs), encoder.defined(root.rhs), lhs != rhs)
+    solver.set(timeout=timeout_ms, random_seed=0)
     solver.add(query)
     status = solver.check()
     if status == z3.unsat:
-        return ValueCheck("unsat")
+        return ValueCheck("unsat", detail="no difference in the SMT encoding")
     if status == z3.unknown:
         return ValueCheck("unknown", detail=solver.reason_unknown())
+    if not encoder.exact:
+        return ValueCheck("unknown", detail="approximate SMT model cannot witness a difference")
     model = solver.model()
     if not z3.is_true(model.eval(query, model_completion=True)):
         return ValueCheck("unknown", detail="model did not satisfy query")

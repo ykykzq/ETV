@@ -4,15 +4,16 @@ from dataclasses import replace
 import importlib.metadata
 import logging
 from pathlib import Path
+import time
 import uuid
 
-from .counterexample import find_counterexample
+from .counterexample import ValueCheck, check_output
 from .eqsat import saturate_roots
 from .errors import ETVError, InputError
 from .frontend import parse_ttir
 from .heuristics import propose
 from .host import lift_host
-from .ir import ProgramPair, ProgramSequence, walk
+from .ir import Expr, ProgramPair, ProgramSequence, RootPair, walk
 from .jsonio import digest, mapping, read_json
 from .lift import lift_kernel, scalar_type
 from .logging import event
@@ -182,6 +183,17 @@ def _verify(spec: PairSpec, report: VerificationReport) -> VerificationReport:
         "All frontend and observable-memory obligations are discharged.",
     )
     report = replace(report, obligations=report.obligations + (memory_closed,))
+    # Ordinary real-value congruence identifies both zeros. Keep observers
+    # that can distinguish their signs out of those e-classes.
+    if any(
+        node.op in ("signbit", "rsqrt")
+        for root in memory.roots
+        for expression in (root.lhs, root.rhs)
+        for node in walk(expression)
+    ):
+        return _check_outputs(
+            spec, report, memory.roots, (False,) * len(memory.roots), (memory_closed.id,)
+        )
     proposal = propose(spec, memory.roots)
     if proposal.diagnostic:
         event(
@@ -293,28 +305,48 @@ def _verify(spec: PairSpec, report: VerificationReport) -> VerificationReport:
         equalities=equalities,
         trusted_axioms=report.trusted_axioms + trusted,
     )
-    if result.reason:
-        return replace(
-            report,
-            reason="RESOURCE_LIMIT" if result.reason == "RESOURCE_LIMIT" else "INTERNAL_ERROR",
-            diagnostic=result.reason,
-        )
-    if all(result.merged):
-        return replace(
-            report,
-            status="PROVED",
-            reason="LOGICAL_BOOLEAN_OUTPUT_EQUIVALENT"
-            if spec.observation.value_representation is not None
-            else "OBSERVABLE_MEMORY_EQUIVALENT",
-        )
+    if result.reason and result.reason != "RESOURCE_LIMIT":
+        return replace(report, reason="INTERNAL_ERROR", diagnostic=result.reason)
+
+    return _check_outputs(spec, report, memory.roots, result.merged, deps, bool(result.reason))
+
+
+def _check_outputs(
+    spec: PairSpec,
+    report: VerificationReport,
+    roots: tuple[RootPair, ...],
+    merged_roots: tuple[bool, ...],
+    deps: tuple[str, ...],
+    resource_limit: bool = False,
+) -> VerificationReport:
     checks = []
-    for i, (root, merged) in enumerate(zip(memory.roots, result.merged, strict=True)):
+    proved = True
+    cached: dict[tuple[Expr, Expr, tuple[Expr, ...]], ValueCheck] = {}
+    deadline = time.monotonic() + spec.limits.smt_timeout_ms / 1000
+    for i, (root, merged) in enumerate(zip(roots, merged_roots, strict=True)):
         if merged:
             continue
-        check = find_counterexample(root, spec)
-        checks.append(
-            Obligation(f"value.counterexample.{i}", "smt", check.status, deps, check.detail)
-        )
+        if root.lhs == root.rhs:
+            check = ValueCheck("unsat", detail="identical expressions after memory checks")
+        else:
+            key = (root.lhs, root.rhs, root.premises)
+            previous = cached.get(key)
+            if previous is not None:
+                check = previous
+            else:
+                remaining_ms = int((deadline - time.monotonic()) * 1000)
+                if remaining_ms <= 0:
+                    checks.append(
+                        Obligation(f"value.smt.{i}", "smt", "unknown", deps, "output SMT budget")
+                    )
+                    proved = False
+                    break
+                check = check_output(root, spec, remaining_ms)
+                # A reproduced witness carries an index, so only retain UNSAT.
+                if check.status == "unsat":
+                    cached[key] = check
+        task = "counterexample" if check.status == "sat" else "smt"
+        checks.append(Obligation(f"value.{task}.{i}", "smt", check.status, deps, check.detail))
         if check.status == "sat":
             return replace(
                 report,
@@ -323,19 +355,29 @@ def _verify(spec: PairSpec, report: VerificationReport) -> VerificationReport:
                 counterexample=check.counterexample,
                 obligations=report.obligations + tuple(checks),
             )
-        if check.status == "unknown":
-            break
+        proved &= check.status == "unsat"
+    report = replace(report, obligations=report.obligations + tuple(checks))
+    if proved:
+        return replace(
+            report,
+            status="PROVED",
+            reason="LOGICAL_BOOLEAN_OUTPUT_EQUIVALENT"
+            if spec.observation.value_representation is not None
+            else "OBSERVABLE_MEMORY_EQUIVALENT",
+        )
+    if resource_limit:
+        return replace(report, reason="RESOURCE_LIMIT", diagnostic="RESOURCE_LIMIT")
     reason = (
         "CAST_EQUIVALENCE_NOT_REWRITTEN"
         if any(
             e.op in ("trunci", "extsi", "extui", "index_cast", "index_castui", "sitofp", "uitofp")
-            for root in memory.roots
+            for root in roots
             for expr in (root.lhs, root.rhs)
             for e in walk(expr)
         )
         else "NO_EQUIVALENCE_PROOF"
     )
-    return replace(report, reason=reason, obligations=report.obligations + tuple(checks))
+    return replace(report, reason=reason)
 
 
 def verify(spec_path: Path, allow_external: bool = False) -> VerificationReport:
